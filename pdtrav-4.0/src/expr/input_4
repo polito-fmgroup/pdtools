@@ -1,0 +1,2 @@
+SPEC
+	AG !(proc1.state = critical & proc2.state = critical)

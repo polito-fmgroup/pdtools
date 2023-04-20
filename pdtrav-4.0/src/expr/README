@@ -1,0 +1,29 @@
+Cosa ho sistemato:
+- spostato il main in exprRead.c
+- tutti i nomi di funzioni e variabili iniziano ora  per expr_yy o EXPR_YY per poter avere diversi parser contemporaneamente
+- il Makefile genera l'eseguibile parser (make) 
+- si puo' fare make clean
+- genero il file y.tab.h per la comunicazione tra Lex e Yacc (non sono riuscito a farne a meno, in altri parser che ho visto non viene generato)
+
+Da fare:
+- la grammatica funziona ma ci sono delle regole inutili da eliminare
+
+Elenco files:
+
+Makefile
+Makefile_pdt
+README		
+expr.h		
+exprGrammar.y -> genera: exprGrammar.c y.output y.tab.h
+exprInt.h
+exprLexic.l -> genera: exprLexic.c
+exprRead.c
+input_1
+input_2
+input_3
+input_4
+parser
+
+
+
+

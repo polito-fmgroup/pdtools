@@ -1,0 +1,68 @@
+myCareBwd
+itpMgr->inductiveRplusLocal
+
+mettere a posto travShared
+
+itpTravMgr->settings.useInitStub e' gestito per conto suo
+
+
+mettere storerings a parte con case 1, 2, 3 ecc...
+compreso weakening
+
+verificare uso di itpTravMgr->toItpSeq
+
+verificare itpTravMgr->careFwd
+
+
+gestire meglio constrainVars e constrainSubstLits
+
+preparare from in funzione
+
+ingGetCone
+
+fase 0: non fa niente in itp (no rings) - mette  posto lo stato in igr
+fase 1: genera il vero cono
+
+
+
+itpImgTrSetup mette a posto from*tr
+abstrWithCone tenta fa cono strutturale...
+
+gestione anticipata target hit puo' essere fatta a parte. Eliminare
+variabili locali.
+Unificare con fix point check, mettendo a posto le free
+
+if (step > 1 && itpMgr->fromRings != NULL && ...
+mettere in gestione rings
+
+anche ottimizzazione reached puo' esser messa da un'altra parte
+
+itpGenMaxIter: rimuovere parte morta.
+
+invarConstr: controllare e unificare
+
+guardare useFwdUnroll
+guardare doMonotoneGen
+
+mettere dynAbstr in funzioni
+
+gestire ternary vars e lcorr in funzione a parte
+toPlusCube
+solo costanti
+equivalenze dopo dynAbstr
+
+inductiveTo a parte
+
+
+dopo itpImgGetCone si fanno le semplificazioni del cono con
+toPlusCube, toPlus e constrain... si potrebbe fare dentro
+attenzione a prevTo che serve per ripetere ???
+
+guardare abstrRef > 2
+
+
+guardare se enStructAbstractionWithCone e' attivo e/o serve
+
+
+
+trArray serve per dynAbstr. Si puo' fare meglio ???

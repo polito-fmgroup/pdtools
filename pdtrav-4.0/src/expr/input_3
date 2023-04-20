@@ -1,0 +1,2 @@
+SPEC
+	(AG AF gate1.out) & (AG AF !gate1.out)
