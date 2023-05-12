@@ -1623,6 +1623,7 @@ EXTERN Ddi_SccMgr_t * Ddi_FsmSccTarjanCheckBridge (Ddi_Bddarray_t *delta, Ddi_Bd
 EXTERN void Ddi_FindSccBridgesNaive(Ddi_SccMgr_t *sccMgr, Ddi_Bddarray_t *delta, Ddi_Bddarray_t *lambda, Ddi_Vararray_t *ps);
 EXTERN void Ddi_SccMgrFree(Ddi_SccMgr_t *sccMgr);
 EXTERN Ddi_Bddarray_t *Ddi_FindIte(Ddi_Bddarray_t *delta, Ddi_Vararray_t *ps,  int threshold);
+Ddi_Bddarray_t *Ddi_FindIteFull(Ddi_Bddarray_t *fA, Ddi_Vararray_t *ps, Ddi_Bddarray_t *iteArray, int threshold);
 EXTERN Ddi_Bddarray_t *Ddi_FindAigIte(Ddi_Bdd_t *f, int threshold);
 EXTERN Ddi_Bdd_t *Ddi_AigConstRed (Ddi_Bddarray_t *fA, Ddi_Bdd_t *constr, void *coreClauses, void *cnfMappedVars,int doRedRem, int maxGateWindow, int assertF, int checkOnlyRedPhase, void *nnfCoreMgrVoid, float timeLimit);
 EXTERN Ddi_Bdd_t *Ddi_AigDisjDecomp (Ddi_Bdd_t *f, int minp,int maxp);

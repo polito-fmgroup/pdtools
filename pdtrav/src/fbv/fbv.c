@@ -269,6 +269,8 @@ static char *help[] = {
   "enable portfolio engines (seconds)", NULL,
   "-itpPeakAig <num>",
   "Set itp/igr mc aig# limit (seconds)", NULL,
+  "-insertCutLatches <val>",
+  "Find cut points and insert redundant latches", NULL,
   "-decompTimeLimit <time>",
   "Set decomposed property time limit (seconds)", NULL,
   "-travSelfTuning <leve>",
@@ -600,6 +602,9 @@ static char *help[] = {
   "-dead",
   "check deadlock. verified spec is:",
   "AG (EX 1 | invarspec)", NULL,
+
+  "-checkProof <val>",
+  "enable/disable final proof checking (default 0: disabled)", NULL,
 
   "-sort_for_bck <sel>",
   "select TR sorting for preimage, allowed values for <sel> are:",
@@ -4204,6 +4209,12 @@ FbvParseArgs(
       argc--;
       argv++;
       argc--;
+    } else if (strcmp(argv[1], "-insertCutLatches") == 0) {
+      opt->fsm.insertCutLatches = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
     } else if (strcmp(argv[1], "-cutAtAuxVar") == 0) {
       opt->fsm.cutAtAuxVar = atoi(argv[2]);
       argv++;
@@ -4563,6 +4574,12 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-sort_for_bck") == 0) {
       opt->trav.sort_for_bck = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-checkProof") == 0) {
+      opt->trav.checkProof = atoi(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -7437,6 +7454,13 @@ invarVerif(
 
   fsmMgrOriginal = Fsm_MgrDup(fsmMgr);
 
+  if (opt->fsm.insertCutLatches > 0) {
+    Fsm_Mgr_t *fsmMgrNew = Fsm_RetimeGateCuts(fsmMgr, opt->fsm.insertCutLatches);
+    Fsm_MgrQuit(fsmMgr);
+    fsmMgr = fsmMgrNew;
+    invarspec = Fsm_MgrReadInvarspecBDD(fsmMgr);
+  }
+  
   invarspec = Ddi_BddDup(invarspec);
   pi = Fsm_MgrReadVarI(fsmMgr);
   ps = Fsm_MgrReadVarPS(fsmMgr);
@@ -8472,6 +8496,9 @@ invarVerif(
         Fsm_FsmUnfoldProperty(fsmFsm, 1);
         Fsm_FsmUnfoldConstraint(fsmFsm);
       }
+      else {
+        Fsm_FsmWriteConstraint(fsmFsm,NULL);
+      }            
 
       if (opt->fsm.nnf) {
         Fsm_FsmNnfEncoding(fsmFsm);
@@ -8735,7 +8762,10 @@ invarVerif(
       Ddi_Free(r);
     }
 
-
+    if (opt->trav.checkProof) {
+      int ok = Trav_TravSatCheckProof(travMgrAig, fsmMgr, fsmMgrOriginal);
+    }
+    
     if (opt->trav.wR != NULL) {
       Ddi_Bdd_t *r = Trav_MgrReadReached(travMgrAig);
       if (r!=NULL) {
@@ -22309,6 +22339,7 @@ new_settings(
    *  fsm options
    */
 
+  opt->fsm.insertCutLatches = -1;
   opt->fsm.cutAtAuxVar = -1;
   opt->fsm.cut = -1;
   opt->fsm.useAig = 0;
@@ -22474,6 +22505,7 @@ new_settings(
   opt->trav.sort_for_bck = 1;
   opt->trav.univQuantifyTh = -1;
   opt->trav.trDpartVar = NULL;
+  opt->trav.checkProof = 0;
   opt->trav.wP = NULL;
   opt->trav.wR = NULL;
   opt->trav.wC = NULL;

@@ -77,7 +77,7 @@ ifdef PDT32
 # StQ: 32-bit (2 rows) OK x cudd-2.4.1 OK ANCHE PER cudd-2.4.2 ma compilato con gcc e non con g++
 CUDD_ICFLAGS = 	-O6 -m32 -Wall -pthread
 # TOLTE O MESSE SEMBRA NON FARE DIFFERENZA -Wall -fPIC  -pthread
-CUDD_XCFLAGS =	-mtune=native -fPIC -DHAVE_IEEE_754 -DBSD
+CUDD_XCFLAGS =	-std=c++14 -mtune=native -fPIC -DHAVE_IEEE_754 -DBSD
 # TOLTE O MESSE SEMBRA NON FACCIA DIFFERENZA --> -DSTDC_HEADERS -DHAVE_STRSTR
 #XC_FLAGS = 	-pthread -m32 -mtune=native -DHAVE_IEEE_754 -DBSD
 XC_FLAGS =

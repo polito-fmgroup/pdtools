@@ -145,6 +145,7 @@ typedef struct {
   struct {
     int nnf;                    // command line parameter -> used in fbv only!
     int cutAtAuxVar;            // command line parameter
+    int insertCutLatches;       // command line parameter
     int cut;                    // command line parameter
     int useAig;                 // INTERNAL FIELD ???
     int cegarStrategy;          // command line parameter
@@ -250,7 +251,8 @@ typedef struct {
     int apprAig;                // command line parameter -> used in fbv only!
     int noInit;                 // command line parameter -> used in fbv only!
     int cntReachedOK;           // INTERNAL FIELD --> replace with countReached?
-
+    int checkProof;             // command line parameter
+    
     /* trav.tr */
     int sort_for_bck;           // command line parameter
     int trPreimgSort;           // command line parameter

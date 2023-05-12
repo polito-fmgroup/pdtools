@@ -959,6 +959,11 @@ EXTERN int Fsm_MgrPMBuild(
   Fsm_Mgr_t * fsmMgr1,
   Fsm_Mgr_t * fsmMgr2
 );
+EXTERN Fsm_Mgr_t *
+Fsm_RetimeGateCuts(
+  Fsm_Mgr_t * fsmMgr,
+  int mode
+);
 EXTERN Fsm_Mgr_t *Fsm_RetimeForRACompute(
   Fsm_Mgr_t * fsmMgr,
   Fsm_Retime_t * retimeStrPtr

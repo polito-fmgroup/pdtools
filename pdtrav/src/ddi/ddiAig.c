@@ -9631,7 +9631,7 @@ Ddi_AigConstRed (
       }
       Pdtutil_Assert(1||splitDone||reduceDone, "no split with SAT");
 
-      if (verbosity > Pdtutil_VerbLevelDevMin_c) {
+      if (verbosity > Pdtutil_VerbLevelDevMed_c) {
 	printf("redrem refinement (#g: %d) %d -> red#: %d\n", nActive, iter, assumeClause.size());
       }
       S.addClause(assumeClause);
@@ -25366,7 +25366,7 @@ AigOptOrIncrementalIntern (
       opt[0][i] = opt[1][i] = newNode;
     }
 
-    Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {
+    Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMed_c) {
       if (rrStatsP->nChecks%20 == 0) {
 	fprintf(dMgrO(ddm),"."); fflush(dMgrO(ddm));
       }
@@ -76434,8 +76434,9 @@ Ddi_AigarrayFindXors(
 
     xorArray = Ddi_BddarrayAlloc(ddiMgr,0);
     for (i=0; i<visitedNodes->num; i++) {
-      if (!nodeInfo[i].mapVarOnlyInFi) continue;
-      if (nodeInfo[i].doReturn && nodeInfo[i].fo>0) {
+      //      if (!nodeInfo[i].mapVarOnlyInFi) continue;
+      //      if (nodeInfo[i].doReturn && nodeInfo[i].fo>0) {
+      if (nodeInfo[i].isAndEq && !nodeInfo[i].foAndEq) {
 	// if (nodeInfo[i].isAndEq && nodeInfo[i].fo>0) {
 	bAigEdge_t baig = visitedNodes->nodes[i];
 	Ddi_Bdd_t *eq = Ddi_BddMakeFromBaig(ddiMgr,baig);
@@ -76445,7 +76446,8 @@ Ddi_AigarrayFindXors(
     }
   }
   bAigArrayAuxIntClear(bmgr,visitedNodes);
-  
+
+  Ddi_Free(myOne);
   bAigArrayFree(visitedNodes);
   if (mapVars!=NULL) {
     Ddi_VararrayWriteMark (mapVars,0);

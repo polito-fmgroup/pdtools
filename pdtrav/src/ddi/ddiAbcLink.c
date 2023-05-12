@@ -418,10 +418,10 @@ ddiAbcOptAcc (
   int useGia = 0;
   int optLevel = Ddi_MgrReadAigAbcOptLevel(ddm);
 
-  if (Ddi_MgrReadVerbosity(ddm) > Pdtutil_VerbLevelDevMin_c) {
+  if (Ddi_MgrReadVerbosity(ddm) > Pdtutil_VerbLevelDevMed_c) {
     verbose = 1;
   }
-  if (Ddi_MgrReadVerbosity(ddm) > Pdtutil_VerbLevelDevMin_c) {
+  if (Ddi_MgrReadVerbosity(ddm) > Pdtutil_VerbLevelDevMed_c) {
     verbose = 2;
   }
 

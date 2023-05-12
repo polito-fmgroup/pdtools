@@ -8922,6 +8922,162 @@ Trav_TravSatItpVerif0(
   SeeAlso     []
 ******************************************************************************/
 int
+Trav_TravSatCheckProof(
+  Trav_Mgr_t * travMgr /* Traversal Manager */ ,
+  Fsm_Mgr_t * fsmMgr,
+  Fsm_Mgr_t * fsmMgrRef
+)
+{
+  Ddi_Mgr_t *ddm = Trav_MgrReadDdiMgrDefault(travMgr);
+  Pdtutil_VerbLevel_e verbosity = Trav_MgrReadVerbosity(travMgr);
+  int fp=0;
+  Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
+  Fsm_FsmUnfoldProperty(fsmFsm, 1);
+  Fsm_FsmUnfoldConstraint(fsmFsm);
+  Fsm_Fsm_t *fsmFsmRef = Fsm_FsmMakeFromFsmMgr(fsmMgrRef);
+  Fsm_FsmUnfoldProperty(fsmFsmRef, 1);
+  Fsm_FsmUnfoldConstraint(fsmFsmRef);
+  
+  Ddi_Bddarray_t *delta = Fsm_FsmReadDelta(fsmFsm); 
+  Ddi_Bddarray_t *deltaRef = Fsm_FsmReadDelta(fsmFsmRef); 
+  Ddi_Bdd_t *initRef = Fsm_FsmReadInit(fsmFsmRef); 
+  Ddi_Bddarray_t *lambda = Fsm_FsmReadLambda(fsmFsm); 
+  Ddi_Bddarray_t *lambdaRef = Fsm_FsmReadLambda(fsmFsmRef); 
+  Ddi_Bdd_t *target = Ddi_BddNot(Ddi_BddarrayRead(lambdaRef,0));
+
+  // check invariant (fix-point)
+  
+  Ddi_Vararray_t *psRef = Fsm_FsmReadPS(fsmFsmRef);
+  Ddi_Vararray_t *ps = Fsm_FsmReadPS(fsmFsm);
+  Ddi_Vararray_t *ns = Fsm_FsmReadPS(fsmFsm);
+
+
+  Ddi_Bdd_t *r = Trav_MgrReadReached(travMgr);
+  Ddi_Vararray_t *auxV = Fsm_MgrReadVarAuxVar(fsmMgr);
+  Ddi_Bddarray_t *auxF = Fsm_MgrReadAuxVarBDD(fsmMgr);
+  if (r==NULL) {
+    Ddi_Free(target);
+    return 0;
+  }
+  Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+    printf("checking reached\n");
+  }
+  Ddi_BddComposeAcc(target,psRef,deltaRef);
+  Ddi_Bdd_t *rUnfolded = Ddi_BddDup(r);
+  Ddi_Var_t *pVar = Fsm_MgrReadPdtSpecVar(fsmMgr);
+  Ddi_Var_t *cVar = Fsm_MgrReadPdtConstrVar(fsmMgr);
+
+  if (pVar!=NULL) {
+    Ddi_BddCofactorAcc(rUnfolded,pVar,1);
+    Ddi_BddCofactorAcc(target,pVar,1);
+  }
+  if (cVar!=NULL) {
+    Ddi_BddCofactorAcc(rUnfolded,cVar,1);
+    Ddi_BddCofactorAcc(target,cVar,1);
+  }
+
+  Ddi_BddComposeAcc(rUnfolded,auxV,auxF);
+  Ddi_Bdd_t *notR = Ddi_BddDup(rUnfolded);
+
+  int doExist = 1;
+  if (doExist) {
+    Ddi_Varset_t *proj = Ddi_VarsetMakeFromArray(ps);
+    Pdtutil_VerbLevel_e verbosity = Ddi_MgrReadVerbosity(ddm);
+    Pdtutil_VerbLevel_e vNew = Pdtutil_VerbLevelDevMax_c;
+    Ddi_MgrSetVerbosity(ddm,vNew);
+    Ddi_BddExistProjectAcc(notR,proj);
+    Ddi_MgrSetVerbosity(ddm,verbosity);
+    Ddi_Free(proj);
+  }
+  else {
+    Ddi_Vararray_t *piNext = Ddi_BddSuppVararray(notR);
+    Ddi_VararrayDiffAcc(piNext,ps);
+    Ddi_Vararray_t *piNextNewVars = Ddi_VararrayMakeNewAigVars(piNext,
+                                    "PDT_NEWV_FOR_CHECK", "");
+    Ddi_BddSubstVarsAcc(notR,piNext,piNextNewVars);
+    Ddi_Free(piNext);
+    Ddi_Free(piNextNewVars);
+  }
+  Ddi_BddNotAcc(notR);
+
+
+  int findDiff=0;
+  if (findDiff) {
+    int i,j;
+    for (i=j=0; i<Ddi_VararrayNum(psRef); i++)  {
+      Ddi_Var_t *v_i = Ddi_VararrayRead(psRef,i);
+      if (j>=Ddi_VararrayNum(ps)) {
+          printf("var: %s not found, delta size: %d\n",
+                 Ddi_VarName(v_i),
+                 Ddi_BddSize(Ddi_BddarrayRead(deltaRef,i)));
+      }
+      else {
+        Ddi_Var_t *v_j = Ddi_VararrayRead(ps,j);
+        if (v_i!=v_j) {
+          printf("var: %s not found, delta size: %d\n",
+                 Ddi_VarName(v_i),
+                 Ddi_BddSize(Ddi_BddarrayRead(deltaRef,i)));
+        }
+        else j++;
+      }
+    }                                                
+  }
+  
+  int result = 1;
+  Ddi_BddComposeAcc(notR,psRef,deltaRef);
+  //Ddi_BddComposeAcc(notR,ps,delta);
+  long myStartTime = util_cpu_time();
+
+  // base step
+  Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+    printf("Checking base step for reached of size. %d\n",
+           Ddi_BddSize(notR));
+  }
+  if (Fsm_MgrReadInitStubSteps(fsmMgr) <= 1) {
+    if (Ddi_AigSatAnd(initRef,notR,NULL))
+      result = 0;
+  }
+  else
+    result = 0;
+  
+  if (result) {
+    Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+      printf("Checking inductive reached of size. %d\n",
+           Ddi_BddSize(notR));
+    }
+    fp = !Ddi_AigSatAnd(rUnfolded,notR,NULL);
+    if (!fp)
+      result = 0;
+  }
+  if (result) {
+    Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+      printf("Checking target reached of size. %d\n",
+           Ddi_BddSize(notR));
+    }
+    if (Ddi_AigSatAnd(rUnfolded,target,NULL))
+      result = 0;
+  }
+  Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+      printf("\nCheck Done invariant %s - time: %s\n",
+             result ? "proved" : "disproved",
+        util_print_time((util_cpu_time() - myStartTime)));
+  }
+  Ddi_Free(notR);
+  Ddi_Free(rUnfolded);
+  Ddi_Free(target);
+  Fsm_FsmFree(fsmFsm);
+  Fsm_FsmFree(fsmFsmRef);
+
+  return result;
+}
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+int
 Trav_TravSatCheckInvar(
   Trav_Mgr_t * travMgr /* Traversal Manager */ ,
   Fsm_Mgr_t * fsmMgr,
@@ -19921,6 +20077,12 @@ igrTravIntern(
         }
         Ddi_BddSetAig(myConeAbstr);
         cexHit = igrAbstrRef(itpMgr, myConeAbstr, start_j, useEqRings);
+        Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelDevMin_c) {
+          fprintf(dMgrO(ddm), "\nREFINED VARS:\n");
+          Ddi_Varset_t *vars =
+            Ddi_VarsetarrayRead(itpMgr->abstrRefRefinedVars, 0);
+          Ddi_VarsetPrint(vars,0,0,tMgrO(travMgr));
+        }
         if (!cexHit) {
           itpAbstrRefCurrAbstrDeltaSetup(itpMgr);
           refined = 1;
@@ -36400,7 +36562,7 @@ interpolantDynAbstrFrom(
   }
 
   if (myEnAbstr != NULL) {
-    if (Pdtutil_MgrVerbosity(ddm) > Pdtutil_VerbLevelDevMin_c) {
+    if (Pdtutil_MgrVerbosity(ddm) > Pdtutil_VerbLevelDevMed_c) {
       printf("EA[0]: ");
       for (j = 0; j < nvars; j++)
         printf("%d", (int)myEnAbstr[j]);
@@ -36530,7 +36692,7 @@ interpolantDynAbstrFrom(
       Ddi_Free(keptVars);
     }
 
-    if (Pdtutil_MgrVerbosity(ddm) > Pdtutil_VerbLevelDevMin_c) {
+    if (Pdtutil_MgrVerbosity(ddm) > Pdtutil_VerbLevelDevMed_c) {
       printf("EA[1]: ");
     }
     for (j = 0; j < Ddi_VararrayNum(ns); j++) {
@@ -36544,7 +36706,7 @@ interpolantDynAbstrFrom(
       if (0 && enAbstr != NULL)
         keepVar |= strstr(Ddi_VarName(v), "PDT_BDD_INVAR") != NULL;
 
-      if (Pdtutil_MgrVerbosity(ddm) > Pdtutil_VerbLevelDevMin_c) {
+      if (Pdtutil_MgrVerbosity(ddm) > Pdtutil_VerbLevelDevMed_c) {
         printf("%d", keepVar);
       }
       if (keepVar) {

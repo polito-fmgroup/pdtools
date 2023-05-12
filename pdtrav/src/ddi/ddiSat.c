@@ -5637,7 +5637,7 @@ Ddi_AigAbstrRefineCegarPba(
         cl = Ddi_SatSolverFinal(solver,-1);
       }
       nIter++;
-      for (j=0; j<cl->nLits; j++) {
+      for (j=0; cl!=NULL && j<cl->nLits; j++) {
         int vj = abs(cl->lits[j]);
         Pdtutil_Assert(vj<ddm->cnf.cnf2aigSize,"invalid cnf 2 aig");
         bAigEdge_t baig = ddm->cnf.cnf2aig[vj];
@@ -5668,7 +5668,7 @@ Ddi_AigAbstrRefineCegarPba(
           DdiClauseAddLiteral(assumeWithAbstr,-vCnf);
         }
       }
-      for (j=0; j<cl->nLits; j++) {
+      for (j=0; cl!=NULL && j<cl->nLits; j++) {
         int vj = abs(cl->lits[j]);
         Pdtutil_Assert(vj<ddm->cnf.cnf2aigSize,"invalid cnf 2 aig");
         bAigEdge_t baig = ddm->cnf.cnf2aig[vj];

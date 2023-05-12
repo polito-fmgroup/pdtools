@@ -4438,6 +4438,22 @@ Ddi_FindIte(
   Ddi_Vararray_t *ps,
   int threshold
 ) {
+  return Ddi_FindIteFull(fA,ps,NULL,threshold);
+}
+
+/**Function********************************************************************
+  Synopsis    [Looks for ITE constructs and tracks ENABLE signals]
+  Description [Looks for ITE constructs and tracks ENABLE signals]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bddarray_t *
+Ddi_FindIteFull(
+  Ddi_Bddarray_t *fA,
+  Ddi_Vararray_t *ps,
+  Ddi_Bddarray_t *iteArray,
+  int threshold
+) {
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(fA);
   bAig_Manager_t *bmgr = ddm->aig.mgr;
   bAig_array_t *visitedNodes = bAigArrayAlloc();
@@ -4560,6 +4576,11 @@ Ddi_FindIte(
 	default: Pdtutil_Assert(0,"wrong case");
 	}
 	if (1 || threshold<0) {
+          if (iteArray!=NULL) {
+            Ddi_Bdd_t *ite_i = Ddi_BddMakeFromBaig(ddm, baig);
+            Ddi_BddarrayInsertLast(iteArray,ite_i);
+            Ddi_Free(ite_i);
+          }
 	  Ddi_Bdd_t *en_i = Ddi_BddMakeFromBaig(ddm, en);
 	  int cnt = en>=max ? 0 : Pdtutil_MapInt2IntReadDir(mapEnableCnt, en);
 	  if (cnt<=0) {
