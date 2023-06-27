@@ -317,6 +317,7 @@ typedef enum {
   Pdt_TravDynAbstrInitIter_c,
   Pdt_TravImplAbstr_c,
   Pdt_TravTernaryAbstr_c,
+  Pdt_TravStoreAbstrRefRefinedVars_c,
   Pdt_TravAbstrRef_c,
   Pdt_TravAbstrRefGla_c,
   Pdt_TravInputRegs_c,

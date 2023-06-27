@@ -110,6 +110,7 @@ struct Trav_Settings_s {
     int ternaryAbstr;
     int abstrRef;
     int abstrRefGla;
+    char *storeAbstrRefRefinedVars;
     int inputRegs;
     int selfTuningLevel;
 
@@ -194,7 +195,6 @@ struct Trav_Settings_s {
 
     int bmcTimeLimit;
     int bmcMemLimit;
-
   } aig;
 
   struct {
@@ -580,6 +580,7 @@ struct TravItpMgr_s {
   Ddi_Bddarray_t *abstrDoAbstr;
   Ddi_Bddarray_t *abstrRefFilter;
   Ddi_Bddarray_t *abstrDoRefine;
+  Ddi_Bddarray_t *abstrPrioRefine;
   Ddi_Bddarray_t *abstrCurrAbstr;
   Ddi_Varsetarray_t *abstrRefRefinedVars;
   unsigned char *enAbstr;
@@ -600,6 +601,9 @@ struct TravItpMgr_s {
   Ddi_Vararray_t *stalledVarsPs;
   Ddi_Vararray_t *stalledVarsNs;
 
+  Ddi_Vararray_t *retimedCutPis;
+  Ddi_Vararray_t *retimedCutRefPis;
+
   Tr_Tr_t *trBdd;
   Tr_Tr_t *trAig;
 
@@ -614,6 +618,7 @@ struct TravItpMgr_s {
   Ddi_Bdd_t *provedProps;
   Ddi_Bdd_t *lemma;
   Ddi_Bddarray_t *antecedents;
+  Ddi_Bddarray_t *enables;
   
   Pdtutil_Array_t *coneBoundOk;
 
@@ -680,6 +685,7 @@ struct TravItpMgr_s {
   int abstrRefNnf;
   int abstrRefScc;
   int abstrRefGla;
+  int abstrPrioRefineNum;
   int levelizeSccs;
   int redRem;
   int abcOpt;

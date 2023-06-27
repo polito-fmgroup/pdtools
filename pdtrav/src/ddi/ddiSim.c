@@ -4645,6 +4645,46 @@ Ddi_FindIteFull(
     }  
   }
 
+  // counting sort by fanout
+  int n = Ddi_BddarrayNum(enables);
+  int *countArray = Pdtutil_Alloc(int,maxCnt+1);
+  int *enArray = Pdtutil_Alloc(int,n);
+  Ddi_Bddarray_t *newEnables = Ddi_BddarrayAlloc(ddm,n);
+  for (j=0; j<=maxCnt; j++) countArray[j]=0;
+
+  for (i=0; i<n; i++) {
+    Ddi_Bdd_t *en_i = Ddi_BddarrayRead(enables,i);
+    int ii = (int)Ddi_BddToBaig(en_i);
+    int cnt = Pdtutil_MapInt2IntReadDir(mapEnableCnt, ii);
+    Pdtutil_Assert(cnt>0&&cnt<=maxCnt,"wromng en count");
+    countArray[cnt]++;
+    enArray[i] = cnt;
+  }
+
+  /* multiple occourrences */
+  for (i=1; i<=maxCnt; i++) {
+    countArray[i] += countArray[i-1];
+  }
+
+  /* do sort */
+  for (i=n-1; i>=0; i--) {
+    j=--countArray[enArray[i]];
+    Pdtutil_Assert(j>=0 && j<n, "error in counting sort");
+    Pdtutil_Assert(Ddi_BddarrayRead(newEnables,j)==NULL,
+      "wrong index in counting sort");
+    Ddi_BddarrayWrite(newEnables,j,Ddi_BddarrayRead(enables,i));
+  }
+
+  /* rewrite original array reversing order */
+
+  for (i=0; i<n; i++) {
+    Ddi_BddarrayWrite(enables,n-i-1,Ddi_BddarrayRead(newEnables,i));
+  }
+
+  Ddi_Free(newEnables);
+  Pdtutil_Free(countArray);
+  Pdtutil_Free(enArray);
+
   printf("\nMax ENABLE control count: %d)\n", maxCnt);
   if (0 && (iMaxCnt >= 0)) {
     Ddi_Bdd_t *en_i = Ddi_BddMakeFromBaig(ddm, iMaxCnt);

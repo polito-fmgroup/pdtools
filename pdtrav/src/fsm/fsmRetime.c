@@ -409,18 +409,50 @@ Fsm_RetimeGateCuts(
   Ddi_Mgr_t *ddm = Fsm_MgrReadDdManager(fsmMgrRetimed);
   Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgrRetimed);
   Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgrRetimed);
-  Ddi_Bddarray_t *ite = Ddi_BddarrayAlloc(ddm, 0);
+  int minimal = 0;
+  int propDecomp = 0;
 
-  Ddi_Bddarray_t *enables = Ddi_FindIteFull(delta,ps,ite,-1);
-
-  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
-    printf("ITE search found %d enables and %d non latch ITE\n",
-           Ddi_BddarrayNum(enables), Ddi_BddarrayNum(ite));
+  if (mode>=100) {
+    mode -= 100;
+    propDecomp=1;
   }
-  Ddi_BddarrayAppend(enables,ite);
-  Ddi_Free(ite);
+  if (mode>=10) {
+    mode -= 10;
+    minimal=1;
+  }
+
+  Ddi_Bddarray_t *enables = Ddi_BddarrayAlloc(ddm,0);
+  if (propDecomp) {
+    int iProp = Ddi_BddarrayNum(delta)-1;
+    Ddi_Bdd_t *dProp = Ddi_BddarrayRead(delta,iProp);
+    Ddi_Var_t *pvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$PS");
+    Ddi_Var_t *cvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$PS");
+    Ddi_Bddarray_t *roots = Ddi_AigDisjDecompRoots (dProp, pvarPs, cvarPs,
+                                                    0/*Ddi_BddSize(dProp)/4*/);
+    Ddi_BddarrayAppend(enables,roots);
+    Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+      printf("Prop decomp found %d roots\n",
+             Ddi_BddarrayNum(roots));
+    }
+    Ddi_Free(roots);
+  }
+
+  if (mode>0) {
+    Ddi_Bddarray_t *ite = Ddi_BddarrayAlloc(ddm, 0);
+    Ddi_Bddarray_t *iteEnables = Ddi_FindIteFull(delta,ps,ite,-1);
+    //Ddi_BddarraySortBySizeAcc (iteEnables,0);//decreasing size keeèp fanout order
+    Ddi_BddarrayAppend(enables,iteEnables);
+    Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+      printf("ITE search found %d enables and %d non latch ITE\n",
+           Ddi_BddarrayNum(iteEnables), Ddi_BddarrayNum(ite));
+    }
+    Ddi_Free(iteEnables);
+    if (!minimal)
+      Ddi_BddarrayAppend(enables,ite);
+    Ddi_Free(ite);
+  }
   if (mode > 1) {
-    Ddi_Bddarray_t *xors = Ddi_AigarrayFindXors(delta,NULL);
+    Ddi_Bddarray_t *xors = Ddi_AigarrayFindXors(delta,NULL,minimal);
     Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
       printf("XOR search found %d xors\n",
            Ddi_BddarrayNum(xors));
@@ -2747,7 +2779,7 @@ Fsm_RetimeWithConstr(
   Ddi_Free(oldA);
   Ddi_Free(newA);
   
-  Ddi_AigArrayClearAuxIntIntern(bmgr,visitedNodes);
+  Ddi_AigArrayClearAuxInt(bmgr,visitedNodes);
   Pdtutil_Free(foCnt);
   bAigArrayFree(visitedNodes);
   
@@ -5696,8 +5728,8 @@ FsmMgrAddNewLatches(
     if (Ddi_VararrayNum(stubPi)>0) {
       sprintf(suffix, "%d", fsmMgr->stats.initStubSteps-1);
       newPiVars = genAigVars ?
-        Ddi_VararrayMakeNewAigVars(stubPi, "PDT_STUB_PI", suffix)
-        : Ddi_VararrayMakeNewVars(stubPi, "PDT_STUB_PI", suffix, 1);
+        Ddi_VararrayMakeNewAigVars(stubPi, "PDT_STUB_CUT_PI", suffix)
+        : Ddi_VararrayMakeNewVars(stubPi, "PDT_STUB_CUT_PI", suffix, 1);
       Ddi_BddarraySubstVarsAcc(addedInitStub, stubPi, newPiVars);
     }
     Ddi_Free(stubPi);
@@ -6189,7 +6221,9 @@ addCutLatches(
   
   Ddi_Vararray_t *piDelta = Ddi_BddarraySuppVararray(newD);
   Ddi_Vararray_t *piRetimed = Ddi_BddarraySuppVararray(cuts);
-  Ddi_Vararray_t *piToLatch = Ddi_VararrayIntersect(piRetimed,piDelta);
+  Ddi_Vararray_t *piToLatch = retimePis ?
+    Ddi_VararrayIntersect(piRetimed,piDelta) :
+    Ddi_VararrayDup(piRetimed);
   Ddi_VararrayDiffAcc(piToLatch,ps);
   int nPiLatches = Ddi_VararrayNum(piToLatch);
 
@@ -6246,9 +6280,11 @@ addCutLatches(
       : Ddi_VararrayMakeNewVars(piToLatch, "PDT_RETIMED_PI_AUX", "", 1);
       Ddi_BddarraySubstVarsAcc(cuts,piToLatch,newPiVars);
       Ddi_VararrayAppend(pi,newPiVars);
+
       Ddi_Free(newPiVars);
     }
   }
+
   // handle extra latches
   Ddi_Bddarray_t *cutDelta = Ddi_BddarrayCompose(cuts,ps0,newD);
   for (int i=Ddi_BddarrayNum(newD)-2; i<Ddi_BddarrayNum(delta)-2; i++) {

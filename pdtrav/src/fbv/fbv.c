@@ -292,6 +292,10 @@ static char *help[] = {
   "set aig redundancy removal level (default 0)", NULL,
   "-aigRedRemPeriod <n>",
   "set aig redundancy removal period (default 1)", NULL,
+  "-abstrRefLoad <filename>",
+  "load abstraction refinement vars (default NULL = disabled)", NULL,
+  "-abstrRefStore <filename>",
+  "store abstraction refinement vars (default NULL = disabled)", NULL,
   "-abstrRef <level>",
   "set aig abstraction refinement level (default 0 = disabled)", NULL,
   "-abstrRefGla <level>",
@@ -447,7 +451,7 @@ static char *help[] = {
   "-igrUseRingsStep <val>",
   "max steplevel of constraining/anging of cone with fwd rings (default 0)", NULL,
   "-igrUseBwdRings <val>",
-  "level of constraining/anging of cone with bwd rings (default 0)", NULL,
+  "level of constraining/anding of cone with bwd rings (default 0)", NULL,
   "-igrAssumeSafeBound <val>",
   "assume already proved bounds while using bwd cone for interpolation (default 0)", NULL,
   "-igrConeSubsetBound <val>",
@@ -4957,6 +4961,18 @@ FbvParseArgs(
       opt->mc.aig = 1;
       argv++;
       argc--;
+    } else if (strcmp(argv[1], "-abstrRefLoad") == 0) {
+      opt->trav.abstrRefLoad = argv[2];
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-abstrRefStore") == 0) {
+      opt->trav.abstrRefStore = argv[2];
+      argv++;
+      argc--;
+      argv++;
+      argc--;
     } else if (strcmp(argv[1], "-abstrRef") == 0) {
       opt->trav.abstrRef = atoi(argv[2]);
       if (opt->trav.abstrRefGla>0) {
@@ -7445,7 +7461,7 @@ invarVerif(
 
     Fsm_FsmFoldProperty(fsmFsm, opt->mc.compl_invarspec,
       opt->trav.cntReachedOK, 1);
-    Fsm_FsmFoldConstraint(fsmFsm);
+    Fsm_FsmFoldConstraint(fsmFsm, 1 /*opt->mc.compl_invarspec*/);
     //    Fsm_FsmFoldInit(fsmFsm);
     Fsm_FsmWriteToFsmMgr(fsmMgr, fsmFsm);
     Fsm_FsmFree(fsmFsm);
@@ -8052,6 +8068,41 @@ invarVerif(
 
   opt->stats.setupTime = util_cpu_time();
 
+  if (opt->trav.abstrRefLoad != NULL) {
+    Ddi_Vararray_t *refinedVars = NULL;
+    if (strcmp(opt->trav.abstrRefLoad,"cuts")==0) {
+      refinedVars = Ddi_VararrayAlloc(ddiMgr, 0);
+      for (int i=0; i<Ddi_VararrayNum(ps); i++) {
+        Ddi_Var_t *v = Ddi_VararrayRead(ps,i);
+        char *search = "retime_CUT";
+        if (strncmp(Ddi_VarName(v),search,strlen(search))==0)
+          Ddi_VararrayInsertLast(refinedVars,v);
+        else {
+          search = "PDT_BDD_INVAR";
+          if (strncmp(Ddi_VarName(v),search,strlen(search))==0)
+            Ddi_VararrayInsertLast(refinedVars,v);
+        }
+      }
+    }
+    else {
+      refinedVars = Ddi_VararrayLoad (ddiMgr, opt->trav.abstrRefLoad, NULL);
+    }
+    if (refinedVars!=NULL) {
+      Ddi_Varsetarray_t *abstrRefRefinedVars = Ddi_VarsetarrayAlloc(ddiMgr, 2);
+      Ddi_Varset_t *rv = Ddi_VarsetMakeFromArray(refinedVars);
+      Ddi_VarsetarrayWrite(abstrRefRefinedVars,0,rv);
+      Ddi_VarsetarrayWrite(abstrRefRefinedVars,1,NULL);
+      Pdtutil_VerbosityMgrIf(ddiMgr, Pdtutil_VerbLevelUsrMax_c) {
+        fprintf(dMgrO(ddiMgr),
+              "Abstr Ref: loaded %d refined vars\n", Ddi_VarsetNum(rv));
+      }
+      Trav_MgrSetAbstrRefRefinedVars(travMgrAig, abstrRefRefinedVars);
+      Ddi_Free(abstrRefRefinedVars);
+      Ddi_Free(rv);
+      Ddi_Free(refinedVars);
+    }
+  }
+  
   {
   char *constrFile = NULL;
   int useAsConstr = 0;
@@ -8395,7 +8446,7 @@ invarVerif(
   if (doXorDetection) {
     Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
     Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
-    Ddi_Bddarray_t *cuts = Ddi_AigarrayFindXors(delta,ps);
+    Ddi_Bddarray_t *cuts = Ddi_AigarrayFindXors(delta,ps,0);
     Ddi_Free(cuts);
   }
   if (doXorCuts) {
@@ -8763,7 +8814,16 @@ invarVerif(
     }
 
     if (opt->trav.checkProof) {
-      int ok = Trav_TravSatCheckProof(travMgrAig, fsmMgr, fsmMgrOriginal);
+      char name[1000];
+      strcpy(name,fsm);
+      char *s = strstr(name,".");
+      if (s!=NULL) {
+        strcpy(s,"-with-proof-inv.aig");
+      }
+      else  {
+        strcat(name,"-with-proof-inv.aig");
+      }      
+      int ok = Trav_TravSatCheckProof(travMgrAig, fsmMgr, fsmMgrOriginal, name);
     }
     
     if (opt->trav.wR != NULL) {
@@ -10010,7 +10070,7 @@ invarMixedVerif(
 
     Fsm_FsmFoldProperty(fsmFsm, opt->mc.compl_invarspec,
       opt->trav.cntReachedOK, 1);
-    Fsm_FsmFoldConstraint(fsmFsm);
+    Fsm_FsmFoldConstraint(fsmFsm, opt->mc.compl_invarspec);
     //    Fsm_FsmFoldInit(fsmFsm);
     Fsm_FsmWriteToFsmMgr(fsmMgr, fsmFsm);
     Fsm_FsmFree(fsmFsm);
@@ -11675,10 +11735,15 @@ invarDecompVerif(
 
     Fsm_FsmFoldProperty(fsmFsm, opt->mc.compl_invarspec,
       opt->trav.cntReachedOK, 1);
-    Fsm_FsmFoldConstraint(fsmFsm);
+    Fsm_FsmFoldConstraint(fsmFsm, opt->mc.compl_invarspec);
     //    Fsm_FsmFoldInit(fsmFsm);
     Fsm_FsmWriteToFsmMgr(fsmMgr, fsmFsm);
     Fsm_FsmFree(fsmFsm);
+    if (opt->fsm.insertCutLatches > 0) {
+      Fsm_Mgr_t *fsmMgrNew = Fsm_RetimeGateCuts(fsmMgr, opt->fsm.insertCutLatches);
+      Fsm_MgrQuit(fsmMgr);
+      fsmMgr = fsmMgrNew;
+    }
     invarspec = Ddi_BddDup(Fsm_MgrReadInvarspecBDD(fsmMgr));
     if (partInvarspec == NULL) {
       Fsm_MgrSetInvarspecBDD(fsmMgr, NULL);
@@ -16149,7 +16214,7 @@ InsertCutLatches(
   }
 
   if (useXors) {
-    Ddi_Bddarray_t *xors = Ddi_AigarrayFindXors(delta, ps);
+    Ddi_Bddarray_t *xors = Ddi_AigarrayFindXors(delta, ps, 0);
     if (xors != NULL) {
       Ddi_BddarrayAppend(cuts,xors);
       Ddi_Free(xors);
@@ -18350,7 +18415,7 @@ FbvTargetEn(
   Ddi_Free(psVars);
 
   Fsm_FsmFoldProperty(fsmFsm, 0, 0, 1);
-  Fsm_FsmFoldConstraint(fsmFsm);
+  Fsm_FsmFoldConstraint(fsmFsm, 0);
   Fsm_FsmWriteToFsmMgr(fsmMgr, fsmFsm);
   Fsm_FsmFree(fsmFsm);
 
@@ -19607,6 +19672,8 @@ FbvSetTravMgrOpt(
   Trav_MgrSetTernaryAbstr(travMgr, opt->trav.ternaryAbstr);
   Trav_MgrSetAbstrRef(travMgr, opt->trav.abstrRef);
   Trav_MgrSetAbstrRefGla(travMgr, opt->trav.abstrRefGla);
+  Trav_MgrSetOption(travMgr, Pdt_TravStoreAbstrRefRefinedVars_c, pchar,
+    opt->trav.abstrRefStore);
   Trav_MgrSetInputRegs(travMgr, opt->trav.inputRegs);
   Trav_MgrSetSelfTuningLevel(travMgr, opt->trav.travSelfTuning);
 

@@ -279,7 +279,9 @@ typedef struct {
     int inputRegs;              // command line parameter
     int travSelfTuning;         // command line parameter
     float lazyTimeLimit;        // command line parameter
-
+    char *abstrRefStore;        // command line parameter
+    char *abstrRefLoad;         // command line parameter
+    
     /* trav.bmc */
     int bmcTr;                  // command line parameter -> used in fbv only!
     int bmcTe;                  // command line parameter -> used in fbv only!

@@ -175,6 +175,7 @@ Trav_MgrInit(
   travMgr->settings.aig.ternaryAbstr = 0;
   travMgr->settings.aig.abstrRef = 0;
   travMgr->settings.aig.abstrRefGla = 0;
+  travMgr->settings.aig.storeAbstrRefRefinedVars = NULL;
   travMgr->settings.aig.inputRegs = 0;
   travMgr->settings.aig.selfTuningLevel = 0;    // 1
   travMgr->settings.aig.lemmasTimeLimit = 60.0; // 120.0
@@ -413,6 +414,7 @@ Trav_MgrQuit(
 
   Ddi_Free(travMgr->settings.ints.univQuantifyVars);
   Ddi_Free(travMgr->settings.ints.abstrRefRefinedVars);
+  Pdtutil_Free(travMgr->settings.aig.storeAbstrRefRefinedVars);
 
   Pdtutil_Free(travMgr->settings.clk);
   Pdtutil_Free(travMgr->settings.savePeriodName);
@@ -972,6 +974,7 @@ Trav_MgrSetTravOpt(
   travMgr->settings.tr.bwdTrClustFile = Pdtutil_StrDup(opt->tr.bwdTrClustFile);
 
   travMgr->settings.aig.satSolver = Pdtutil_StrDup(opt->aig.satSolver);
+  travMgr->settings.aig.storeAbstrRefRefinedVars = Pdtutil_StrDup(opt->aig.storeAbstrRefRefinedVars);
 
   travMgr->settings.bdd.hints = Ddi_BddarrayDup(opt->bdd.hints);
   travMgr->settings.bdd.auxPsSet = Ddi_VarsetDup(opt->bdd.auxPsSet);
@@ -988,6 +991,8 @@ Trav_MgrSetTravOpt(
   travMgr->settings.ints.auxFwdTr = NULL;
   travMgr->settings.ints.univQuantifyVars = NULL;
   travMgr->settings.ints.abstrRefRefinedVars = NULL;
+  if (opt->ints.abstrRefRefinedVars != NULL)
+    travMgr->settings.ints.abstrRefRefinedVars = Ddi_VarsetarrayDup(opt->ints.abstrRefRefinedVars);
   travMgr->settings.ints.timeFrameClauses = NULL;
 }
 
@@ -4718,6 +4723,9 @@ Trav_MgrSetOptionItem(
     case Pdt_TravTernaryAbstr_c:
       travMgr->settings.aig.ternaryAbstr = optItem.optData.inum;
       break;
+    case Pdt_TravStoreAbstrRefRefinedVars_c:
+      travMgr->settings.aig.storeAbstrRefRefinedVars = Pdtutil_StrDup(optItem.optData.pchar);
+      break;
     case Pdt_TravAbstrRef_c:
       travMgr->settings.aig.abstrRef = optItem.optData.inum;
       break;
@@ -5289,6 +5297,9 @@ Trav_MgrReadOption(
       break;
     case Pdt_TravTernaryAbstr_c:
       *(int *)optRet = travMgr->settings.aig.ternaryAbstr;
+      break;
+    case Pdt_TravStoreAbstrRefRefinedVars_c:
+      *(char **)optRet = travMgr->settings.aig.storeAbstrRefRefinedVars;
       break;
     case Pdt_TravAbstrRef_c:
       *(int *)optRet = travMgr->settings.aig.abstrRef;

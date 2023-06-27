@@ -263,6 +263,85 @@ Ddi_VararrayMakeNewAigVars (
 }
 
 /**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects [none]
+  SeeAlso     [none]
+*****************************************************************************/
+Ddi_Vararray_t *
+Ddi_VararrayFindVarsFromPrefixSuffix (
+  Ddi_Vararray_t *vars,
+  char *namePrefix,
+  char *nameSuffix
+)
+{
+  Ddi_Vararray_t *varArray;
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(vars);
+  int i, n=Ddi_VararrayNum(vars);
+  int prefixLen = namePrefix==NULL ? 0 : strlen(namePrefix);
+  int suffixLen = nameSuffix==NULL ? 0 : strlen(nameSuffix);
+  Pdtutil_Assert(prefixLen>0||suffixLen,"name prefix or suffix needed");
+
+  varArray = Ddi_VararrayAlloc(ddm,0);
+  for (i=0; i<n; i++) {
+    Ddi_Var_t *v_i = Ddi_VararrayRead(vars,i);
+    char *name_i = Ddi_VarName(v_i);
+    int l = strlen(name_i);
+    if (prefixLen>0 && strncmp(name_i,namePrefix,prefixLen)!=0)
+      continue;
+    if (suffixLen>0 && strcmp(name_i+l-suffixLen,nameSuffix)!=0)
+      continue;
+    Ddi_VararrayInsertLast(varArray,v_i);
+  }
+  if (Ddi_VararrayNum(varArray)==0)
+    Ddi_Free(varArray);
+  
+  return(varArray);
+}
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+
+  SideEffects [none]
+  SeeAlso     [none]
+*****************************************************************************/
+Ddi_Vararray_t *
+Ddi_VararrayFindRefVars (
+  Ddi_Vararray_t *vars,
+  char *namePrefix,
+  char *nameSuffix
+)
+{
+  Ddi_Vararray_t *refArray;
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(vars);
+  int i, n=Ddi_VararrayNum(vars);
+  int prefixLen = namePrefix==NULL ? 0 : strlen(namePrefix);
+  int suffixLen = nameSuffix==NULL ? 0 : strlen(nameSuffix);
+  char nameBuf[1000];
+  Pdtutil_Assert(prefixLen>0||suffixLen,"name prefix or suffix needed");
+
+  refArray = Ddi_VararrayAlloc(ddm,0);
+  for (i=0; i<n; i++) {
+    Ddi_Var_t *v_i = Ddi_VararrayRead(vars,i);
+    char *name_i = Ddi_VarName(v_i);
+    int l = strlen(name_i);
+    if (prefixLen>0 && strncmp(name_i,namePrefix,prefixLen)!=0)
+      continue;
+    if (suffixLen>0 && strcmp(name_i+l-suffixLen,nameSuffix)!=0)
+      continue;
+    strncpy(nameBuf,name_i+(prefixLen>0?prefixLen+1:0),l-(suffixLen>0?suffixLen+1:0));
+    Ddi_Var_t *ref_i = Ddi_VarFromName(ddm,nameBuf);
+    if (ref_i != NULL)
+      Ddi_VararrayInsertLast(refArray,ref_i);
+  }
+  if (Ddi_VararrayNum(refArray)<n)
+    Ddi_Free(refArray);
+  
+  return(refArray);
+}
+
+/**Function*******************************************************************
   Synopsis    [Generate a variable array from varset]
   Description [Generate a variable array from varset. Variables are inserted
                in array according to their index or position in variable
@@ -790,9 +869,6 @@ Ddi_VararraySubstVarsAcc (
     Ddi_Accumulate_c,va,x,y));
 }
 
-
-
-
 /**Function*******************************************************************
   Synopsis    [Print variable in array                               ]
   SideEffects [none]
@@ -811,6 +887,68 @@ Ddi_VararrayPrint (
     printf ("%s ", Ddi_VarName(v));
   }
   printf ("\n ");
+}
+
+
+/**Function*******************************************************************
+  Synopsis    [Print variable in array                               ]
+  SideEffects [none]
+  SeeAlso     []
+******************************************************************************/
+void
+Ddi_VararrayStore (
+  Ddi_Vararray_t *array,
+  char *filename,
+  FILE *fp
+)
+{
+  int i,n;
+  int doClose = 0;
+  if (fp == NULL) {
+    fp = fopen(filename,"w");
+    doClose = 1;
+    if (fp==NULL) return;
+  }
+  DdiConsistencyCheck(array,Ddi_Vararray_c);
+  n = Ddi_VararrayNum(array);
+  for (i=0; i<n; i++) {
+    Ddi_Var_t *v = Ddi_VararrayRead(array,i);
+    fprintf (fp, "%s\n", Ddi_VarName(v));
+  }
+  if (doClose)
+    fclose(fp);
+}
+
+/**Function*******************************************************************
+  Synopsis    [Print variable in array                               ]
+  SideEffects [none]
+  SeeAlso     []
+******************************************************************************/
+Ddi_Vararray_t *
+Ddi_VararrayLoad (
+  Ddi_BddMgr *ddm          /* dd Manager */,
+  char *filename,
+  FILE *fp
+)
+{
+  int i,n;
+  int doClose = 0;
+  Ddi_Vararray_t *array=NULL;
+  if (fp == NULL) {
+    fp = fopen(filename,"r");
+    doClose = 1;
+    if (fp==NULL) return NULL;
+  }
+  array = Ddi_VararrayAlloc(ddm,0);
+  char name [1000];
+  while (fscanf(fp,"%s",name)==1) {
+    Ddi_Var_t *v = Ddi_VarFromName(ddm,name);
+    Pdtutil_Assert (v != NULL, "missing var in vararray load");
+    Ddi_VararrayInsertLast(array,v);
+  }
+  if (doClose)
+    fclose(fp);
+  return array;
 }
 
 /**Function*******************************************************************

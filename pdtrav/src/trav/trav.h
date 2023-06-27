@@ -1115,7 +1115,8 @@ EXTERN int
 Trav_TravSatCheckProof(
   Trav_Mgr_t * travMgr /* Traversal Manager */ ,
   Fsm_Mgr_t * fsmMgr,
-  Fsm_Mgr_t * fsmMgrRef
+  Fsm_Mgr_t * fsmMgrRef,
+  char *wFsm
 );
 EXTERN int Trav_TravSatCheckInvar(
   Trav_Mgr_t * travMgr /* Traversal Manager */ ,

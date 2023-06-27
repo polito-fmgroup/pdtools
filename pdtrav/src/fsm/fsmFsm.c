@@ -1372,15 +1372,15 @@ Fsm_FsmFoldInit(
 
     if (var == cvarPs) {
       isPosition = nl - 1;
-      foldedConstr = isPosition;
+      foldedConstr = isPosition+1;
     } else if (var == pvarPs) {
       isPosition = nl - 1;
-      foldedConstr = isPosition;
+      foldedConstr = isPosition+1;
       if (nl > 1) {
         var = Ddi_VararrayRead(fsmFsm->ps, nl - 2);
         if (var == cvarPs) {
           isPosition = nl - 2;
-          foldedConstr = isPosition;
+          foldedConstr = isPosition+1;
         }
       }
     }
@@ -1440,7 +1440,9 @@ Fsm_FsmFoldInit(
     Ddi_Bdd_t *initStubConstr = fsmFsm->initStubConstraint;
 
     if (initStubConstr == NULL) {
+      Ddi_BddNotAcc(newDeltaLit);
       Ddi_BddOrAcc(constraint, newDeltaLit);
+      Ddi_BddNotAcc(newDeltaLit);
     } else {
       Ddi_Bdd_t *ddiNewITE = Ddi_BddIte(newDeltaLit,
         constraint, initStubConstr);
@@ -1878,7 +1880,8 @@ Fsm_FsmDeltaWithConstraint(
 
 void
 Fsm_FsmFoldConstraint(
-  Fsm_Fsm_t * fsmFsm
+  Fsm_Fsm_t * fsmFsm,
+  int compl_invarspec
 )
 {
 
@@ -1994,7 +1997,13 @@ Fsm_FsmFoldConstraint(
   }
 
   for (i = 0; i < Ddi_BddarrayNum(fsmFsm->lambda); i++) {
-    Ddi_BddAndAcc(Ddi_BddarrayRead(fsmFsm->lambda, i), newLambdaBdd);
+    if (compl_invarspec) {
+      Ddi_BddNotAcc(newLambdaBdd);
+      Ddi_BddOrAcc(Ddi_BddarrayRead(fsmFsm->lambda, i), newLambdaBdd);
+      Ddi_BddNotAcc(newLambdaBdd);
+    }
+    else 
+      Ddi_BddAndAcc(Ddi_BddarrayRead(fsmFsm->lambda, i), newLambdaBdd);
   }
 
   Ddi_Free(newLambdaBdd);
@@ -2111,8 +2120,10 @@ Fsm_FsmUnfoldProperty(
   iProp = fsmFsm->iFoldedProp;
   fsmFsm->iFoldedProp = -1;
 
-  if (unfoldLambda)
+  if (unfoldLambda) {
+    Ddi_BddarrayCofactorAcc(fsmFsm->lambda,cvarPs,1);
     Ddi_BddarrayComposeAcc(fsmFsm->lambda, ps, delta);
+  }
   if (fsmFsm->invarspec != NULL)
     Ddi_BddComposeAcc(fsmFsm->invarspec, ps, delta);
 
@@ -2331,7 +2342,7 @@ Fsm_FsmAbcReduce(
     if (pUnfold)
       Fsm_FsmFoldProperty(fsmOpt, 0, 0);
     if (cUnfold)
-      Fsm_FsmFoldConstraint(fsmOpt);
+      Fsm_FsmFoldConstraint(fsmOpt, 0);
 
     for (i = 0; i < Ddi_BddarrayNum(fsmOpt->delta); i++) {
       Ddi_Bdd_t *d_i = Ddi_BddarrayRead(fsmOpt->delta, i);
@@ -2387,7 +2398,7 @@ Fsm_FsmAbcReduce(
       if (pUnfold)
         Fsm_FsmFoldProperty(fsmOpt, 0, 0, 1); 
       if (cUnfold)
-        Fsm_FsmFoldConstraint(fsmOpt);
+        Fsm_FsmFoldConstraint(fsmOpt, 0);
    }
 
   } else {
@@ -2466,7 +2477,7 @@ Fsm_FsmAbcScorr(
   if (pUnfold)
     Fsm_FsmFoldProperty(fsmOpt, 0, 0, 0);
   if (cUnfold)
-    Fsm_FsmFoldConstraint(fsmOpt);
+    Fsm_FsmFoldConstraint(fsmOpt, 0);
 
   return fsmOpt;
 }

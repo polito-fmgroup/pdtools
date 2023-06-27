@@ -314,7 +314,8 @@ EXTERN void Fsm_FsmFoldInitWithPi(
   Fsm_Fsm_t * fsmFsm
 );
 EXTERN void Fsm_FsmFoldConstraint(
-  Fsm_Fsm_t * fsmFsm
+  Fsm_Fsm_t * fsmFsm,
+  int compl_invarspec
 );
 EXTERN void Fsm_FsmDeltaWithConstraint(
   Fsm_Fsm_t * fsmFsm

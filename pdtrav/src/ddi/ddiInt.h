@@ -1450,6 +1450,7 @@ EXTERN Ddi_Varset_t * DdiAigSupp(Ddi_Bdd_t *fAig);
 EXTERN Ddi_Varset_t *DdiAigArraySupp (Ddi_Bddarray_t *fAigA);
 EXTERN int DdiAigFanoutCount(Ddi_Bdd_t *fAig, Ddi_Var_t *v);
 EXTERN int DdiAigFlowCount(Ddi_Bdd_t *fAig, Ddi_Var_t *v);
+EXTERN int DdiAigVararraySortByFlow(Ddi_Vararray_t *vA, Ddi_Bdd_t *fAig);
 EXTERN int DdiAigVararraySortByFanout(Ddi_Vararray_t *vA, Ddi_Bdd_t *fAig);
 EXTERN Ddi_Aig_t * DdiAigNot(Ddi_Aig_t *a);
 EXTERN Ddi_Aig_t * DdiAigAnd(Ddi_Aig_t *a, Ddi_Aig_t *b);

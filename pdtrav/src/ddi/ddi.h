@@ -751,6 +751,15 @@ EXTERN int Ddi_AigSatBerkmin(Ddi_Bdd_t *f);
 EXTERN int Ddi_AigSatMinisat(Ddi_Bdd_t *f);
 EXTERN int Ddi_AigSatMinisatWithAbort(Ddi_Bdd_t *f, float timeLimit);
 EXTERN int Ddi_AigSatMinisat22WithAbortAndFinal (Ddi_Bdd_t *f, Ddi_Bdd_t *constrCube, int doGen, float timeLimit);
+EXTERN Ddi_Bdd_t *
+Ddi_AigSatMinisat22RemoveCoreFinal
+(
+  Ddi_Bdd_t *f,
+  Ddi_Bdd_t *constr,
+  int doGen,
+  float timeLimit,
+  int *pAbort
+);
 EXTERN int Ddi_AigSatMinisatWithAbortAndFinal (Ddi_Bdd_t *f, Ddi_Bdd_t *constrCube, float timeLimit, int split);
 EXTERN Ddi_Bdd_t *Ddi_AigSatWindow(Ddi_Bdd_t *f, Ddi_Bdd_t *care, Ddi_Bdd_t *pivotCube, Ddi_Varset_t *vars, float timeLimit);
 EXTERN Ddi_Bdd_t *Ddi_AigSatMinisatWithCexAndAbort(Ddi_Bdd_t *f, Ddi_Vararray_t *filterVars, float timeLimit, char *dumpFilename, int *pAbort);
@@ -1321,6 +1330,8 @@ EXTERN DdNode ** Ddi_VararrayToCU(Ddi_Vararray_t *array);
 EXTERN Ddi_Vararray_t * Ddi_VararrayMakeFromInt(Ddi_Mgr_t *mgr, int *array, int n);
 EXTERN Ddi_Vararray_t * Ddi_VararrayMakeNewVars(Ddi_Vararray_t *refArray, char *namePrefix, char *nameSuffix, int relativeOrder);
 EXTERN Ddi_Vararray_t * Ddi_VararrayMakeNewAigVars(Ddi_Vararray_t *refArray, char *namePrefix, char *nameSuffix);
+EXTERN Ddi_Vararray_t * Ddi_VararrayFindVarsFromPrefixSuffix (Ddi_Vararray_t *vars, char *namePrefix, char *nameSuffix);
+EXTERN Ddi_Vararray_t * Ddi_VararrayFindRefVars(Ddi_Vararray_t *vars, char *namePrefix, char *nameSuffix);
 EXTERN Ddi_Vararray_t * Ddi_VararrayMakeFromVarset(Ddi_Varset_t *vs, int sortByOrderOrIndex);
 EXTERN void Ddi_VararraySort (Ddi_Vararray_t *va, int sortByOrderOrIndex);
 EXTERN int * Ddi_VararrayToInt(Ddi_Vararray_t *array);
@@ -1346,6 +1357,8 @@ EXTERN void Ddi_VararrayAppend(Ddi_Vararray_t *array1, Ddi_Vararray_t *array2);
 EXTERN int Ddi_VararraySearchVar(Ddi_Vararray_t *array, Ddi_Var_t *v);
 EXTERN int Ddi_VararraySearchVarDown(Ddi_Vararray_t *array, Ddi_Var_t *v);
 EXTERN void Ddi_VararrayPrint (Ddi_Vararray_t *array);
+EXTERN Ddi_Vararray_t * Ddi_VararrayLoad (Ddi_BddMgr *ddm, char *filename, FILE *fp);
+EXTERN void Ddi_VararrayStore (Ddi_Vararray_t *array, char *filename, FILE *fp);
 EXTERN void Ddi_VararrayWriteMark (Ddi_Vararray_t *array, int val);
 EXTERN void Ddi_VararrayWriteMarkWithIndex (Ddi_Vararray_t *array, int offset);
 EXTERN void Ddi_VararrayCheckMark (Ddi_Vararray_t *array, int val);
@@ -1512,8 +1525,8 @@ EXTERN int Ddi_PdrCubeLitIsNoInit(Ddi_PdrMgr_t *pdrMgr, int lit);
 EXTERN Ddi_Clause_t *Ddi_GeneralizeClause(Ddi_SatSolver_t *solver, Ddi_Clause_t *cl, unsigned char *enAbstr, int nAbstr, int *initLits, int useInduction);
 EXTERN int Ddi_UnderEstimateUnsatCoreByCexGen(Ddi_Bdd_t *f, Ddi_Bdd_t *cone, Ddi_Vararray_t *vars, unsigned char *enAbstr, int maxIter, int *result);
 EXTERN Ddi_Bdd_t *Ddi_AigInterpolantByGenClauses(Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Bdd_t *care, Ddi_Bdd_t *careA, Ddi_Vararray_t *ps, Ddi_Vararray_t *ns, Ddi_Bdd_t *init, Ddi_Vararray_t *globVars,   Ddi_Vararray_t *dynAbstrCut, Ddi_Vararray_t *dynAbstrAux, Ddi_Bddarray_t *dynAbstrCutLits, int maxIter, int useInduction, int *result);
-EXTERN Ddi_Bddarray_t *Ddi_AigAbstrRefineCegarPba(Ddi_Bdd_t *f, Ddi_Vararray_t *abstrVars, Ddi_Bddarray_t *noAbstr, Ddi_Bddarray_t *prevAbstr, int *result);
-EXTERN Ddi_Bddarray_t *Ddi_AigAbstrRefinePba(Ddi_Bdd_t *f, Ddi_Vararray_t *abstrVars, Ddi_Bddarray_t *noAbstr, Ddi_Bddarray_t *prevAbstr, int *result);
+EXTERN Ddi_Bddarray_t *Ddi_AigAbstrRefineCegarPba(Ddi_Bdd_t *f, Ddi_Vararray_t *abstrVars, Ddi_Bddarray_t *noAbstr, Ddi_Bddarray_t *prevAbstr, int *result, float timeLimit);
+EXTERN Ddi_Bddarray_t *Ddi_AigAbstrRefinePba(Ddi_Bdd_t *f, Ddi_Vararray_t *abstrVars, Ddi_Bddarray_t *noAbstr, Ddi_Bddarray_t *prevAbstr, int *result, float timeLimit);
 EXTERN Ddi_Bdd_t *Ddi_AigExistProjectByGenClauses(Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Bdd_t *care, Ddi_Varset_t *projVars, int maxIter, int doConstr, int *result);
 EXTERN Ddi_Bdd_t *Ddi_AigExistProjectBySubset(Ddi_Bdd_t *f, Ddi_Bdd_t *gHit, Ddi_Varset_t *projVars, int minCube, int maxIter, int *result);
 EXTERN int Ddi_AigSignatureArrayNum(Ddi_AigSignatureArray_t *sig);
@@ -1522,7 +1535,7 @@ EXTERN long double Ddi_AigEstimateMintermCount (Ddi_Bdd_t *f, int numv);
 EXTERN Ddi_AigDynSignatureArray_t *Ddi_AigEvalVarSignatures (Ddi_Mgr_t *ddm, bAig_array_t *aigNodes, Ddi_AigSignatureArray_t *varSig, int *mapPs, int *mapNs, int nMap);
 EXTERN Ddi_AigDynSignatureArray_t *Ddi_AigEvalVarSignaturesWithScc (Ddi_SccMgr_t *sccMgr, Ddi_Mgr_t *ddm, bAig_array_t *aigNodes, Ddi_Bddarray_t *lambda, Ddi_AigSignatureArray_t *varSig, int *mapPs, int *mapNs, int nMap);
 EXTERN int Ddi_DeltaFindEqSpecs(Ddi_Bddarray_t *delta, Ddi_Vararray_t *ps, Ddi_Var_t *pvarPs, Ddi_Var_t *cvarPs, Ddi_Bdd_t *partSpec, int *nPartP, int doConstr, int speculate);
-EXTERN Ddi_Bddarray_t *Ddi_AigarrayFindXors(Ddi_Bddarray_t *fA, Ddi_Vararray_t *mapVars);
+EXTERN Ddi_Bddarray_t *Ddi_AigarrayFindXors(Ddi_Bddarray_t *fA, Ddi_Vararray_t *mapVars, int topEqOnly);
 EXTERN int Ddi_AigCheckEqGate (Ddi_Mgr_t *ddiMgr, bAigEdge_t baig, bAigEdge_t right, bAigEdge_t left, bAigEdge_t *baigEq0P, bAigEdge_t *baigEq1P, int chkDiff);
 EXTERN int Ddi_AigCheckImplGate (Ddi_Mgr_t *ddiMgr, bAigEdge_t baig, bAigEdge_t right, bAigEdge_t left, bAigEdge_t *baigEq0P, bAigEdge_t *baigEq1P);
 EXTERN Ddi_Bdd_t *Ddi_AigSatAndFlowAbstraction (Ddi_Bdd_t *a, Ddi_Bdd_t *b);
@@ -1628,8 +1641,14 @@ EXTERN Ddi_Bddarray_t *Ddi_FindAigIte(Ddi_Bdd_t *f, int threshold);
 EXTERN Ddi_Bdd_t *Ddi_AigConstRed (Ddi_Bddarray_t *fA, Ddi_Bdd_t *constr, void *coreClauses, void *cnfMappedVars,int doRedRem, int maxGateWindow, int assertF, int checkOnlyRedPhase, void *nnfCoreMgrVoid, float timeLimit);
 EXTERN Ddi_Bdd_t *Ddi_AigDisjDecomp (Ddi_Bdd_t *f, int minp,int maxp);
 EXTERN Ddi_Bdd_t *Ddi_AigConjDecomp (Ddi_Bdd_t *f, int minp,int maxp);
+EXTERN Ddi_Bddarray_t *Ddi_AigDisjDecompRoots (Ddi_Bdd_t *f, Ddi_Var_t *pVar, Ddi_Var_t *cVar, int recurTh);
 EXTERN Ddi_Bdd_t *Ddi_ItpWeakenByRefinement (Ddi_Bdd_t *a,Ddi_Bdd_t *b,Ddi_Bdd_t *care);
-EXTERN void Ddi_AigArrayClearAuxIntIntern(bAig_Manager_t *bmgr, bAig_array_t *visitedNodes);
+EXTERN void Ddi_AigArrayClearAuxInt(bAig_Manager_t *bmgr, bAig_array_t *visitedNodes);
+EXTERN Ddi_Bdd_t *
+Ddi_BddPartFilter (
+  Ddi_Bdd_t *f,
+  Ddi_Bdd_t *filter 
+);
 EXTERN Ddi_Bdd_t *
 Ddi_AigSat22Constrain(
   Ddi_Bdd_t *F,

@@ -173,6 +173,11 @@ static void
 Minisat22Eliminate (
   void    *Svoid
 );
+static Ddi_Bddarray_t *
+aigArrayMakeFromMinisatLits(
+  Ddi_Mgr_t *ddm,
+  vec<Lit>& lits
+);
 static void
 RestoreClausesAsAigs(
   Ddi_Mgr_t *ddm,
@@ -498,6 +503,7 @@ static void bAigArrayMinisatClausesWithNum(Ddi_Mgr_t *ddm, Solver&    S, bAig_ar
 static void bAigArrayMinisatClauses(Ddi_Mgr_t *ddm, Solver&    S, bAig_array_t *visitedNodes, int i0);
 static void MinisatInterpolant(Solver& S, Ddi_Mgr_t *ddm, int nAClauses, int reverseItp, Ddi_Bdd_t **interpolantP, Ddi_Bdd_t **interpolantOptP, Ddi_Bdd_t *care,  Ddi_Bddarray_t *partitionLits, vec<vec<Lit> > *partitionClausesP, int nSuppVars, int itpOdc);
 static Ddi_Bdd_t *getProof22(void *Svoid, struct Checker *travP, Ddi_Bdd_t *a, Ddi_Bdd_t *b, int nAClauses, Ddi_Varset_t *globalvars,int computeAuxItp);
+static Ddi_Bdd_t *Minisat22InterpolantUndefTopLits (void *Svoid, Ddi_Mgr_t *ddm, int maxn);
 static bool
 Minisat22InterpolantUndef (void    *Svoid, Ddi_Mgr_t *ddm, Ddi_Bdd_t *a, Ddi_Varset_t *globalvars, int reverseItp, Ddi_Bdd_t **interpolantP, Ddi_Bdd_t *care, int nSuppVars, int itpOdc, int genProof, int nACl, int useB);
 static bool Minisat22Interpolant(void *S22, Ddi_Mgr_t *ddm, Ddi_Bdd_t *a, Ddi_Bdd_t *b, int nAClauses, Ddi_Varset_t *globalvars, int reverseItp, Ddi_Bdd_t **interpolantP, Ddi_Bdd_t **interpolantOptP, Ddi_Bdd_t *care, int nSuppVars, int itpOdc, int genProof);
@@ -1011,6 +1017,67 @@ Ddi_AigConjDecomp (
    SideEffects []
    SeeAlso     []
 ******************************************************************************/
+Ddi_Bddarray_t *
+Ddi_AigDisjDecompRoots (
+  Ddi_Bdd_t *f,
+  Ddi_Var_t *pVar,
+  Ddi_Var_t *cVar,
+  int recurTh
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
+  Ddi_Bddarray_t *roots = Ddi_BddarrayAlloc(ddm,0);
+  Ddi_Bdd_t *fDup = Ddi_BddDup(f);
+  if (pVar!=NULL)
+    Ddi_BddCofactorAcc(fDup,pVar,1);
+  if (cVar!=NULL)
+    Ddi_BddCofactorAcc(fDup,cVar,1);
+  Ddi_Bdd_t *pConj = Ddi_AigPartitionTop(fDup, 0);
+  Ddi_Free(fDup);
+  Ddi_Bdd_t *pPart;
+  int tryDec = 1, tryCompact = 1, increasingSize = 1;
+  int prevPartNum = 0;
+
+  Ddi_BddPartSortBySizeAcc(pConj, 1); 
+
+  for (int ii = 0; ii < Ddi_BddPartNum(pConj); ii++) {
+    Ddi_Bdd_t *p_ii = Ddi_BddPartRead(pConj, ii);
+
+    Ddi_Bdd_t *p_ii_Part = Ddi_AigPartitionTop(p_ii, 1);
+    int np_ii = Ddi_BddPartNum(p_ii_Part);
+      
+    Ddi_BddPartSortBySizeAcc(p_ii_Part, 1); // decreasing size
+    
+    for (int j = 0; j < np_ii; j++) {
+      Ddi_Bdd_t *p_j = Ddi_BddPartRead(p_ii_Part, j);
+      Ddi_BddarrayInsertLast(roots,p_j);    
+    }
+    Ddi_Free(p_ii_Part);
+  }
+  Ddi_Free(pConj);
+  if (recurTh>0) {
+    int n = Ddi_BddarrayNum(roots);
+    if (n<100) {
+      for (int i=0; i<n; i++) {
+        Ddi_Bdd_t *r_i = Ddi_BddarrayRead(roots,i);
+        if (Ddi_BddSize(r_i) > recurTh) {
+          Ddi_Bddarray_t *newRoots = Ddi_AigDisjDecompRoots (r_i,NULL,NULL,0);
+          Ddi_BddarrayAppend(roots,newRoots);
+          Ddi_Free(newRoots);
+        }
+      }
+    }
+  }
+  
+  return roots;
+}
+
+/**Function********************************************************************
+   Synopsis    []
+   Description []
+   SideEffects []
+   SeeAlso     []
+******************************************************************************/
 Ddi_Bdd_t *
 Ddi_AigConjDecompRecur (
   Ddi_Bdd_t *f,
@@ -1119,12 +1186,50 @@ Ddi_AigConjDecompRecur (
   SeeAlso     []
 ******************************************************************************/
 void
-Ddi_AigArrayClearAuxIntIntern(
+Ddi_AigArrayClearAuxInt(
   bAig_Manager_t *bmgr,
   bAig_array_t *visitedNodes
 )
 {
   aigArrayClearAuxIntIntern(bmgr,visitedNodes);
+}
+
+
+
+/**Function********************************************************************
+  Synopsis    [Select partitions belonging to filter]
+  Description [Select partitions belonging to filter]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bdd_t *
+Ddi_BddPartFilter (
+  Ddi_Bdd_t *f,
+  Ddi_Bdd_t *filter 
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  bAig_array_t *aigNodes = bAigArrayAlloc();
+  int i;
+  Ddi_Bdd_t *fFiltered = Ddi_BddMakePartConjVoid(ddm);
+  
+  Ddi_PostOrderBddAigVisitIntern(filter,aigNodes,-1);
+  Ddi_PostOrderAigClearVisitedIntern(bmgr,aigNodes);
+  for (i=0; i<aigNodes->num; i++) {
+    bAigEdge_t baig = aigNodes->nodes[i];
+    bAig_AuxInt(bmgr,baig) = 1;
+  }
+  for (i=0; i<Ddi_BddPartNum(f); i++) {
+    Ddi_Bdd_t *f_i = Ddi_BddPartRead(f,i);
+    bAigEdge_t baig = Ddi_BddToBaig(f_i);
+    if (bAig_AuxInt(bmgr,baig)>0) {
+      Ddi_BddPartInsertLast(fFiltered,f_i);
+    }
+  }
+  Ddi_AigArrayClearAuxInt(bmgr,aigNodes);
+  
+  return fFiltered;
 }
 
 /**Function********************************************************************
@@ -1487,6 +1592,21 @@ DdiAigFanoutCount (
   return(cnt);
 }
 
+
+/**Function********************************************************************
+  Synopsis    [Return support of Aig]
+  Description [Return support of Aig]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+int
+DdiAigVararraySortByFlow(
+  Ddi_Vararray_t *vA,
+  Ddi_Bdd_t *fAig
+)
+{
+  return AigVararraySortByFlow(vA,fAig);
+}
 
 /**Function********************************************************************
   Synopsis    [Return support of Aig]
@@ -5079,14 +5199,16 @@ DdiAigMonotoneRedAcc (
 
   suppSm = Ddi_BddSupp(a);
   suppAbstr = Ddi_VarsetDup(suppSm);
-  if (Ddi_VarsetIsArray(project)) {
-    Ddi_VarsetSetArray(project);
-    Ddi_VarsetSetArray(suppAbstr);
+  if (project!=NULL) {
+    if (Ddi_VarsetIsArray(project)) {
+      Ddi_VarsetSetArray(project);
+      Ddi_VarsetSetArray(suppAbstr);
+    }
+    
+    Ddi_VarsetDiffAcc(suppSm,project);
+    Ddi_VarsetDiffAcc(suppAbstr,project);
   }
-
-  Ddi_VarsetDiffAcc(suppSm,project);
-  Ddi_VarsetDiffAcc(suppAbstr,project);
-
+  
   r = DdiAigTernaryInterpolantAcc (a,NULL,suppAbstr,
           suppSm,NULL,care,0,0,timeLimit);
 
@@ -31459,7 +31581,7 @@ Ddi_AigProjectAllSolutionImgAcc (
   int *nextStateVars;
   int ret;
   Pdtutil_VerbLevel_e verbosity = Ddi_MgrReadVerbosity (ddm);
-  int timeLimit=100;
+  int timeLimit=-1;
 
   Solver    S, S2;
   vec<Lit> blocking;
@@ -48036,12 +48158,13 @@ Ddi_AigSatAndWithInterpolantIncr (
   }
 
   int checkBbySat = 0;
+  int checkAbySat = 0;
   if (Ddi_BddIsZero(b) || incrSat==NULL && forceRevItp && 
       (checkBbySat && !Ddi_AigSatAnd(b,optCare,NULL))) {
     *psat = 0;
     return (Ddi_BddMakeConstAig(ddm,1));
   }
-  if (Ddi_BddIsZero(a) || incrSat==NULL && !Ddi_AigSat(a)) {
+  if (Ddi_BddIsZero(a) || incrSat==NULL && checkAbySat && !Ddi_AigSat(a)) {
     *psat = 0;
     return (Ddi_BddMakeConstAig(ddm,0));
   }
@@ -76232,7 +76355,8 @@ typedef struct {
 Ddi_Bddarray_t *
 Ddi_AigarrayFindXors(
   Ddi_Bddarray_t *fA,
-  Ddi_Vararray_t *mapVars
+  Ddi_Vararray_t *mapVars,
+  int topEqOnly
 )
 {
   Ddi_Mgr_t *ddiMgr = Ddi_ReadMgr(fA);
@@ -76436,8 +76560,11 @@ Ddi_AigarrayFindXors(
     for (i=0; i<visitedNodes->num; i++) {
       //      if (!nodeInfo[i].mapVarOnlyInFi) continue;
       //      if (nodeInfo[i].doReturn && nodeInfo[i].fo>0) {
-      if (nodeInfo[i].isAndEq && !nodeInfo[i].foAndEq) {
-	// if (nodeInfo[i].isAndEq && nodeInfo[i].fo>0) {
+      int doInsert = nodeInfo[i].isAndEq && !nodeInfo[i].foAndEq;
+      if (!topEqOnly)
+        doInsert |= nodeInfo[i].checkedCnt>0;
+      if (doInsert) {
+        // if (nodeInfo[i].isAndEq && nodeInfo[i].fo>0) {
 	bAigEdge_t baig = visitedNodes->nodes[i];
 	Ddi_Bdd_t *eq = Ddi_BddMakeFromBaig(ddiMgr,baig);
 	Ddi_BddarrayInsertLast(xorArray,eq);
@@ -80450,7 +80577,7 @@ Ddi_AigSatMinisat22WithAbortAndFinal
 
   if (sat == -1) {
   }
-  else if (!sat && (constrCube != NULL) && isCube) {
+  else if (!sat && (constrCube != NULL)) {
     Ddi_Bdd_t *constrFinal = Ddi_BddMakeConstAig(ddm, 1);
     int k;
 
@@ -80486,7 +80613,7 @@ Ddi_AigSatMinisat22WithAbortAndFinal
             assumps2.push(~conflict[k1]);              
           }
         }
-	S22.setTimeBudget((double)20);
+	S22.setTimeBudget((double)0.05);
 	int sat2 = S22.solveLimitedInt(assumps2);
         if (sat2<0 || sat2) {
           // undo remove lit
@@ -80504,6 +80631,7 @@ Ddi_AigSatMinisat22WithAbortAndFinal
           lit = Ddi_BddMakeLiteralAig(v,signSat);
           Ddi_BddAndAcc(constrFinal,lit);
           Ddi_Free(lit);
+
         }
         else {
           Ddi_Bdd_t *e = Ddi_BddMakeFromBaig(ddm,baig);
@@ -80513,12 +80641,165 @@ Ddi_AigSatMinisat22WithAbortAndFinal
       }
     }
     Ddi_DataCopy(constrCube,constrFinal);
+
     Ddi_Free(constrFinal);
   }
 
   aig2CnfIdClose(ddm);
 
   return sat;
+}
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+Ddi_Bdd_t *
+Ddi_AigSatMinisat22RemoveCoreFinal
+(
+  Ddi_Bdd_t *f,
+  Ddi_Bdd_t *constr,
+  int doGen,
+  float timeLimit,
+  int *pAbort
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  int sat, constrNum = 0, isCube=1;
+  Minisat22Solver S22;
+  vec<Lit> assumps;
+
+  if (Ddi_BddIsConstant(f) && constr==NULL) {
+    return(Ddi_BddDup(f));
+  }
+
+  isCube = Ddi_BddIsCube(constr);
+
+  aig2CnfIdInit(ddm);
+  Minisat22Clauses((void *)&S22,f,NULL,NULL,0);
+
+  assumps.clear();
+
+  Ddi_Bdd_t *constrPart = NULL;
+  if (constr != NULL) {
+    isCube = Ddi_BddIsCube(constr);
+    constrPart = Ddi_AigPartitionTop(constr,0);
+    int j;
+    constrNum = Ddi_BddPartNum(constrPart);
+    if (!isCube) {
+      Minisat22Clauses((void *)&S22,constrPart,NULL,NULL,1);
+    }
+    for (j=0; j<Ddi_BddPartNum(constrPart); j++) {
+      Ddi_Bdd_t *c_j = Ddi_BddPartRead(constrPart,j);
+      bAigEdge_t baig = Ddi_BddToBaig(c_j);
+      int cCnf = bAig_NodeIsInverted(baig) ? -aig2CnfId(bmgr,baig) :
+	aig2CnfId(bmgr,baig);
+      while (abs(cCnf) > S22.nVars()) S22.newVar();
+      assumps.push(MinisatLit(cCnf));
+    }
+  }
+  if (!S22.okay()) {
+    aig2CnfIdClose(ddm);
+    Ddi_Free(constrPart);
+    return NULL;
+  }
+
+  Minisat::vec<Minisat::Lit> assumps22;
+  MinisatTo22(assumps22,assumps);
+
+  if (timeLimit >= 0) {
+    S22.setTimeBudget((double)timeLimit);
+    sat = S22.solveLimitedInt(assumps22);
+  }
+  else {
+    sat = S22.solve(assumps22,false,true);
+  }
+
+  Ddi_Bdd_t *constrNoFinal = Ddi_BddMakePartConjVoid(ddm);
+  Ddi_Bdd_t *constrFinal = NULL;
+
+  if (sat == -1) {
+    Ddi_Free(constrNoFinal);
+  }
+  else if (sat > 0) {
+    Ddi_Free(constrNoFinal);
+    constrNoFinal = Ddi_BddDup(constrPart);
+  }
+  else if (!sat && (constr != NULL)) {
+    bAig_array_t *finalNodes = bAigArrayAlloc();
+    int k;
+    Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMax_c) {
+      printf("solver final selected %d/%d vars\n", S22.conflict.size(),
+	   constrNum);
+    }
+    Minisat::vec<Minisat::Lit> conflict;
+    Minisat::vec<Minisat::Lit> conflict2;
+    Minisat::vec<Minisat::Lit> assumps2;
+    Minisat::vec<Minisat::Lit> assumps3;
+    for (k=0; k<S22.conflict.size(); k++) {
+      Minisat::Lit kLit = S22.conflict[k];
+      conflict.push(kLit);
+      assumps2.push(~kLit);
+    }
+    assert(!S22.solve(assumps2,false,true));
+    for (k=0; k<conflict.size(); k++) {
+      Ddi_Bdd_t *lit;
+      Minisat::Lit kLit = conflict[k];
+      int vSat = var(kLit);
+      int signSat = sign(kLit);
+      int vCnf = vSat+1;
+      int useLit = 1;
+      if (doGen) {
+        assumps2.clear();
+        conflict[k] = Minisat::lit_Undef;
+        for (int k1=0; k1<conflict.size(); k1++) {
+          if (conflict[k1] != Minisat::lit_Undef) {
+            assumps2.push(~conflict[k1]);              
+          }
+        }
+	S22.setTimeBudget((double)0.05);
+	int sat2 = S22.solveLimitedInt(assumps2);
+        if (sat2<0 || sat2) {
+          // undo remove lit
+          conflict[k] = kLit;
+          conflict2.push(kLit);
+          assumps3.push(~kLit);
+        }
+        else {
+          useLit = 0;
+        }
+      }
+      if (useLit) {
+        bAigEdge_t baig = ddm->cnf.cnf2aig[vCnf];
+        bAigArrayPush(finalNodes,baig);
+        bAig_AuxInt(bmgr,baig) = 1;
+      }
+    }
+    constrFinal = Ddi_BddMakePartConjVoid(ddm);
+    for (int i=0; i<Ddi_BddPartNum(constrPart); i++) {
+      Ddi_Bdd_t *c_i = Ddi_BddPartRead(constrPart,i);
+      bAigEdge_t baig = Ddi_BddToBaig(c_i);
+      if (bAig_AuxInt(bmgr,baig)<=0) {
+        Ddi_BddPartInsertLast(constrNoFinal,c_i);
+      }
+      else {
+        Ddi_BddPartInsertLast(constrFinal,c_i);
+      }
+    }
+    Ddi_AigArrayClearAuxInt(bmgr,finalNodes);
+    if (Ddi_BddPartNum(constrFinal)==0) {
+      Ddi_Free(constrFinal);
+    }
+    else 
+      Ddi_DataCopy(constr,constrNoFinal);
+  }
+  
+  Ddi_Free(constrPart);
+  aig2CnfIdClose(ddm);
+
+  return constrFinal;
 }
 
 /**Function********************************************************************
@@ -83418,8 +83699,19 @@ Ddi_AigSat22AndWithInterpolant (
        (int)S22->conflicts);
     fprintf(dMgrO(ddm),"Solver stats: time = %s\n", util_print_time (cpuTime)));
 
+  if (0 && (cpuTime > 40000)) {
+    Minisat::vec<Minisat::Lit> topLits22;
+    S22->getLearntsTopLits(topLits22,100);
+    vec<Lit> topLits;
+    MinisatFrom22(topLits22,topLits);
+    Ddi_Bddarray_t *topA = aigArrayMakeFromMinisatLits(ddm, topLits);
+    Ddi_Free(topA);
+  }
+
   if (*psat < 0) {
     int ncl, i;
+    int enTopLitConstr = 1;
+    int returnConstr = 1;
     undefined = 1;
 
     Pdtutil_VerbosityLocal(Pdtutil_VerbLevelUsrMin_c, Pdtutil_VerbLevelNone_c,
@@ -83444,6 +83736,112 @@ Ddi_AigSat22AndWithInterpolant (
       else {
 	delete S22itp;
       }
+    }
+    else if (enTopLitConstr && returnConstr) {
+      Ddi_Bdd_t *constrFull = Minisat22InterpolantUndefTopLits ((void *)S22, ddm, 200);
+      interpolant = constrFull;
+      aig2CnfIdClose(ddm);
+    }
+    else if (enTopLitConstr) {
+      Ddi_Bdd_t *constrFull = Minisat22InterpolantUndefTopLits ((void *)S22, ddm, 10);
+      aig2CnfIdClose(ddm);
+      Ddi_Bdd_t *constrA = Ddi_BddPartFilter (constrFull,a2);
+      Ddi_Bdd_t *constrB = Ddi_BddPartFilter (constrFull,b2);
+      Ddi_Bdd_t *myA = Ddi_BddDup(a2);
+      Ddi_Bdd_t *myB = Ddi_BddDup(b2);
+      int useAconstr = Ddi_BddPartNum(constrA) > Ddi_BddPartNum(constrB);
+      int abort;
+      if (!useAconstr) {
+        int again = 0;
+        do {
+          Ddi_Bdd_t *newConstrB = Ddi_BddDup(constrB);
+          Ddi_Bdd_t *constrFinal = Ddi_AigSatMinisat22RemoveCoreFinal(myB,newConstrB,
+                                                                      1,(double)timeLimit,&abort);
+          again = 0;
+          if (constrFinal != NULL) {
+            Ddi_Free(constrFinal);
+            again = 1;
+            Ddi_DataCopy(constrB, newConstrB);
+          }
+          Ddi_Free(newConstrB);
+        } while (again);
+        Ddi_BddSetPartConj(myB);
+        Ddi_BddPartInsertLast(myB,constrB);
+        Ddi_BddSetFlattened(myB);
+        useAconstr = 0;
+      }
+      if (useAconstr) {
+        int again = 0;
+        do {
+          Ddi_Bdd_t *newConstrA = Ddi_BddDup(constrA);
+          Ddi_Bdd_t *constrFinal = Ddi_AigSatMinisat22RemoveCoreFinal(myA,newConstrA,
+                                                                      1,(double)timeLimit,&abort);
+          again = 0;
+          if (constrFinal != NULL) {
+            Ddi_Free(constrFinal);
+            again = 1;
+            Ddi_DataCopy(constrA, newConstrA);
+          }
+          Ddi_Free(newConstrA);
+        } while (again);
+        Ddi_BddSetPartConj(myA);
+        Ddi_BddPartInsertLast(myA,constrA);
+        Ddi_BddSetFlattened(myA);
+      }
+      Ddi_Bdd_t *constr = useAconstr?constrA:constrB;
+      Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+        printf("\nConstrained interpolant with %s constraint of size %d (%d entries)\n",
+               useAconstr?"A":"B", Ddi_BddSize(constr), Ddi_BddPartNum(constr));
+      }
+      Ddi_Bdd_t *itp2_1 = Ddi_AigSat22AndWithInterpolant(
+			 incrSat,myA,myB,NULL,
+			 globalVars, domainVars,
+			 tfPiVars,tfPiNum,
+			 NULL,NULL,
+			 psat, 0, itpOdc,0, 
+			 -1);
+      interpolant = itp2_1;
+      for (int i=0; i<Ddi_BddPartNum(constr); i++) {
+        Ddi_Bdd_t *myA_i = Ddi_BddDup(a2);
+        Ddi_Bdd_t *myB_i = Ddi_BddDup(b2);
+        Ddi_Bdd_t *c_i = Ddi_BddPartRead(constr,i);
+        if (useAconstr)
+          Ddi_BddDiffAcc(myA_i,c_i);
+        else
+          Ddi_BddDiffAcc(myB_i,c_i);
+
+        Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+          printf("\nConstrained interpolant with constraint [%d] of size %d\n",
+                 i, Ddi_BddSize(c_i));
+        }
+
+        Ddi_Bdd_t *itp2_i = Ddi_AigSat22AndWithInterpolant(
+                         incrSat,myA_i,myB_i,NULL,
+			 globalVars, domainVars,
+			 tfPiVars,tfPiNum,
+			 NULL,NULL,
+			 psat, 0, itpOdc,0, 
+			 -1);
+        Ddi_Free(myA_i);
+        Ddi_Free(myB_i);
+        if (itp2_i==NULL) {
+          Ddi_Free(interpolant);
+          break;
+        }
+        if (useAconstr)
+          Ddi_BddOrAcc(interpolant,itp2_i);
+        else
+          Ddi_BddAndAcc(interpolant,itp2_i);
+        Ddi_Free(itp2_i);
+      }
+      Ddi_Free(a2);
+      Ddi_Free(b2);
+
+      Ddi_Free(myA);
+      Ddi_Free(myB);
+      Ddi_Free(constrA);
+      Ddi_Free(constrB);
+      Ddi_Free(constrFull);
     }
     else if (globalVars!=NULL) { 
       int useB = 1;
@@ -83566,7 +83964,8 @@ Ddi_AigSat22AndWithInterpolant (
   }
 
   if (*psat || (undefined && !itpPart)) {
-    aig2CnfIdClose(ddm);
+    if (DdiAig2CnfIdIsOpen(ddm))
+      aig2CnfIdClose(ddm);
 
     Ddi_Free(a2);
     Ddi_Free(b2);
@@ -83578,8 +83977,10 @@ Ddi_AigSat22AndWithInterpolant (
       Ddi_IncrSatMgrQuitKeepDdi(incrSat);
     }
     Ddi_Free(vA);
-    if (undefined) *psat = -1;
-
+    if (undefined) {
+      *psat = -1;
+      return interpolant;
+    }
     return NULL;
   }
 
@@ -84313,7 +84714,8 @@ trySatClauseArray(
 static Ddi_Bdd_t *
 Minisat22NnfAbstrPba(
   Ddi_Bdd_t *f,
-  Minisat::vec< Minisat::vec<Minisat::Lit> >& clauses
+  Minisat::vec< Minisat::vec<Minisat::Lit> >& clauses,
+  float timeLimit
 )
 {
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
@@ -84379,21 +84781,33 @@ Minisat22NnfAbstrPba(
   long cpuTime=0, startTime=0;
 
   startTime = util_cpu_time ();
-  int ret = S.solve(false,true);
+  int ret=0;
+  if (timeLimit >= 0) {
+    Minisat::vec<Minisat::Lit> assumps22;
+    S.setTimeBudget((double)timeLimit);
+    ret = S.solveLimitedInt(assumps22);
+  }
+  else {
+    ret = S.solve(false,true);
+  }
   cpuTime = util_cpu_time () - startTime;
   Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {
-    fprintf(dMgrO(ddm),"NNF PBA Solver time = %s)\n", 
-            util_print_time(cpuTime));
+    fprintf(dMgrO(ddm),"NNF PBA Solver time%s = %s)\n", 
+            ret<0?" (undefined)":"", util_print_time(cpuTime));
     fprintf(dMgrO(ddm),
           "NNF PBA Solver stats: %ld/%ld/%ld dec./prop./confl.\n",
 	 (int)S.decisions, (int)S.propagations,
 	 (int)S.conflicts);
   }
-  assert (!ret);
+  //  assert (!ret);
   
   if (!ret) {
     int nCut=0;
 
+    //    if (cpuTime > 5000) {
+    //      S.printLearntsLitStats();
+    //    }
+    
     Minisat::TraceProofVisitor v(S, stdout);
     startTime = util_cpu_time ();
     S.validate(v);
@@ -84719,14 +85133,14 @@ getAuxProof22(
 
   Ddi_Bdd_t *itp=NULL;
   if (nAClCore==clauses1.size()) {
-    // A is zero
+    // A is zero - No B clauses needed for unsat
     itp = Ddi_BddMakeConstAig(ddm, 0);
     Ddi_Free(auxF);
     Ddi_Free(auxV);
     return (itp);
   }
   else if (nAClCore==0) {
-    // B is zero
+    // B is zero - No A clauses needed for unsat
     itp = Ddi_BddMakeConstAig(ddm, 1);
     Ddi_Free(auxF);
     Ddi_Free(auxV);
@@ -84963,6 +85377,7 @@ getAuxProof22(
   }
 
   int itpAgain = okay;
+  float itp2TimeLimit = -1.0;
   if (itpAgain) {
 
     Minisat::TraceProofVisitor v(S22check, stdout);
@@ -84973,7 +85388,9 @@ getAuxProof22(
       fprintf(dMgrO(ddm),"CHECK Solver Validation time = %s)\n", 
               util_print_time(cpuTime));
     }
-
+    itp2TimeLimit = 8*(float)cpuTime/1000;
+    if (itp2TimeLimit < 5) itp2TimeLimit = 5;
+                           
     startTime = util_cpu_time ();
     bool okReplay = S22check.replay(v);
     cpuTime = util_cpu_time () - startTime;
@@ -85128,13 +85545,13 @@ getAuxProof22(
                                    ClAorig,ClAfromB,ClAfromRes);
 #if 0
        Ddi_BddNotAcc(itp2);
-       Ddi_Bdd_t *itp2AbstrA = Minisat22NnfAbstrPba(itp2,ClA);
+       Ddi_Bdd_t *itp2AbstrA = Minisat22NnfAbstrPba(itp2,ClA,-1.0);
        Ddi_BddNotAcc(itp2);
        Ddi_BddNotAcc(itp2AbstrA);
 #else
        Ddi_Bdd_t *itp2AbstrA = Ddi_BddDup(itp2);
 #endif
-       Ddi_Bdd_t *itp2Abstr = Minisat22NnfAbstrPba(itp2AbstrA,ClB);
+       Ddi_Bdd_t *itp2Abstr = Minisat22NnfAbstrPba(itp2AbstrA,ClB,itp2TimeLimit);
        Ddi_Free(itp2AbstrA);
        assert (itp2Abstr!=NULL);
        Ddi_Free(itp2);
@@ -85600,6 +86017,77 @@ printTopResClauses22(
   SeeAlso     [Ddi_BddMakeFromCU]
 ******************************************************************************/
 static int
+Minisat22GetTopLearningLits (
+  void    *Svoid,
+  Minisat::TraceProofVisitor &v,
+  Ddi_Mgr_t *ddm,
+  Ddi_Varset_t *globalVars,
+  int useB
+)
+{
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  Minisat22Solver* S22 = (Minisat22Solver *)Svoid;
+  Minisat::vec<Minisat::Var> filterVars;
+  Minisat::vec<Minisat::Var> filter2Vars;
+  int i, ncl;
+
+  Pdtutil_Assert(globalVars!=NULL,"global vars needed");
+
+  filterVars.clear();
+  filter2Vars.clear();
+
+  for (i=0; i<S22->nVars(); i++) {
+    int vCnf = i+1;
+    Minisat::Var v22 = i;
+    if (ddm->cnf.solver2cnf != NULL) {
+      vCnf = ddm->cnf.solver2cnf[i]+1;
+    }
+    bAigEdge_t litBaig = ddm->cnf.cnf2aig[vCnf];
+    int isB = nodeAuxChar(bmgr,litBaig)>0;
+    int isGlob = nodeAuxChar(bmgr,litBaig)>1;
+    if (!useB) isB = !isB;
+    if (isB)
+      filter2Vars.push(v22);
+    if (isGlob)
+      filterVars.push(v22);
+  }	
+  v.genUndefTopClauses(filterVars, filter2Vars);
+  ncl = v.nTopClauses();
+  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {
+    printf("# learnt clauses on itp VARS: %d\n", ncl);
+  }
+
+#if 0
+  Ddi_Bdd_t *learntAig = Ddi_BddMakeConstAig(ddm, 1);
+  for (i=0; i<learntClauses.size(); i++) {
+    int j;
+    Ddi_Bdd_t *clauseAig = Ddi_BddMakeConstAig(ddm, 0);
+    Minisat::vec<Minisat::Lit>& c = learntClauses[i];
+    for (j=0; j<c.size(); j++) {
+      int v = Minisat::var(c[j]);
+      bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
+      int s = Minisat::sign(c[j]);
+      Ddi_Bdd_t *litAig = Ddi_BddMakeFromBaig(ddm, baig);
+      if (s) Ddi_BddNotAcc(litAig);
+      Ddi_BddOrAcc(clauseAig,litAig);
+      Ddi_Free(litAig);
+    }
+    Ddi_BddAndAcc(learntAig,clauseAig);
+    Ddi_Free(clauseAig);
+  }
+  Ddi_BddNotAcc(learntAig);
+#endif
+
+  return ncl;
+}
+
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+static int
 Minisat22GetUndefTopClauses (
   void    *Svoid,
   Minisat::TraceProofVisitor &v,
@@ -85811,6 +86299,38 @@ Minisat22Eliminate (
 
   S22->eliminate(true);
 }
+
+
+static Ddi_Bddarray_t *
+aigArrayMakeFromMinisatLits(
+  Ddi_Mgr_t *ddm,
+  vec<Lit>& lits
+)
+{
+  int j;
+  Ddi_Bddarray_t *fA = Ddi_BddarrayAlloc(ddm,0);
+  for (j=0; j<lits.size(); j++) {
+    Lit l = lits[j];
+    int vSat = var(l);
+    int signSat = sign(l);
+    int vCnf = vSat+1;
+    bAigEdge_t baig = ddm->cnf.cnf2aig[vCnf];
+    Ddi_Bdd_t *aig = NULL;
+    if (bAig_isVarNode(ddm->aig.mgr,baig)) {
+      Ddi_Var_t *v = Ddi_VarFromBaig(ddm,baig);
+      Pdtutil_Assert (v!=NULL, "Null var");
+      aig = Ddi_BddMakeLiteralAig(v,signSat?0:1);
+    }
+    else {
+      aig = Ddi_BddMakeFromBaig(ddm, baig);
+      if (signSat) Ddi_BddNotAcc(aig);
+    }
+    Ddi_BddarrayInsertLast(fA,aig);
+    Ddi_Free(aig);
+  }
+  return fA;
+}
+
 
 /**Function********************************************************************
   Synopsis    [Convert a DDI AIG to a monolitic BDD]
@@ -86037,6 +86557,35 @@ Minisat22InterpolantUndef (
   // system("rm -f ./tmp/file*");
 
   return success;
+}
+
+/**Function********************************************************************
+  Synopsis    [Literals appearing in highest number of learned clauses]
+  Description [Literals appearing in highest number of learned clauses. The result is a conjunct of aigs. Phase: complemented w.r.t. literals in clauses]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Bdd_t *
+Minisat22InterpolantUndefTopLits (
+  void    *Svoid,
+  Ddi_Mgr_t *ddm,
+  int maxn
+)
+{
+  Minisat22Solver* S22 = (Minisat22Solver *)Svoid;
+  long cpuTime=0, startTime=0;
+  Ddi_Bdd_t *topLitConstr;
+ 
+  Minisat::vec<Minisat::Lit> topLits22;
+  S22->getLearntsTopLits(topLits22,maxn,0);
+  vec<Lit> topLits;
+  MinisatFrom22(topLits22,topLits);
+  Ddi_Bddarray_t *topA = aigArrayMakeFromMinisatLits(ddm, topLits);
+  topLitConstr = Ddi_BddMakePartDisjFromArray(topA);
+  Ddi_BddNotAcc(topLitConstr);
+  Ddi_Free(topA);
+
+  return topLitConstr;
 }
 
 /**Function********************************************************************

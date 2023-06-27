@@ -286,7 +286,7 @@ FbvThrdVerif(
     fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
     Fsm_FsmFoldProperty(fsmFsm, opt->mc.compl_invarspec,
       opt->trav.cntReachedOK, 1);
-    Fsm_FsmFoldConstraint(fsmFsm);
+    Fsm_FsmFoldConstraint(fsmFsm, opt->mc.compl_invarspec);
     //    Fsm_FsmFoldInit(fsmFsm);
     Fsm_FsmWriteToFsmMgr(fsmMgr, fsmFsm);
     Fsm_FsmFree(fsmFsm);
