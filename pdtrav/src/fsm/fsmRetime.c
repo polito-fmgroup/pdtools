@@ -6098,7 +6098,18 @@ retimePeriferalLatches(
     }
     printf("%d latched stalled adter init found\n", nStalled);
   }
-  
+
+
+  if (0 && initStub!=NULL && fsmMgr->stats.initStubSteps==1) {
+    int ns = Ddi_BddarrayNum(initStub);
+    for (int i=0; i<ns; i++) {
+      Ddi_Bdd_t *is_i = Ddi_BddarrayRead(initStub,i);
+      if (Ddi_BddSize(is_i) > 0) {
+        printf("init stub[%d] -> size: %d\n", i, Ddi_BddSize(is_i));
+      }
+    }
+  }  
+    
   Ddi_Free(ps0);
   Ddi_Free(initStub);
   Ddi_Free(substVars);

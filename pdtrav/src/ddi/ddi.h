@@ -1535,6 +1535,12 @@ EXTERN long double Ddi_AigEstimateMintermCount (Ddi_Bdd_t *f, int numv);
 EXTERN Ddi_AigDynSignatureArray_t *Ddi_AigEvalVarSignatures (Ddi_Mgr_t *ddm, bAig_array_t *aigNodes, Ddi_AigSignatureArray_t *varSig, int *mapPs, int *mapNs, int nMap);
 EXTERN Ddi_AigDynSignatureArray_t *Ddi_AigEvalVarSignaturesWithScc (Ddi_SccMgr_t *sccMgr, Ddi_Mgr_t *ddm, bAig_array_t *aigNodes, Ddi_Bddarray_t *lambda, Ddi_AigSignatureArray_t *varSig, int *mapPs, int *mapNs, int nMap);
 EXTERN int Ddi_DeltaFindEqSpecs(Ddi_Bddarray_t *delta, Ddi_Vararray_t *ps, Ddi_Var_t *pvarPs, Ddi_Var_t *cvarPs, Ddi_Bdd_t *partSpec, int *nPartP, int doConstr, int speculate);
+EXTERN Ddi_Bddarray_t *
+Ddi_AigFindXors(
+  Ddi_Bdd_t *f,
+  Ddi_Vararray_t *mapVars,
+  int topEqOnly
+);
 EXTERN Ddi_Bddarray_t *Ddi_AigarrayFindXors(Ddi_Bddarray_t *fA, Ddi_Vararray_t *mapVars, int topEqOnly);
 EXTERN int Ddi_AigCheckEqGate (Ddi_Mgr_t *ddiMgr, bAigEdge_t baig, bAigEdge_t right, bAigEdge_t left, bAigEdge_t *baigEq0P, bAigEdge_t *baigEq1P, int chkDiff);
 EXTERN int Ddi_AigCheckImplGate (Ddi_Mgr_t *ddiMgr, bAigEdge_t baig, bAigEdge_t right, bAigEdge_t left, bAigEdge_t *baigEq0P, bAigEdge_t *baigEq1P);

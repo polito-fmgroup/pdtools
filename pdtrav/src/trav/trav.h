@@ -1159,6 +1159,7 @@ EXTERN Ddi_Bdd_t *Trav_DeepestRingCex(
   int genCubes,
   Ddi_Varset_t *hintVars,
   int *fullTarget,
+  int doRunItp,
   int subsetByAntecedents
 );
 EXTERN int Trav_TravSatQbfVerif(

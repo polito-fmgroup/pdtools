@@ -45337,7 +45337,7 @@ aigOptByMonotoneCoreAcc (
 					     constr,1,2/*levelize*/);
     if (useMinisat22byProof) 
       iCore = aigSat22AndWithAigCoreByProof (monotoneItp,myB,myCarePlus,nnfCoreMgr,
-				    coreBClauses,cnfMappedVars,1,&mySat,-1.0);
+				    coreBClauses,cnfMappedVars,1,&mySat,timeLimit);
     else
       iCore = aigSat22AndWithAigCore (monotoneItp,myB,optCare,nnfCoreMgr,
 				    coreBClauses,cnfMappedVars,1,&mySat,-1.0);
@@ -76347,6 +76347,27 @@ typedef struct {
 } aigInfoForXorCheck_t;
 
 /**Function********************************************************************
+  Synopsis    [Looks for ITE constructs and tracks ENABLE signals]
+  Description [Looks for ITE constructs and tracks ENABLE signals]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bddarray_t *
+Ddi_AigFindXors(
+  Ddi_Bdd_t *f,
+  Ddi_Vararray_t *mapVars,
+  int topEqOnly
+) {
+  Ddi_Bddarray_t *xors;
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
+  Ddi_Bddarray_t *fA = Ddi_BddarrayAlloc(ddm, 1);
+  Ddi_BddarrayWrite(fA,0,f);
+  xors = Ddi_AigarrayFindXors(fA,mapVars,topEqOnly);
+  Ddi_Free(fA);
+  return xors;
+}
+
+/**Function********************************************************************
   Synopsis    [refine state eq classes]
   Description [refine state eq classes]
   SideEffects []
@@ -87502,7 +87523,14 @@ aigSat22AndWithAigCoreByProof (
     ret = 0;
   }
   else {    
-    ret = S22->solve(false,true);
+    Minisat::vec<Minisat::Lit> assumps22;
+    if (timeLimit >= 0) {
+      S22->setTimeBudget((double)timeLimit);
+      ret = S22->solveLimitedInt(assumps22);
+    }
+    else {
+      ret = S22->solve(false,true);
+    }
   }
   cpuTime = util_cpu_time () - startTime;
   Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {
@@ -87513,49 +87541,57 @@ aigSat22AndWithAigCoreByProof (
 	 (int)S22->decisions, (int)S22->propagations,
 	 (int)S22->conflicts);
   }
-  assert (!ret);
 
-  Minisat::TraceProofVisitor v(*S22, stdout);
-  startTime = util_cpu_time ();
-  S22->validate(v);
-  cpuTime = util_cpu_time () - startTime;
-  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {
-    fprintf(dMgrO(ddm),"NNF PBA Solver Validation time = %s)\n", 
-	    util_print_time(cpuTime));
-  }
-
-  int nAClCore=0;
-  int nAbstrCand=0;
-
-  vec<Var> coreVars;
-  vec<Var> sharedVars;
-  int logVars = 0;
-
-  S22->proofSetupProofVars();
-
-  for (int i=0; i<S22->nVars(); i++) {
-    if (!S22->proofPdt.UsedVar(i)) {
-      // these are vars not apearing in clauses
-      coreVars.push(i<<2);
+  if (ret<0) {
+    Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {
+      fprintf(dMgrO(ddm),"NNF PBA Solver result UNDEFINED\n");
     }
-    else if (S22->proofPdt.Global(i)) {
+    aCore = Ddi_BddDup(a);
+  }
+  else {
+    assert (!ret);
+
+    Minisat::TraceProofVisitor v(*S22, stdout);
+    startTime = util_cpu_time ();
+    S22->validate(v);
+    cpuTime = util_cpu_time () - startTime;
+    Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {
+      fprintf(dMgrO(ddm),"NNF PBA Solver Validation time = %s)\n", 
+              util_print_time(cpuTime));
+    }
+
+    int nAClCore=0;
+    int nAbstrCand=0;
+
+    vec<Var> coreVars;
+    vec<Var> sharedVars;
+    int logVars = 0;
+
+    S22->proofSetupProofVars();
+
+    for (int i=0; i<S22->nVars(); i++) {
+      if (!S22->proofPdt.UsedVar(i)) {
+        // these are vars not apearing in clauses
+        coreVars.push(i<<2);
+      }
+      else if (S22->proofPdt.Global(i)) {
+        sharedVars.push(i<<2);
+      }
+      else if (S22->proofPdt.Bvar(i)) {
+        coreVars.push(i<<2);
+      }
+      else if (1 && S22->proofPdt.Avar(i)) {
+        coreVars.push(i<<2);
+      }
+    }
+  
+    for (int i=S22->nVars(); i<ddm->cnf.maxCnfId; i++) {
       sharedVars.push(i<<2);
     }
-    else if (S22->proofPdt.Bvar(i)) {
-      coreVars.push(i<<2);
-    }
-    else if (1 && S22->proofPdt.Avar(i)) {
-      coreVars.push(i<<2);
-    }
-  }
-  
-  for (int i=S22->nVars(); i<ddm->cnf.maxCnfId; i++) {
-    sharedVars.push(i<<2);
-  }
 
-  aCore = MinisatCoreAig(a,NULL,coreVars,&sharedVars,NULL,
-			  &nCut,NULL,NULL,1);
-
+    aCore = MinisatCoreAig(a,NULL,coreVars,&sharedVars,NULL,
+                           &nCut,NULL,NULL,1);
+  }
 
   if (aigCnfMgr!=NULL) {
     aigCnfMgrFree(aigCnfMgr);

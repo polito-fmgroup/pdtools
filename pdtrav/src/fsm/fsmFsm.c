@@ -2491,7 +2491,9 @@ Fsm_FsmAbcReduceMulti(
   Fsm_Fsm_t *fsmOpt = Fsm_FsmDup(fsmFsm);
   Ddi_Mgr_t *ddm = fsmFsm->fsmMgr->dd;
   int useConstr = 0, nc = 0, nprop = Ddi_BddarrayNum(fsmFsm->lambda);
-
+  int pUnfold = Fsm_FsmUnfoldProperty(fsmOpt, 1);
+  int cUnfold = Fsm_FsmUnfoldConstraint(fsmOpt);
+  
   Pdtutil_Assert(fsmOpt->invarspec == NULL,
     "partitioned spec not supported in abc reduce");
   Pdtutil_Assert(1 || fsmOpt->initStub == NULL,
@@ -2553,6 +2555,10 @@ Fsm_FsmAbcReduceMulti(
       Ddi_AigCubeExistProjectAcc(fsmOpt->init, psv);
       Ddi_Free(psv);
     }
+    if (pUnfold)
+        Fsm_FsmFoldProperty(fsmOpt, 0, 0, 1); 
+    if (cUnfold)
+        Fsm_FsmFoldConstraint(fsmOpt, 0);
 
   } else {
     Fsm_FsmFree(fsmOpt);

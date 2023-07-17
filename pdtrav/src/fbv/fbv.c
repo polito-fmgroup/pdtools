@@ -7157,7 +7157,7 @@ invarVerif(
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(1);
     }
-    if (opt->pre.performAbcOpt) {
+    if (opt->pre.performAbcOpt==1) {
       int ret = Fsm_MgrAbcReduceMulti(fsmMgr, 0.99);
     }
   } else {
@@ -7277,7 +7277,7 @@ invarVerif(
   }
 
   //fsmMgrOriginal = Fsm_MgrDup(fsmMgr);
-  //fsmMgrOpt = Fsm_MgrAbcReduce(fsmMgr);
+  //fsmMgrOpt = Fsm_MgrAbcReduce(fsmMgr)
 
   if (nRun > 1) {
     opt->mc.method = opt->mc.saveMethod;
@@ -7509,6 +7509,7 @@ invarVerif(
       Ddi_BddExistProjectAcc(care, psVars);
       Ddi_Free(psVars);
     }
+
   }
 
   opt->stats.setupTime = util_cpu_time();
@@ -8048,6 +8049,10 @@ invarVerif(
     Ddi_Free(twoPhasePis);
     Ddi_Free(twoPhaseDelta);
     Ddi_Free(twoPhaseDelta2);
+  }
+
+  if (opt->pre.performAbcOpt == 2) {
+    int ret = Fsm_MgrAbcReduce(fsmMgr, 0.9);
   }
 
   if (0 && forceDeltaConstraint)
@@ -11399,7 +11404,6 @@ invarDecompVerif(
   Ddi_Var_t *pvarPs, *pvarNs, *cvarPs, *cvarNs;
   int iProp = -1, iConstr = -1, nstate, size;
   Ddi_Bdd_t *deltaProp = NULL, *deltaConstr, *p, *pConj, *pDisj;
-  int useRplus = 1;
   int maxPart = opt->pre.specDecompMax;
   float coiRatio = 1.2;
   Ddi_Bdd_t *partInvarspec = NULL;
@@ -11423,9 +11427,11 @@ invarDecompVerif(
   Ddi_Bdd_t *leftover = NULL;
   int doGenNew = 0, useTot = 0;
   float projVarsRate = 0.5;
-  int replaceReached = 1; // do not and reached at each k - replace it
+  int replaceReached = 0; // do not and reached at each k - replace it
   int useFullPropAsConstr=0&&(opt->pre.specDecompCore>0);
   int igrFpRing = -1;
+  int useRplusAsConstr = opt->trav.itpGfp>0;
+  int useRplusAsCareWithItp = opt->trav.itpGfp>0;
   
   /**********************************************************************/
   /*                        Create DDI manager                          */
@@ -11517,7 +11523,7 @@ invarDecompVerif(
       exit(1);
     }
 
-    if (opt->pre.performAbcOpt) {
+    if (opt->pre.performAbcOpt == 1) {
       int ret = Fsm_MgrAbcReduceMulti(fsmMgr, 0.99);
     }
   } else {
@@ -12385,9 +12391,6 @@ invarDecompVerif(
 
   }
 
-  if (opt->pre.performAbcOpt > 1) {
-    int ret = Fsm_MgrAbcReduceMulti(fsmMgr, 0.99);
-  }
   //  lemmasSteps = 2;
   lemmasSteps = opt->mc.lemmas;
 
@@ -12396,6 +12399,12 @@ invarDecompVerif(
   }
 
   Ddi_Free(invar);
+
+  if (opt->pre.performAbcOpt == 2) {
+    //  int ret = Fsm_MgrAbcReduce(fsmMgr, 0.99);
+    // folding/unfolding to be fixed in ...Multi
+    int ret = Fsm_MgrAbcReduceMulti(fsmMgr, 0.99);
+  }
 
   opt->stats.setupTime = util_cpu_time();
 
@@ -12450,7 +12459,7 @@ invarDecompVerif(
 
     if (v_i == pvarPs) {
       iProp = i;
-    }
+    } 
     if (v_i == cvarPs) {
       iConstr = i;
     }
@@ -12696,6 +12705,43 @@ invarDecompVerif(
     FbvSetTravMgrFsmData(travMgrAig, fsmMgr2);
     delta = Fsm_MgrReadDeltaBDD(fsmMgr2);
 
+    if (k==0 && (opt->trav.abstrRefLoad != NULL)) {
+      Ddi_Vararray_t *refinedVars = NULL;
+      if (strcmp(opt->trav.abstrRefLoad,"cuts")==0) {
+        refinedVars = Ddi_VararrayAlloc(ddiMgr, 0);
+        for (int i=0; i<Ddi_VararrayNum(ps); i++) {
+          Ddi_Var_t *v = Ddi_VararrayRead(ps,i);
+          char *search = "retime_CUT";
+          if (strncmp(Ddi_VarName(v),search,strlen(search))==0)
+            Ddi_VararrayInsertLast(refinedVars,v);
+          else {
+            search = "PDT_BDD_INVAR";
+            if (strncmp(Ddi_VarName(v),search,strlen(search))==0)
+              Ddi_VararrayInsertLast(refinedVars,v);
+          }
+        }
+      }
+      else {
+        refinedVars = Ddi_VararrayLoad (ddiMgr, opt->trav.abstrRefLoad, NULL);
+      }
+      if (refinedVars!=NULL) {
+        Ddi_Varsetarray_t *abstrRefRefinedVars = Ddi_VarsetarrayAlloc(ddiMgr, 2);
+        Ddi_Varset_t *rv = Ddi_VarsetMakeFromArray(refinedVars);
+        Ddi_VarsetarrayWrite(abstrRefRefinedVars,0,rv);
+        Ddi_VarsetarrayWrite(abstrRefRefinedVars,1,NULL);
+        Pdtutil_VerbosityMgrIf(ddiMgr, Pdtutil_VerbLevelUsrMax_c) {
+          fprintf(dMgrO(ddiMgr),
+                  "Abstr Ref: loaded %d refined vars\n", Ddi_VarsetNum(rv));
+        }
+        Trav_MgrSetAbstrRefRefinedVars(travMgrAig, abstrRefRefinedVars);
+        Ddi_Free(abstrRefRefinedVars);
+        Ddi_Free(rv);
+        Ddi_Free(refinedVars);
+      }
+    }
+  
+
+
     if (rplusRings!=NULL) {
       Trav_MgrSetNewi(travMgrAig, rplusRings);
     }
@@ -12849,12 +12895,24 @@ invarDecompVerif(
               
             if (lookBwd && jj >= 1) {
               int fullTarget = 0;
+              if (!doRunItp && opt->mc.gfp > 0) {
+                if (fromRings!=NULL) {
+                  Trav_MgrSetNewi(travMgrAig,fromRings);
+                }
+                Trav_TravSatItpGfp(travMgrAig,fsmMgr,opt->mc.gfp,
+                         opt->trav.countReached);
+              }
               Ddi_Bdd_t *inWindow =
                 Trav_DeepestRingCex(travMgrAig, fsmMgr2,
                   myTarget, invarspec, fromRings, jj, genCubes,
                                     hintVars,NULL /*&fullTarget*/,
+                                    doRunItp,
                                     opt->pre.specSubsetByAntecedents
                                     );
+              if (!doRunItp && opt->mc.gfp > 0) {
+                Ddi_Free(fromRings);
+                fromRings = Ddi_BddarrayDup(Trav_MgrReadNewi(travMgrAig));
+              }
               opt->trav.abstrRef = Trav_MgrReadAbstrRef(travMgrAig);
               if (inWindow != NULL) {
                 Ddi_Free(myWindow);
@@ -13329,12 +13387,12 @@ invarDecompVerif(
         Ddi_Var_t *v_j = Ddi_VararrayRead(ps2, j);
 
         if (v_j == cvarPs) {
-          iConstr2 = j;
+          iConstr2 = j; break;
         }
       }
       Pdtutil_Assert(iConstr2 >= 0, "missing constr in delta");
       deltaConstr = Ddi_BddarrayRead(delta, iConstr2);
-      if (useRplus) {
+      if (useRplusAsConstr) {
         Ddi_BddAndAcc(deltaConstr, myInvar);
         Fsm_MgrSetConstraintBDD(fsmMgr2,myInvar);
       }
@@ -13520,7 +13578,9 @@ invarDecompVerif(
         }
       }
 
-      //      Ddi_Free(care);
+      if (!useRplusAsCareWithItp)
+        Ddi_Free(care);
+
       if (fromRings != NULL) {
         //        Ddi_Free(care);
         for (jj = 1; jj < Ddi_BddarrayNum(fromRings); jj++) {
