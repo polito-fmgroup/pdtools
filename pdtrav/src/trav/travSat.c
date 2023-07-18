@@ -470,6 +470,12 @@ static int igrAbstrRef(
   float timeLimit,
   int *cexUsedP
 );
+static Ddi_Bdd_t *
+genRefiningTrConstr(
+  Trav_ItpMgr_t * itpMgr,
+  int start_j,
+  int end_j
+);
 static int igrAbstrRefByItp(
   Trav_ItpMgr_t * itpMgr,
   Ddi_Bdd_t * myConeAbstr,
@@ -17612,6 +17618,45 @@ igrAbstrRef(
 
 }
 
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Bdd_t *
+genRefiningTrConstr(
+  Trav_ItpMgr_t * itpMgr,
+  int start_j,
+  int end_j
+)
+{
+  /* cegar/pba */
+  Trav_Mgr_t *travMgr = itpMgr->travMgr;
+  Ddi_Mgr_t *ddm = Trav_MgrReadDdiMgrDefault(travMgr);
+  Pdtutil_VerbLevel_e verbosity = Trav_MgrReadVerbosity(travMgr);
+  int abstrRef = Trav_MgrReadAbstrRef(itpMgr->travMgr);
+  int abstrRefGla = Trav_MgrReadAbstrRefGla(itpMgr->travMgr);
+  int doPba = ((abstrRef % 2) == 1);
+  int mySat, chk = 0, cexHit = 1;
+  Ddi_Bdd_t *ringAndCone;
+  Ddi_Bddarray_t *currAbstr = itpMgr->abstrCurrAbstr;
+  Ddi_Bddarray_t *abstrRefA = NULL;
+  Ddi_Bddarray_t *abstrRefA0 = NULL;
+  Ddi_Vararray_t *abstrRefCtrl = itpMgr->abstrRefCtrl;
+  Ddi_Bddarray_t *abstrDoAbstr = itpMgr->abstrDoAbstr;
+  Ddi_Bddarray_t *abstrDoRefine = itpMgr->abstrDoRefine;
+  Ddi_Bddarray_t *initStub = itpMgr->initStub;
+
+  Ddi_Bdd_t *refTr = Ddi_BddMakePartConjVoid(ddm);
+
+
+  return refTr;
+
+ 
+}
+
 /**Function*******************************************************************
   Synopsis    []
   Description []
@@ -17711,7 +17756,10 @@ igrAbstrRefByItp(
   }
   int doRecur=0;
 
-  //  Ddi_Bdd_t *refiningUnrolledTr = genUnrolledRefiningTr(itpMgr, start_j, 0, itpMgr->initStub);
+
+
+  Ddi_Bdd_t *refiningTrConstr = genRefiningTrConstr(itpMgr, start_j, 0);
+  Ddi_Free(refiningTrConstr);
   abstrRefA = doPba ?
     Ddi_AigAbstrRefinePba(ringAndCone,
                           abstrRefCtrl, abstrDoRefine, currAbstr, &mySat,timeLimit) :
