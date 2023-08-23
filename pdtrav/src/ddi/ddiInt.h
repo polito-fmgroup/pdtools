@@ -293,6 +293,7 @@ struct Ddi_SccMgr_t {
   int nSccWithLatch;            //Number of scc with latches
   int nLatches;                 //Number of latches
   int nNodes;                   //Number of nodes
+  int sccWithMaxLatches;        //largest scc
   Ddi_Bddarray_t *delta;        //Riferimento alla delta
   Ddi_Vararray_t *ps;           //Riferimento alle variabili di stato
   int *sccLatchCnt;             //Counters of latches per scc

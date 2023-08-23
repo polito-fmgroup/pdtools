@@ -662,6 +662,12 @@ Ddi_AigSatNnfAbstrPba (
   Ddi_Vararray_t *ns
 );
 EXTERN Ddi_Bdd_t *Ddi_AigSatNnfSubset (Ddi_Bdd_t *f, Ddi_Bdd_t *g, Ddi_Bdd_t *care);
+EXTERN Ddi_Bdd_t *
+Ddi_AigNnfStats (
+  Ddi_Bdd_t *f,
+  Ddi_Vararray_t *filterVars,
+  int doExist
+);
 EXTERN Ddi_Bdd_t * Ddi_AigSatCore(Ddi_Bdd_t *fAig, Ddi_Bdd_t *care, Ddi_Bdd_t *eq, Ddi_Varset_t *projVars, int thresholdVars, int threshold, int strategy, int verbose);
 EXTERN int Ddi_AigEqualSat (Ddi_Bdd_t *f, Ddi_Bdd_t *g);
 EXTERN int Ddi_AigEqualSatWithCare (Ddi_Bdd_t *f, Ddi_Bdd_t *g, Ddi_Bdd_t *care);
@@ -1533,6 +1539,16 @@ EXTERN int Ddi_AigSignatureArrayNum(Ddi_AigSignatureArray_t *sig);
 EXTERN Ddi_AigSignature_t *Ddi_AigSignatureArrayRead(Ddi_AigSignatureArray_t *sig, int i);
 EXTERN long double Ddi_AigEstimateMintermCount (Ddi_Bdd_t *f, int numv);
 EXTERN Ddi_AigDynSignatureArray_t *Ddi_AigEvalVarSignatures (Ddi_Mgr_t *ddm, bAig_array_t *aigNodes, Ddi_AigSignatureArray_t *varSig, int *mapPs, int *mapNs, int nMap);
+EXTERN Ddi_Vararray_t *
+Ddi_GetSccLatches (
+  Ddi_SccMgr_t *sccMgr,
+  Ddi_Vararray_t *ps,
+  int sccBit
+);
+EXTERN int
+Ddi_GetSccBitWithMaxLatches (
+  Ddi_SccMgr_t *sccMgr
+);
 EXTERN Ddi_AigDynSignatureArray_t *Ddi_AigEvalVarSignaturesWithScc (Ddi_SccMgr_t *sccMgr, Ddi_Mgr_t *ddm, bAig_array_t *aigNodes, Ddi_Bddarray_t *lambda, Ddi_AigSignatureArray_t *varSig, int *mapPs, int *mapNs, int nMap);
 EXTERN int Ddi_DeltaFindEqSpecs(Ddi_Bddarray_t *delta, Ddi_Vararray_t *ps, Ddi_Var_t *pvarPs, Ddi_Var_t *cvarPs, Ddi_Bdd_t *partSpec, int *nPartP, int doConstr, int speculate);
 EXTERN Ddi_Bddarray_t *

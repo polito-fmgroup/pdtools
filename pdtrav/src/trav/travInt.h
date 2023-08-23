@@ -110,7 +110,13 @@ struct Trav_Settings_s {
     int ternaryAbstr;
     int abstrRef;
     int abstrRefGla;
+    int abstrRefItp;
+    int abstrRefItpMaxIter;
+    int trAbstrItp;
+    int trAbstrItpMaxFwdStep;
     char *storeAbstrRefRefinedVars;
+    char *trAbstrItpLoad;
+    char *trAbstrItpStore;
     int inputRegs;
     int selfTuningLevel;
 
@@ -152,6 +158,7 @@ struct Trav_Settings_s {
     int itpRpm;
     int itpTimeLimit;
     int itpPeakAig;
+    char *itpStoreRings;
 
     int igrSide;
     int igrItpSeq;
@@ -195,6 +202,8 @@ struct Trav_Settings_s {
 
     int bmcTimeLimit;
     int bmcMemLimit;
+    int bmcTrAbstrPeriod;
+    int bmcTrAbstrInit;
   } aig;
 
   struct {
@@ -486,7 +495,12 @@ struct TravBmcMgr_s {
   Ddi_Bdd_t *init;
   Ddi_Bddarray_t *initStub;
   Ddi_Bddarray_t *itpRings;
-
+  Ddi_Bdd_t *trAbstrItp;
+  int trAbstrItpNumFrames;
+  int trAbstrItpPeriod;
+  int trAbstrItpInit;
+  int trAbstrItpCheck;
+  
   Ddi_Bddarray_t *dummyRefs;
 
   Ddi_Varsetarray_t *timeFrameVars;
@@ -583,6 +597,7 @@ struct TravItpMgr_s {
   Ddi_Bddarray_t *abstrPrioRefine;
   Ddi_Bddarray_t *abstrCurrAbstr;
   Ddi_Varsetarray_t *abstrRefRefinedVars;
+  Ddi_Bdd_t *abstrRefTrConstr;
   unsigned char *enAbstr;
   Ddi_Bdd_t *tr, *trAux, *trRange;
   Ddi_Bdd_t *trAbstr, *itpTrAbstr, *trAuxAbstr;
@@ -628,6 +643,12 @@ struct TravItpMgr_s {
     Pdtutil_Array_t *clauseSharedNum;
   } pdrClauses;
 
+  struct {
+    int nFrames;
+    Ddi_Bddarray_t *psNsConstr;
+    int enCompute;
+  } trItpAbstr;
+  
   Ddi_Bddarray_t *eqRings;
 
   Ddi_Vararray_t *freeDeltaPi;
@@ -682,9 +703,14 @@ struct TravItpMgr_s {
   int unsatGuaranteed;
   int dynAbstr;
   int abstrRef;
+  int abstrRefNumRefinedLatches;
   int abstrRefNnf;
   int abstrRefScc;
   int abstrRefGla;
+  int abstrRefItp;
+  int abstrRefItpMaxIter;
+  int trAbstrItp;
+  int trAbstrItpMaxFwdStep;
   int abstrPrioRefineNum;
   int levelizeSccs;
   int redRem;
@@ -889,6 +915,11 @@ TravBmcMgrTernarySimInit(
 );
 EXTERN int TravBddOutOfLimits(
   Trav_Mgr_t * travMgr
+);
+EXTERN Ddi_Bddarray_t *
+TravTravTrAbstrLoad(
+  Trav_Mgr_t * travMgr,
+  int *nfp
 );
 
 /**AutomaticEnd***************************************************************/

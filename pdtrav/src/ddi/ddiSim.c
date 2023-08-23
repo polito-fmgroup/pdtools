@@ -2071,6 +2071,44 @@ Ddi_AigEvalVarSignatures (
   Description  []
   SideEffects  []
 ******************************************************************************/
+Ddi_Vararray_t *
+Ddi_GetSccLatches (
+  Ddi_SccMgr_t *sccMgr,
+  Ddi_Vararray_t *ps,
+  int sccBit
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(ps);
+  Ddi_Vararray_t *vars = Ddi_VararrayAlloc(ddm,0);
+  for (int i=0; i<Ddi_VararrayNum(ps); i++) {
+    if (sccMgr->mapLatches[i] == sccBit) {
+      Ddi_Var_t *ps_i = Ddi_VararrayRead(ps,i);
+      Ddi_VararrayInsertLast(vars,ps_i);
+    }
+  }
+
+  return vars;
+}
+
+/**Function********************************************************************
+  Synopsis     []
+  Description  []
+  SideEffects  []
+******************************************************************************/
+int
+Ddi_GetSccBitWithMaxLatches (
+  Ddi_SccMgr_t *sccMgr
+)
+{
+  return sccMgr->sccWithMaxLatches;
+}
+
+
+/**Function********************************************************************
+  Synopsis     []
+  Description  []
+  SideEffects  []
+******************************************************************************/
 Ddi_AigDynSignatureArray_t *
 Ddi_AigEvalVarSignaturesWithScc (
   Ddi_SccMgr_t *sccMgr,
@@ -2613,8 +2651,13 @@ Ddi_FsmSccTarjan (
     bAig_CacheAig(bmgr,varIndex) = bAig_NULL;
   }
 
+  int maxNumLatches = -1;
   for (i=currBit=0; i<sccMgr->nScc; i++) {
     if (sccMgr->sccLatchCnt[i]>0) {
+      if (sccMgr->sccLatchCnt[i]>maxNumLatches) {
+        sccMgr->sccWithMaxLatches = currBit;
+        maxNumLatches = sccMgr->sccLatchCnt[i];
+      }          
       sccMgr->mapSccBit[i] = currBit++;
     }
     else {
@@ -3968,6 +4011,7 @@ sccMgrAlloc(
   sccMgr->size1 = 0;
   sccMgr->size2 = 0;
   sccMgr->nLatches = Ddi_BddarrayNum(delta);
+  sccMgr->sccWithMaxLatches = -1;
   sccMgr->delta = delta;
   sccMgr->ps = ps;
   sccMgr->aigStack = bAigArrayAlloc();

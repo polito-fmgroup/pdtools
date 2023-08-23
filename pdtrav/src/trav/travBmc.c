@@ -1458,11 +1458,11 @@ Trav_TravSatBmcIncrVerif(
 
     TravBmcMgrAddFrames(bmcMgr, ddiS, i, NULL);
 
-    if (1 && Ddi_BddPartNum(bmcMgr->bmcConstr) > i && i>0) {
+    if (1 && Ddi_BddPartNum(bmcMgr->bmcConstr) >= i && i>0) {
       // i-1 as constrain is 1 time frame ahead of target
       Ddi_Bdd_t *constr_i = Ddi_BddPartRead(bmcMgr->bmcConstr, i-1);
 
-      if (ddiS != NULL && constr_i!=NULL) {
+      if (ddiS != NULL && constr_i!=NULL && !Ddi_BddIsOne(constr_i)) {
         Ddi_AigSatMinisatLoadClausesIncrementalAsserted(ddiS,
           constr_i);
       }
@@ -2475,6 +2475,7 @@ TravBmcMgrInit(
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(invarspec);
   TravBmcMgr_t *bmcMgr;
   Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
+  Ddi_Vararray_t *ns = Fsm_MgrReadVarNS(fsmMgr);
   Ddi_Vararray_t *pi = Fsm_MgrReadVarI(fsmMgr);
   Ddi_Var_t *pvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$PS");
   Ddi_Var_t *cvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$PS");
@@ -2505,8 +2506,13 @@ TravBmcMgrInit(
   bmcMgr->init = NULL;
   bmcMgr->initStub = NULL;
   bmcMgr->itpRings = NULL;
+  bmcMgr->trAbstrItp = NULL;
   bmcMgr->dummyRefs = NULL;
   bmcMgr->unrollArray = NULL;
+
+  bmcMgr->trAbstrItpNumFrames = 0;
+  bmcMgr->trAbstrItpPeriod = 0;
+  bmcMgr->trAbstrItpCheck = 0;
 
   bmcMgr->inCoreScc = NULL;
 
@@ -2687,11 +2693,11 @@ TravBmcMgrInit(
         /* literal */
         Ddi_Var_t *v = Ddi_BddTopVar(l_j);
 
-        Ddi_VararrayWrite(vA, j, v);
+        Ddi_VararrayInsertLast(vA, v);
         if (Ddi_BddIsComplement(l_j)) {
-          Ddi_BddarrayWrite(subst, j, myZero);
+          Ddi_BddarrayInsertLast(subst, myZero);
         } else {
-          Ddi_BddarrayWrite(subst, j, myOne);
+          Ddi_BddarrayInsertLast(subst, myOne);
         }
       } else {
         /* not a literal */
@@ -2717,6 +2723,52 @@ TravBmcMgrInit(
     Ddi_Free(subst);
   }
 
+
+  char *trConstrLoad = travMgr->settings.aig.trAbstrItpLoad;
+  int trConstrNumFrames = 4;
+  if (trConstrLoad!=NULL) {
+    Ddi_Bddarray_t *trConstrA;
+    trConstrA = TravTravTrAbstrLoad(travMgr,&trConstrNumFrames);
+    Pdtutil_Assert(trConstrA != NULL  ,"Unexpected NULL pointer");
+
+    Ddi_Free(bmcMgr->trAbstrItp);
+    int nc = Ddi_BddarrayNum(trConstrA);
+    bmcMgr->trAbstrItp = Ddi_BddMakePartConjFromArray(trConstrA);
+
+    Ddi_BddSetAig(bmcMgr->trAbstrItp);
+
+    bmcMgr->trAbstrItpNumFrames = trConstrNumFrames;
+
+    bmcMgr->trAbstrItpPeriod = travMgr->settings.aig.bmcTrAbstrPeriod;
+    bmcMgr->trAbstrItpInit = travMgr->settings.aig.bmcTrAbstrInit;
+    if (bmcMgr->trAbstrItpInit<trConstrNumFrames)
+      bmcMgr->trAbstrItpInit += trConstrNumFrames;
+    bmcMgr->trAbstrItpCheck = 0;
+    if (bmcMgr->trAbstrItpPeriod==0)
+      bmcMgr->trAbstrItpPeriod = trConstrNumFrames;
+    else if (bmcMgr->trAbstrItpPeriod<0) {
+      bmcMgr->trAbstrItpCheck = 1;
+      bmcMgr->trAbstrItpPeriod *= -1;
+    }
+    Pdtutil_VerbosityMgrIf(bmcMgr->travMgr, Pdtutil_VerbLevelUsrMed_c) {
+      fprintf(dMgrO(ddm), "Loaded %d constraints - size: %d - frames: %d - period: %d\n",
+              Ddi_BddarrayNum(trConstrA), Ddi_BddarraySize(trConstrA),
+              trConstrNumFrames, bmcMgr->trAbstrItpPeriod);
+      Ddi_Vararray_t *supp = Ddi_BddarraySuppVararray(trConstrA);
+      int n = Ddi_VararrayNum(supp);
+      Ddi_Vararray_t *psupp = Ddi_VararrayIntersect(supp,ps);
+      Ddi_VararrayIntersectAcc(supp,ns);
+      fprintf(dMgrO(ddm), "TR constraint has %d->%d (%d) ps->ns (pi) vars\n",
+              Ddi_VararrayNum(psupp), Ddi_VararrayNum(supp),
+              n-(Ddi_VararrayNum(psupp)+Ddi_VararrayNum(supp)));
+      Ddi_Free(supp);      
+      Ddi_Free(psupp);      
+    }
+    Ddi_Free(trConstrA);
+    
+      
+  }
+  
   if (ddm->settings.aig.itpStore != NULL) {
     Ddi_Bddarray_t *itpRings;
     char filename[100];
@@ -2826,6 +2878,7 @@ TravBmcMgrQuit(
   Ddi_Free(bmcMgr->init);
   Ddi_Free(bmcMgr->initStub);
   Ddi_Free(bmcMgr->itpRings);
+  Ddi_Free(bmcMgr->trAbstrItp);
   Ddi_Free(bmcMgr->dummyRefs);
   Ddi_Free(bmcMgr->timeFrameVars);
   Ddi_Free(bmcMgr->bwdTimeFrameVars);
@@ -2879,7 +2932,7 @@ TravBmcMgrAddFrames(
   int iCex = 0;
   int nFrames = bmcMgr->settings.stepFrames;
   int loadAbstrTarget = 0;
-  int targetDecomp = 0;
+  int targetDecomp = 0; 
 
   static int enforceNewStates = 0;
 
@@ -3028,7 +3081,8 @@ TravBmcMgrAddFrames(
     if (bmcMgr->bmcInvar != NULL && (k<=bmcMgr->settings.invarMaxBound)) {
       Ddi_Bdd_t *invar_k = 
 	Ddi_BddCompose(bmcMgr->bmcInvar, ps, bmcMgr->unroll);
-      Ddi_AigSatMinisatLoadClausesIncrementalAsserted(ddiS,invar_k);	          Pdtutil_Assert(bmcMgr->dummyRefs!=NULL,"uninitialized refs");
+      Ddi_AigSatMinisatLoadClausesIncrementalAsserted(ddiS,invar_k);
+      Pdtutil_Assert(bmcMgr->dummyRefs!=NULL,"uninitialized refs");
       Ddi_BddarrayInsertLast(bmcMgr->dummyRefs,invar_k);
       Ddi_Free(invar_k);
     }
@@ -3177,12 +3231,78 @@ TravBmcMgrAddFrames(
       Ddi_BddarraySubstVarsAcc(deltaAux, pi, newPi);
       Ddi_BddarrayComposeAcc(deltaAux, ps, bmcMgr->unroll);
       if (Ddi_BddarraySize(deltaAux)>Ddi_BddarraySize(delta_k)) {
-	printf("ternary compaction: %d -> %d\n",
+        Pdtutil_VerbosityMgrIf(bmcMgr->travMgr, Pdtutil_VerbLevelUsrMed_c) {
+          printf("ternary compaction: %d -> %d\n",
 	       Ddi_BddarraySize(deltaAux),
 	       Ddi_BddarraySize(delta_k));
+        }
       }
       Ddi_Free(deltaAux);
     }
+    if (bmcMgr->trAbstrItp != NULL && k>= bmcMgr->trAbstrItpInit &&
+        ((k-bmcMgr->trAbstrItpInit)%bmcMgr->trAbstrItpPeriod==0) ) {
+      //if (bmcMgr->trAbstrItp != NULL && k>bmcMgr->trAbstrItpNumFrames ) {
+      Ddi_Bdd_t *myOne = Ddi_BddMakeConstAig(ddm, 1);
+      Ddi_Bdd_t *unrolledTrConstr = Ddi_BddDup(bmcMgr->trAbstrItp);
+      Ddi_Bddarray_t *currUnroll = bmcMgr->unroll;
+      int nFrames = bmcMgr->trAbstrItpNumFrames;
+      Ddi_Bddarray_t *prevUnroll =
+        (Ddi_Bddarray_t *)Pdtutil_PointerArrayRead(bmcMgr->unrollArray,k-nFrames);
+      Ddi_BddComposeAcc(unrolledTrConstr,ps,prevUnroll);
+      static int chkIncl = bmcMgr->trAbstrItpCheck;
+      Pdtutil_VerbosityMgrIf(bmcMgr->travMgr, Pdtutil_VerbLevelUsrMed_c) {
+        fprintf(tMgrO(bmcMgr->travMgr), "++ TR Abstr Constr added at frame: %d.\n", k);
+      }
+      if (chkIncl) {
+        Ddi_Bdd_t *tr = Ddi_BddRelMakeFromArray(delta, ns);
+        Ddi_Bdd_t *trUnrolled = Ddi_BddRelMakeFromArray(currUnroll, ns);
+        Ddi_Var_t *pvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$PS");
+        Ddi_Var_t *cvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$PS");
+        Ddi_Var_t *cvarNs = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$NS");
+        Ddi_BddSetAig(tr);
+        Ddi_BddSetAig(trUnrolled);
+        Ddi_BddCofactorAcc(trUnrolled, cvarNs, 1);
+        Ddi_IncrSatMgrSuspend(ddiS);
+        if (nFrames==1 && k<=nFrames) {
+          int isInclTr = Ddi_BddIncluded(tr,bmcMgr->trAbstrItp);
+          printf("tr constr inclusion TR 1 check: %s\n", isInclTr?"OK":"KO");
+          Pdtutil_Assert(isInclTr,"bug in tr appr");
+        }
+        else if (k<=nFrames) {
+          for (int i = 1; i < nFrames; i++) {
+            Ddi_Vararray_t *newVars = composeWithNewTimeFrameVars(tr,
+                                        ps, delta, pi, "PDT_BMC_TARGET_PI", i);
+            Ddi_Free(newVars);
+          }
+          //          Ddi_BddCofactorAcc(tr, pvarPs, 1);
+          Ddi_BddCofactorAcc(tr, cvarPs, 1);
+          Ddi_BddCofactorAcc(tr, cvarNs, 1);
+          int isInclTr = Ddi_BddIncluded(tr,bmcMgr->trAbstrItp);
+          printf("tr constr inclusion TR %d check: %s\n", nFrames, isInclTr?"OK":"KO");
+          if (!isInclTr) {
+            Ddi_Bdd_t *myCheck = Ddi_BddDiff(tr,bmcMgr->trAbstrItp);
+            Ddi_Bdd_t *cex = Ddi_AigSatWithCexAndAbort(myCheck, NULL, -1.0, NULL);
+            Ddi_Free(cex);
+            Ddi_Free(myCheck);
+          }                         
+          Pdtutil_Assert(isInclTr,"bug in tr appr");
+        }
+        int isIncl = Ddi_BddIncluded(trUnrolled,unrolledTrConstr);
+        printf("tr constr inclusion check: %s\n", isIncl?"OK":"KO");
+        Pdtutil_Assert(isIncl,"bug in tr appr");
+        Ddi_IncrSatMgrResume(ddiS);
+        Ddi_Free(trUnrolled);
+        Ddi_Free(tr);
+      }
+      Ddi_BddComposeAcc(unrolledTrConstr,ns,currUnroll);
+      while (Ddi_BddPartNum(bmcMgr->bmcConstr) <= k) {
+        Ddi_BddPartInsertLast(bmcMgr->bmcConstr,myOne);
+      }
+      Ddi_BddAndAcc(Ddi_BddPartRead(bmcMgr->bmcConstr, k), unrolledTrConstr);
+      Ddi_Free(unrolledTrConstr);
+      Ddi_Free(myOne);
+    }
+
     if (enforceNewStates && ddiS != NULL) {
       int i;
       Ddi_Bdd_t *diffConstr = Ddi_BddMakeConstAig(ddm, 0);

@@ -2353,6 +2353,89 @@ Ddi_AigSatNnfSubset (
   SeeAlso     []
 ******************************************************************************/
 Ddi_Bdd_t *
+Ddi_AigNnfStats (
+  Ddi_Bdd_t *f,
+  Ddi_Vararray_t *filterVars,
+  int doExist
+)
+{
+   Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
+
+   Ddi_Vararray_t *aV0 = Ddi_VararrayAlloc(ddm,0);
+   Ddi_Vararray_t *aV1 = Ddi_VararrayAlloc(ddm,0);
+   Ddi_Vararray_t *vars = Ddi_VararrayAlloc(ddm,0);
+   Ddi_Bdd_t *f2 = Ddi_AigNnf (f,filterVars,NULL,vars,aV0,aV1);
+
+   Ddi_Vararray_t *supp = Ddi_BddSuppVararray(f2);
+   Ddi_VararrayWriteMark (supp, 1);
+
+   Ddi_Bdd_t *cube = Ddi_BddMakeConstAig(ddm, 1);
+
+   int mon0 = 0, mon1 = 0, v01 = 0;
+   int maxfo = 0, maxfl=0, ifo=-1, ifl=-1, mfl0, mfl1, mfo0, mfo1;
+   for (int i=0; i<Ddi_VararrayNum(vars); i++) {
+     Ddi_Var_t *v_i = Ddi_VararrayRead(vars,i);
+     Ddi_Var_t *a0_i = Ddi_VararrayRead(aV0,i);
+     Ddi_Var_t *a1_i = Ddi_VararrayRead(aV1,i);
+     int m0 = Ddi_VarReadMark(a0_i);
+     int m1 = Ddi_VarReadMark(a1_i);
+     int mV = Ddi_VarReadMark(v_i);
+     if (m0==m1) {
+       int fo0 = DdiAigFanoutCount (f2,a0_i);
+       int fo1 = DdiAigFanoutCount (f2,a1_i);
+       int fl0 = DdiAigFlowCount (f2,a0_i);
+       int fl1 = DdiAigFlowCount (f2,a1_i);
+       if (fo0+fo1 > maxfo) {
+         maxfo = fo0+fo1; mfo0 = fo0; mfo1 = fo1;
+         ifo = i;
+       }
+       if (fl0+fl1 > maxfl) {
+         maxfl = fl0+fl1; mfl0 = fl0; mfl1 = fl1;
+         ifl = i;
+       }
+       v01++;
+       continue;
+     }
+     if (m0>0) {
+       mon0++;
+       Ddi_Bdd_t *lit = Ddi_BddMakeLiteralAig(v_i, 0);
+       Ddi_BddAndAcc(cube,lit);
+       Ddi_Free(lit);
+     }
+     else {
+       mon1++;
+       Ddi_Bdd_t *lit = Ddi_BddMakeLiteralAig(v_i, 1);
+       Ddi_BddAndAcc(cube,lit);
+       Ddi_Free(lit);
+     }
+   }
+   printf("maxfo: %d + %d - var: %d\n", mfo0, mfo1, ifo);
+   printf("maxfl: %d + %d - var: %d\n", mfl0, mfl1, ifl);
+   Ddi_VararrayWriteMark (supp, 0);
+   Ddi_Free(supp); 
+   printf("NNF MONOTONE vars: %d->0, %d->1 (01: %d)\n",
+           mon0, mon1, v01);
+   Ddi_Bdd_t *fSmooth = NULL;
+   if (doExist) {
+     fSmooth = Ddi_BddDup(f);
+     Ddi_AigConstrainCubeAcc(fSmooth,cube);
+     printf("quantify %d vars: %d->%d\n", mon0+mon1, Ddi_BddSize(f), Ddi_BddSize(fSmooth));
+   }
+   Ddi_Free(vars);
+   Ddi_Free(cube);
+   Ddi_Free(aV0);
+   Ddi_Free(aV1);
+   Ddi_Free(f2);
+   return fSmooth;
+}
+
+/**Function********************************************************************
+  Synopsis    [Operate compose]
+  Description [Operate compose]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bdd_t *
 Ddi_AigSatCore (
   Ddi_Bdd_t *fAig,
   Ddi_Bdd_t *care,
@@ -79259,7 +79342,7 @@ Ddi_IncrSatPrintStats
 	  nVars, S->nClauses(), nElim, nElimC);
   fprintf(dMgrO(ddm),
 	 "Solver 22 stats: %ld/%ld/%ld dec./prop./confl.\n",
-	 (int)S->decisions, (int)S->propagations,
+	 (int)S->decisions, (long int)S->propagations,
 	 (int)S->conflicts);
 
 }
@@ -83474,7 +83557,8 @@ Ddi_AigSat22AndWithInterpolant (
 
   if (nSuppVars==0) {
     Ddi_Free(myGlobalVars);
-    if (Ddi_AigSatAnd(a,b,optCare)) {
+    if (Ddi_AigSatAnd(b,optCare,NULL)
+        &&Ddi_AigSat(a)) {
       *psat = 1;
     }
     return (Ddi_BddMakeConstAig(ddm,1));
@@ -85410,7 +85494,8 @@ getAuxProof22(
               util_print_time(cpuTime));
     }
     itp2TimeLimit = 8*(float)cpuTime/1000;
-    if (itp2TimeLimit < 5) itp2TimeLimit = 5;
+    if (itp2TimeLimit < ddm->settings.aig.satTimeLimit)
+      itp2TimeLimit = ddm->settings.aig.satTimeLimit;
                            
     startTime = util_cpu_time ();
     bool okReplay = S22check.replay(v);

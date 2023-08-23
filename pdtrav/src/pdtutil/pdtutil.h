@@ -320,6 +320,12 @@ typedef enum {
   Pdt_TravStoreAbstrRefRefinedVars_c,
   Pdt_TravAbstrRef_c,
   Pdt_TravAbstrRefGla_c,
+  Pdt_TravAbstrRefItp_c,
+  Pdt_TravAbstrRefItpMaxIter_c,
+  Pdt_TravTrAbstrItp_c,
+  Pdt_TravTrAbstrItpMaxFwdStep_c,
+  Pdt_TravTrAbstrItpLoad_c,
+  Pdt_TravTrAbstrItpStore_c,
   Pdt_TravInputRegs_c,
   Pdt_TravSelfTuning_c,
   Pdt_TravLemmasTimeLimit_c,
@@ -361,6 +367,7 @@ typedef enum {
   Pdt_TravItpRpm_c,
   Pdt_TravItpTimeLimit_c,
   Pdt_TravItpPeakAig_c,
+  Pdt_TravItpStoreRings_c,
 
   /* igr */
   Pdt_TravIgrSide_c,
@@ -407,7 +414,9 @@ typedef enum {
   /* bmc */
   Pdt_TravBmcTimeLimit_c,
   Pdt_TravBmcMemLimit_c,
-
+  Pdt_TravBmcTrAbstrPeriod_c,
+  Pdt_TravBmcTrAbstrInit_c,
+  
   /* bdd */
   Pdt_TravFromSelect_c,
   Pdt_TravUnderApproxMaxVars_c,

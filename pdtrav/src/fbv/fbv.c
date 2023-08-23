@@ -300,6 +300,20 @@ static char *help[] = {
   "set aig abstraction refinement level (default 0 = disabled)", NULL,
   "-abstrRefGla <level>",
   "set GLA abstraction refinement level (default 0 = disabled)", NULL,
+  "-abstrRefItp <level>",
+  "set ITP abstraction refinement level (0..100: default 0 = disabled)", NULL,
+  "-abstrRefItpMaxIter <max>",
+  "set ITP abstraction refinement max iterations (default 4)", NULL,
+  "-trAbstrItp <nframes>",
+  "set ITP TR abstraction frames (default 0 = disabled)", NULL,
+  "-trAbstrItpFirstFwdStep <max>",
+  "set ITP TR abstraction first Fwd step (default 0)", NULL,
+  "-trAbstrItpMaxFwdStep <max>",
+  "set ITP TR abstraction max Fwd step (default 0 = just first fwd step)", NULL,
+  "-trAbstrItpLoad <filename>",
+  "load ITP TR abstraction from file (default NULL = disabled)", NULL,
+  "-trAbstrItpStore <filename>",
+  "store ITP TR abstraction to file (prefix) (default NULL = disabled)", NULL,
   "-dynAbstr <level>",
   "set aig dynamic abstraction level (default 0 = disabled)", NULL,
   "-dynAbstrInitIter <iter>",
@@ -325,7 +339,7 @@ static char *help[] = {
   "-itpStructOdcTh <th>",
   "set Odc opt th (default 1000)", NULL,
   "-itpStoreTh <th>",
-  "set interpolant partitioning th (default 100000)", NULL,
+  "set interpolant store th (default 100000)", NULL,
   "-itpActiveVars <n>",
   "set interpolant use most active vars (default 0 = disabled)", NULL,
   "-itpAppr <th>",
@@ -349,8 +363,10 @@ static char *help[] = {
   "-itpOpt <l>",
   "set interpolant optimization level (default 0 = disabled)", NULL,
   "-itpStore <name>",
-  "set name prefix for bench files storing interpolants (default NULL = disabled)",
+  "set name prefix for aiger files storing interpolants (default NULL = disabled)",
   NULL,
+  "-itpStoreRings <fname>",
+  "set interpolant rings store file name (default NULL)", NULL,
   "-itpLoad <l>",
   "load interpolant aig from file (default 0 = disabled)", NULL,
   "-itpDrup <v>",
@@ -433,7 +449,7 @@ static char *help[] = {
   "-pdrMaxBlock <val>",
   "set pdrMaxBlock value (default 0 = disabled)", NULL,
   "-igrGrowConeMaxK <val>",
-  "stop frow cone at bound (default 0)", NULL,
+  "stop from cone at bound (default 0)", NULL,
   "-igrGrowConeMax <val>",
   "max relative cone bound increase (default 0.5)", NULL,
   "-igrGrowCone <val>",
@@ -447,7 +463,7 @@ static char *help[] = {
   "-igrRewindMinK <val>",
   "en igr rewind if K bound > <val> (default -1: disabled)", NULL,
   "-igrUseRings <val>",
-  "level of constraining/anging of cone with fwd rings (default 0)", NULL,
+  "level of constraining/anding of cone with fwd rings (default 0)", NULL,
   "-igrUseRingsStep <val>",
   "max steplevel of constraining/anging of cone with fwd rings (default 0)", NULL,
   "-igrUseBwdRings <val>",
@@ -482,6 +498,10 @@ static char *help[] = {
   "target decomposition. (k: # of trav iter.)", NULL,
   "-bmcStep <s>",
   "step of SAT based BMC", NULL,
+  "-bmcTrAbstrPeriod <p>",
+  "period for tr abstraction as e constraint (default 0 - use tr bound)", NULL,
+  "-bmcTrAbstrInit <p>",
+  "initial step for tr abstraction as e constraint (default 0)", NULL,
   "-bmcLearnStep <s>",
   "step of BMC pre-loaded during SAT based BMC", NULL,
   "-bmcFirst <s>",
@@ -4884,6 +4904,12 @@ FbvParseArgs(
       argc--;
       argv++;
       argc--;
+    } else if (strcmp(argv[1], "-itpStoreRings") == 0) {
+      opt->trav.itpStoreRings = Pdtutil_StrDup(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
     } else if (strcmp(argv[1], "-rpRings") == 0) {
       opt->trav.rPlusRings = Pdtutil_StrDup(argv[2]);
       argv++;
@@ -4962,13 +4988,13 @@ FbvParseArgs(
       argv++;
       argc--;
     } else if (strcmp(argv[1], "-abstrRefLoad") == 0) {
-      opt->trav.abstrRefLoad = argv[2];
+      opt->trav.abstrRefLoad = Pdtutil_StrDup(argv[2]);
       argv++;
       argc--;
       argv++;
       argc--;
     } else if (strcmp(argv[1], "-abstrRefStore") == 0) {
-      opt->trav.abstrRefStore = argv[2];
+      opt->trav.abstrRefStore = Pdtutil_StrDup(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -4998,6 +5024,48 @@ FbvParseArgs(
       }
       if (opt->trav.itpConstrLevel > 1)
         opt->trav.itpConstrLevel = 1;
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-abstrRefItp") == 0) {
+      opt->trav.abstrRefItp = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-abstrRefItpMaxIter") == 0) {
+      opt->trav.abstrRefItpMaxIter = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-trAbstrItp") == 0) {
+      opt->trav.trAbstrItp = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-trAbstrItpFirstFwdStep") == 0) {
+      opt->trav.trAbstrItpFirstFwdStep = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-trAbstrItpMaxFwdStep") == 0) {
+      opt->trav.trAbstrItpMaxFwdStep = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-trAbstrItpLoad") == 0) {
+      opt->trav.trAbstrItpLoad = Pdtutil_StrDup(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-trAbstrItpStore") == 0) {
+      opt->trav.trAbstrItpStore = Pdtutil_StrDup(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -5053,6 +5121,18 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-bmcTe") == 0) {
       opt->trav.bmcTe = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-bmcTrAbstrPeriod") == 0) {
+      opt->trav.bmcTrAbstrPeriod = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-bmcTrAbstrInit") == 0) {
+      opt->trav.bmcTrAbstrInit = atoi(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -5638,11 +5718,6 @@ FbvParseArgs(
     } else if (strcmp(argv[1], "-qbf") == 0) {
       opt->mc.aig = 1;
       opt->mc.qbf = 1;
-      argv++;
-      argc--;
-    } else if (strcmp(argv[1], "-gfp") == 0) {
-      opt->mc.aig = 1;
-      opt->mc.gfp = 1;
       argv++;
       argc--;
     } else if (strcmp(argv[1], "-diameter") == 0) {
@@ -8500,6 +8575,18 @@ invarVerif(
     if (opt->mc.gfp > 0) {
       Trav_TravSatItpGfp(travMgrAig,fsmMgr,opt->mc.gfp,
                          opt->trav.countReached);
+    }
+    
+    if (opt->trav.trAbstrItp > 0 &&
+        (opt->mc.bmc>0 || Trav_MgrReadNewi(travMgrAig) != NULL ||
+         opt->trav.trAbstrItpLoad != NULL)) {
+      Trav_TravTrAbstrItp(travMgrAig,fsmMgr,
+                          opt->trav.trAbstrItp,
+                          opt->trav.trAbstrItpFirstFwdStep,
+                          opt->trav.trAbstrItpMaxFwdStep,
+                          opt->mc.bmc
+                          );
+      exit(0);
     }
     
     if (opt->mc.checkInv != NULL) {
@@ -12590,10 +12677,10 @@ invarDecompVerif(
   bmcTimeLimit = opt->mc.decompTimeLimit;
 
   doRunBdd = !opt->mc.aig;
-  doRunItp = opt->mc.aig;
+  doRunItp = opt->mc.aig && (opt->mc.bmc < 0);
   doRunBmc = opt->mc.bmc >= 0;
   doRunPdr = opt->mc.pdr;
-
+  
   if (doRunPdr) {
     doRunItp = 0;
   }
@@ -19732,6 +19819,18 @@ FbvSetTravMgrOpt(
   Trav_MgrSetTernaryAbstr(travMgr, opt->trav.ternaryAbstr);
   Trav_MgrSetAbstrRef(travMgr, opt->trav.abstrRef);
   Trav_MgrSetAbstrRefGla(travMgr, opt->trav.abstrRefGla);
+  Trav_MgrSetOption(travMgr, Pdt_TravAbstrRefItp_c, inum,
+    opt->trav.abstrRefItp);
+  Trav_MgrSetOption(travMgr, Pdt_TravAbstrRefItpMaxIter_c, inum,
+    opt->trav.abstrRefItpMaxIter);
+  Trav_MgrSetOption(travMgr, Pdt_TravTrAbstrItp_c, inum,
+    opt->trav.trAbstrItp);
+  Trav_MgrSetOption(travMgr, Pdt_TravTrAbstrItpMaxFwdStep_c, inum,
+    opt->trav.trAbstrItpMaxFwdStep);
+  Trav_MgrSetOption(travMgr, Pdt_TravTrAbstrItpLoad_c, pchar,
+    opt->trav.trAbstrItpLoad);
+  Trav_MgrSetOption(travMgr, Pdt_TravTrAbstrItpStore_c, pchar,
+    opt->trav.trAbstrItpStore);
   Trav_MgrSetOption(travMgr, Pdt_TravStoreAbstrRefRefinedVars_c, pchar,
     opt->trav.abstrRefStore);
   Trav_MgrSetInputRegs(travMgr, opt->trav.inputRegs);
@@ -19842,6 +19941,12 @@ FbvSetTravMgrOpt(
   Trav_MgrSetOption(travMgr, Pdt_TravPdrTimeLimit_c, inum,
     opt->expt.pdrTimeLimit);
 
+  /* bmc */
+  Trav_MgrSetOption(travMgr, Pdt_TravBmcTrAbstrPeriod_c, inum,
+    opt->trav.bmcTrAbstrPeriod);
+  Trav_MgrSetOption(travMgr, Pdt_TravBmcTrAbstrInit_c, inum,
+    opt->trav.bmcTrAbstrInit);
+  
   /* tr */
   //Trav_MgrSetOption(travMgr, Pdt_TravTrProfileMethod_c, inum, opt->trav.???);
   //Trav_MgrSetOption(travMgr, Pdt_TravTrProfileDynamicEnable_c, inum, opt->trav.???);
@@ -19954,6 +20059,7 @@ FbvSetTravMgrOpt(
   Trav_MgrSetOption(travMgr, Pdt_TravInvarFile_c, pchar, opt->trav.invarFile);
   Trav_MgrSetOption(travMgr, Pdt_TravStoreCnf_c, pchar, opt->trav.storeCNF);
   Trav_MgrSetOption(travMgr, Pdt_TravStoreCnfTr_c, inum, opt->trav.storeCNFTR);
+  Trav_MgrSetOption(travMgr, Pdt_TravItpStoreRings_c, pchar, opt->trav.itpStoreRings);
   Trav_MgrSetOption(travMgr, Pdt_TravStoreCnfMode_c, inum,
     (int)opt->trav.storeCNFmode);
   Trav_MgrSetOption(travMgr, Pdt_TravStoreCnfPhase_c, inum,
@@ -22040,6 +22146,18 @@ travOpt2OptList(
     opt->trav.abstrRef);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravAbstrRefGla_c, inum,
     opt->trav.abstrRefGla);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravAbstrRefItp_c, inum,
+    opt->trav.abstrRefItp);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravAbstrRefItpMaxIter_c, inum,
+    opt->trav.abstrRefItpMaxIter);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravTrAbstrItp_c, inum,
+    opt->trav.trAbstrItp);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravTrAbstrItpMaxFwdStep_c, inum,
+    opt->trav.trAbstrItpMaxFwdStep);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravTrAbstrItpLoad_c, pchar,
+    opt->trav.trAbstrItpLoad);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravTrAbstrItpStore_c, pchar,
+    opt->trav.trAbstrItpStore);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravInputRegs_c, inum,
     opt->trav.inputRegs);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravSelfTuning_c, inum,
@@ -22115,6 +22233,8 @@ travOpt2OptList(
     opt->trav.itpStrengthen);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpRpm_c, inum,
     opt->trav.itpRpm);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpStoreRings_c, pchar,
+    opt->trav.itpStoreRings);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpTimeLimit_c, inum,
     opt->expt.itpTimeLimit);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpPeakAig_c, inum,
@@ -22325,6 +22445,13 @@ travOpt2OptList(
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravMaxCnfLength_c, inum,
     opt->trav.maxCNFLength);
 
+  /* bmc */
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravBmcTrAbstrPeriod_c, inum,
+    opt->trav.bmcTrAbstrPeriod);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravBmcTrAbstrInit_c, inum,
+    opt->trav.bmcTrAbstrInit);
+
+  
   return pkgOpt;
 }
 
@@ -22524,6 +22651,13 @@ new_settings(
   opt->trav.ternaryAbstr = 0;
   opt->trav.abstrRef = 0;
   opt->trav.abstrRefGla = 0;
+  opt->trav.abstrRefItp = 0;
+  opt->trav.abstrRefItpMaxIter = 4;
+  opt->trav.trAbstrItp = 0;
+  opt->trav.trAbstrItpFirstFwdStep = 0;
+  opt->trav.trAbstrItpMaxFwdStep = 0;
+  opt->trav.trAbstrItpLoad = NULL;
+  opt->trav.trAbstrItpStore = NULL;
   opt->trav.inputRegs = 0;
 
   opt->trav.itpBdd = 0;
@@ -22640,8 +22774,7 @@ new_settings(
   opt->trav.wU = NULL;
   opt->trav.wOrd = NULL;
   opt->trav.rPlus = NULL;
-
-
+  opt->trav.itpStoreRings = NULL;
 
   /*
    *  other options: TO BE MANAGED
@@ -22713,6 +22846,8 @@ new_settings(
   opt->trav.bmcStrategy = 1;
   opt->trav.interpolantBmcSteps = 0;
   opt->trav.bmcLearnStep = 4;
+  opt->trav.bmcTrAbstrPeriod = 0;
+  opt->trav.bmcTrAbstrInit = 0;
 
   opt->mc.itpSeq = 0;
   opt->mc.itpSeqGroup = 0;
@@ -22940,6 +23075,7 @@ FbvDupSettings(
   opt->mc.ctlSpec = Pdtutil_StrDup(opt0->mc.ctlSpec);
   opt->trav.rPlus = Pdtutil_StrDup(opt0->trav.rPlus);
   opt->trav.rPlusRings = Pdtutil_StrDup(opt0->trav.rPlusRings);
+  opt->trav.itpStoreRings = Pdtutil_StrDup(opt0->trav.itpStoreRings);
   opt->mc.rInit = Pdtutil_StrDup(opt0->mc.rInit);
   opt->trav.wP = Pdtutil_StrDup(opt0->trav.wP);
   opt->trav.wR = Pdtutil_StrDup(opt0->trav.wR);
@@ -22994,6 +23130,7 @@ dispose_settings(
   Pdtutil_Free(opt->mc.ctlSpec);
   Pdtutil_Free(opt->trav.rPlus);
   Pdtutil_Free(opt->trav.rPlusRings);
+  Pdtutil_Free(opt->trav.itpStoreRings);
   Pdtutil_Free(opt->mc.rInit);
   Pdtutil_Free(opt->trav.wP);
   Pdtutil_Free(opt->trav.wR);

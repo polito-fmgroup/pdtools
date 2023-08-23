@@ -1124,6 +1124,14 @@ EXTERN int Trav_TravSatCheckInvar(
   Ddi_Bdd_t *invar,
   int *checkTargetSatP
 );
+EXTERN int Trav_TravTrAbstrItp(
+  Trav_Mgr_t * travMgr /* Traversal Manager */ ,
+  Fsm_Mgr_t * fsmMgr,
+  int nFrames,
+  int firstFwdStep,
+  int maxFwdStep,
+  int bmcBound
+);
 EXTERN int Trav_TravSatItpGfp(
   Trav_Mgr_t * travMgr,
   Fsm_Mgr_t * fsmMgr,

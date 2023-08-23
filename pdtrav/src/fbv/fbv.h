@@ -126,9 +126,9 @@ typedef struct {
     int itpCompute;             // command line parameter
     int nnfClustSimplify;       // command line parameter
     int itpCompact;                 // command line parameter
-   int itpClust;             // INTERNAL FIELD
-   int itpNorm;             // INTERNAL FIELD
-   int itpSimp;             // INTERNAL FIELD
+    int itpClust;             // INTERNAL FIELD
+    int itpNorm;             // INTERNAL FIELD
+    int itpSimp;             // INTERNAL FIELD
 
     int aigPartial;             // command line parameter -> used in fbv only!
     int aigBddOpt;              // command line parameter
@@ -276,6 +276,13 @@ typedef struct {
     int ternaryAbstr;           // command line parameter
     int abstrRef;               // command line parameter
     int abstrRefGla;            // command line parameter
+    int abstrRefItp;            // command line parameter
+    int abstrRefItpMaxIter;     // command line parameter
+    int trAbstrItp;             // command line parameter
+    int trAbstrItpFirstFwdStep; // command line parameter
+    int trAbstrItpMaxFwdStep;   // command line parameter
+    char *trAbstrItpLoad;       // command line parameter
+    char *trAbstrItpStore;      // command line parameter
     int inputRegs;              // command line parameter
     int travSelfTuning;         // command line parameter
     float lazyTimeLimit;        // command line parameter
@@ -290,6 +297,8 @@ typedef struct {
     int bmcStrategy;            // command line parameter -> used in fbv only!
     int interpolantBmcSteps;    // command line parameter -> used in fbv only!
     int bmcLearnStep;           // command line parameter
+    int bmcTrAbstrPeriod;       // command line parameter
+    int bmcTrAbstrInit;       // command line parameter
 
     /* trav.pdr */
     int pdrMaxBlock;          // command line parameter
@@ -342,6 +351,7 @@ typedef struct {
     int itpRefineCex;           // command line parameter
     int itpUsePdrReached;       // command line parameter
     int itpRpm;                 // command line parameter
+    char *itpStoreRings;        // command line parameter
 
     /* trav.igr */
     int igrSide;                // command line parameter
