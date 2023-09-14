@@ -24135,10 +24135,11 @@ genTrConstrFromBmcCone(
   Ddi_Bdd_t *tr0, *tr;
   Ddi_Bddarray_t *trConstrA;
   int i;
+  int doBwdRing = 0;
   
   if (first < 1) first = 1;
   if (last <= 0 || last>=bmcBound)
-    last = bmcBound-1;
+    last = bmcBound;
   if (first >= last) return 0;
   
   Ddi_Bdd_t *invarPs = NULL;
@@ -24169,18 +24170,36 @@ genTrConstrFromBmcCone(
     Ddi_AigConstrainCubeAcc(tr0, itpMgr->init);
   }
   Ddi_BddSubstVarsAcc(tr0,itpMgr->ns,itpMgr->ps);
-  
-  tr = genComposedTr(itpMgr,last-first,first/*shift*/);
-  Ddi_AigAndCubeAcc(tr,invarConstrCube); 
-  //  Ddi_AigConstrainCubeAcc(tr,invarConstr);
 
-  cone = Ddi_BddDup(itpMgr->target);
-  Ddi_BddWriteMark (cone, last);
-  Ddi_BddSubstVarsAcc(cone, itpMgr->ps, itpMgr->ns);
-
-  growConeBwd(itpMgr, cone, bmcBound-1, last, NULL,
+#if 0 // to check BWD cone
+  if (last == bmcBound) {
+    cone = Ddi_BddMakeConstAig(ddm, 1);
+    tr = Ddi_BddDup(itpMgr->target);
+    Ddi_BddWriteMark (tr, first);
+    
+    Ddi_BddSubstVarsAcc(tr, itpMgr->ps, itpMgr->ns);
+    
+    growConeBwd(itpMgr, tr, bmcBound-1, first, NULL,
                           NULL, 0, -1, 0 /*boundK */ );
-  Ddi_AigAndCubeAcc(cone,invarNs);
+    Ddi_BddSubstVarsAcc(tr, itpMgr->ns, itpMgr->ps);
+    doBwdRing = 1;
+  }
+  else
+#endif
+  {
+    tr = genComposedTr(itpMgr,last-first,first/*shift*/);
+    Ddi_AigAndCubeAcc(tr,invarConstrCube); 
+    //  Ddi_AigConstrainCubeAcc(tr,invarConstr);
+
+    cone = Ddi_BddDup(itpMgr->target);
+    Ddi_BddWriteMark (cone, last);
+    Ddi_BddSubstVarsAcc(cone, itpMgr->ps, itpMgr->ns);
+    
+    if (last < bmcBound)
+      growConeBwd(itpMgr, cone, bmcBound-1, last, NULL,
+                          NULL, 0, -1, 0 /*boundK */ );
+    Ddi_AigAndCubeAcc(cone,invarNs);
+  }
   
   trConstrA = Ddi_BddarrayAlloc(ddm,0);
 
@@ -24196,7 +24215,11 @@ genTrConstrFromBmcCone(
   Ddi_BddSetFlattened(bForItp);
   int sat;
   Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
-    printf("\nTR abstr by INTERPOLATION from bmc %d-(tr)-%d - (cone: %d) Bound: %d\n\n",
+    if (doBwdRing)
+      printf("\nBWD RING abstr by INTERPOLATION from bmc %d-(tr)-%d - Bound: %d\n\n",
+           first, last, bmcBound-last, bmcBound);
+    else 
+      printf("\nTR abstr by INTERPOLATION from bmc %d-(tr)-%d - (cone: %d) Bound: %d\n\n",
            first, last, bmcBound-last, bmcBound);
   }
 
@@ -24204,7 +24227,8 @@ genTrConstrFromBmcCone(
                                                     NULL, NULL,NULL,0,NULL/*bwdCare*/,NULL,
                                                     &sat, 0, 1, 0, -1.0);
 
-  Ddi_AigAndCubeAcc(itp_i,invarConstrCube);
+  if (!doBwdRing)
+    Ddi_AigAndCubeAcc(itp_i,invarConstrCube);
   Ddi_Varset_t *supp = Ddi_BddSupp(itp_i);
   if (Ddi_VarsetNum(supp) < 100) {
     int s0 = Ddi_BddSize(itp_i);

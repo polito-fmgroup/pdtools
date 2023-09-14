@@ -202,6 +202,7 @@ struct Trav_Settings_s {
 
     int bmcTimeLimit;
     int bmcMemLimit;
+    int bmcItpRingsPeriod;
     int bmcTrAbstrPeriod;
     int bmcTrAbstrInit;
   } aig;
@@ -496,6 +497,7 @@ struct TravBmcMgr_s {
   Ddi_Bddarray_t *initStub;
   Ddi_Bddarray_t *itpRings;
   Ddi_Bdd_t *trAbstrItp;
+  int itpRingsPeriod;
   int trAbstrItpNumFrames;
   int trAbstrItpPeriod;
   int trAbstrItpInit;

@@ -365,10 +365,13 @@ static char *help[] = {
   "-itpStore <name>",
   "set name prefix for aiger files storing interpolants (default NULL = disabled)",
   NULL,
+  "-bmcItpRingsPeriod <p>",
+  "period for itp rings as a constraint (default 0 - disabled)", NULL,
+  "-itpLoad <name>",
+  "set file name for aiger file loading interpolant rings (default NULL = disabled)",
+  NULL,
   "-itpStoreRings <fname>",
   "set interpolant rings store file name (default NULL)", NULL,
-  "-itpLoad <l>",
-  "load interpolant aig from file (default 0 = disabled)", NULL,
   "-itpDrup <v>",
   "enable DRUP-based interpolation (default 0 = disabled)", NULL,
   "-itpCompute <l>",
@@ -499,9 +502,9 @@ static char *help[] = {
   "-bmcStep <s>",
   "step of SAT based BMC", NULL,
   "-bmcTrAbstrPeriod <p>",
-  "period for tr abstraction as e constraint (default 0 - use tr bound)", NULL,
+  "period for tr abstraction as a constraint (default 0 - use tr bound)", NULL,
   "-bmcTrAbstrInit <p>",
-  "initial step for tr abstraction as e constraint (default 0)", NULL,
+  "initial step for tr abstraction as a constraint (default 0)", NULL,
   "-bmcLearnStep <s>",
   "step of BMC pre-loaded during SAT based BMC", NULL,
   "-bmcFirst <s>",
@@ -2062,7 +2065,7 @@ FbvSetDdiMgrOpt(
         opt->ddi.nnfClustSimplify);
       Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
       Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
-      Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, inum, opt->ddi.itpLoad);
+      Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, pchar, opt->ddi.itpLoad);
       Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
       Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
       Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
@@ -2296,7 +2299,7 @@ FbvSetHeuristicOpt(
 
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
-  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, inum, opt->ddi.itpLoad);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, pchar, opt->ddi.itpLoad);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
@@ -3760,7 +3763,7 @@ if (opt->ddi.itpCompact > -1)     //-1 is the default value
    *  Custom compacting ITP behaviour: load an itp or compute a new itp starting from A and B (previously stored) //DV
    */
 
-  if (opt->ddi.itpCompute > 0 || opt->ddi.itpLoad > 0) {
+  if (opt->ddi.itpCompute > 0) {
 
     int method = 0;
     Ddi_Mgr_t *ddiMgr;
@@ -3797,7 +3800,7 @@ if (opt->ddi.itpCompact > -1)     //-1 is the default value
       opt->ddi.nnfClustSimplify);
     Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
     Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
-    Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, inum, opt->ddi.itpLoad);
+    Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, pchar, opt->ddi.itpLoad);
     Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
     Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
     Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
@@ -3805,14 +3808,9 @@ if (opt->ddi.itpCompact > -1)     //-1 is the default value
     Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpSimp_c, inum, opt->ddi.itpSimp);
 
 
-    if (opt->ddi.itpCompute > 0) {
-      method = opt->ddi.itpCompute;
-    } else {
-      Pdtutil_Assert(opt->ddi.itpLoad > 0, "Wrong value for option -itpLoad");
-      method = -(opt->ddi.itpLoad);
-    }
+    method = opt->ddi.itpCompute;
 
-    Ddi_AigSingleInterpolantCompaction(ddiMgr, fsmFileName, opt->ddi.itpStore,
+    Ddi_AigSingleInterpolantCompaction(ddiMgr, fsmFileName, opt->ddi.itpLoad,
       method);
 
     Ddi_MgrQuit(ddiMgr);
@@ -4154,7 +4152,7 @@ FbvParseArgs(
       argv++;
       argc--;
     } else if (strcmp(argv[1], "-itpLoad") == 0) {
-      opt->ddi.itpLoad = atoi(argv[2]);
+      opt->ddi.itpLoad = Pdtutil_StrDup(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -5121,6 +5119,12 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-bmcTe") == 0) {
       opt->trav.bmcTe = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-bmcItpRingsPeriod") == 0) {
+      opt->trav.bmcItpRingsPeriod = atoi(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -7178,7 +7182,7 @@ invarVerif(
     opt->ddi.nnfClustSimplify);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
-  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, inum, opt->ddi.itpLoad);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, pchar, opt->ddi.itpLoad);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
@@ -9918,7 +9922,7 @@ invarMixedVerif(
     opt->ddi.nnfClustSimplify);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
-  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, inum, opt->ddi.itpLoad);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, pchar, opt->ddi.itpLoad);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
@@ -10358,7 +10362,7 @@ invarMixedVerif(
     opt->ddi.nnfClustSimplify);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
-  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, inum, opt->ddi.itpLoad);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, pchar, opt->ddi.itpLoad);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
@@ -19942,6 +19946,8 @@ FbvSetTravMgrOpt(
     opt->expt.pdrTimeLimit);
 
   /* bmc */
+  Trav_MgrSetOption(travMgr, Pdt_TravBmcItpRingsPeriod_c, inum,
+    opt->trav.bmcItpRingsPeriod);
   Trav_MgrSetOption(travMgr, Pdt_TravBmcTrAbstrPeriod_c, inum,
     opt->trav.bmcTrAbstrPeriod);
   Trav_MgrSetOption(travMgr, Pdt_TravBmcTrAbstrInit_c, inum,
@@ -22017,7 +22023,7 @@ ddiOpt2OptList(
   Pdtutil_OptListIns(pkgOpt, eDdiOpt, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
   Pdtutil_OptListIns(pkgOpt, eDdiOpt, Pdt_DdiItpStore_c, pchar,
     opt->ddi.itpStore);
-  Pdtutil_OptListIns(pkgOpt, eDdiOpt, Pdt_DdiItpLoad_c, inum,
+  Pdtutil_OptListIns(pkgOpt, eDdiOpt, Pdt_DdiItpLoad_c, pchar,
     opt->ddi.itpLoad);
   Pdtutil_OptListIns(pkgOpt, eDdiOpt, Pdt_DdiItpDrup_c, inum,
     opt->ddi.itpDrup);
@@ -22446,6 +22452,8 @@ travOpt2OptList(
     opt->trav.maxCNFLength);
 
   /* bmc */
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravBmcItpRingsPeriod_c, inum,
+    opt->trav.bmcItpRingsPeriod);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravBmcTrAbstrPeriod_c, inum,
     opt->trav.bmcTrAbstrPeriod);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravBmcTrAbstrInit_c, inum,
@@ -22574,7 +22582,7 @@ new_settings(
   opt->ddi.itpMem = 4;
   opt->ddi.itpMap = -1;
   opt->ddi.itpStore = NULL;
-  opt->ddi.itpLoad = 0;
+  opt->ddi.itpLoad = NULL;
   opt->ddi.itpDrup = 0;
   opt->ddi.itpCompute = 0;
   opt->ddi.itpIteOptTh = 50000;
@@ -22846,6 +22854,7 @@ new_settings(
   opt->trav.bmcStrategy = 1;
   opt->trav.interpolantBmcSteps = 0;
   opt->trav.bmcLearnStep = 4;
+  opt->trav.bmcItpRingsPeriod = 0;
   opt->trav.bmcTrAbstrPeriod = 0;
   opt->trav.bmcTrAbstrInit = 0;
 
@@ -23064,6 +23073,7 @@ FbvDupSettings(
   opt->mc.nlambda = Pdtutil_StrDup(opt0->mc.nlambda);
   opt->mc.ninvar = Pdtutil_StrDup(opt0->mc.ninvar);
   opt->ddi.itpStore = Pdtutil_StrDup(opt0->ddi.itpStore);
+  opt->ddi.itpLoad = Pdtutil_StrDup(opt0->ddi.itpLoad);
   opt->trav.auxVarFile = Pdtutil_StrDup(opt0->trav.auxVarFile);
   opt->trav.bwdTrClustFile = Pdtutil_StrDup(opt0->trav.bwdTrClustFile);
   opt->trav.approxTrClustFile = Pdtutil_StrDup(opt0->trav.approxTrClustFile);

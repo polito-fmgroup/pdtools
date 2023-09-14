@@ -414,6 +414,7 @@ typedef enum {
   /* bmc */
   Pdt_TravBmcTimeLimit_c,
   Pdt_TravBmcMemLimit_c,
+  Pdt_TravBmcItpRingsPeriod_c,
   Pdt_TravBmcTrAbstrPeriod_c,
   Pdt_TravBmcTrAbstrInit_c,
   

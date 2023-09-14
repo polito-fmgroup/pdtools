@@ -266,6 +266,7 @@ Trav_MgrInit(
   /* bmc */
   travMgr->settings.aig.bmcTimeLimit = 0;
   travMgr->settings.aig.bmcMemLimit = 0;
+  travMgr->settings.aig.bmcItpRingsPeriod = 0;
   travMgr->settings.aig.bmcTrAbstrPeriod = 0;
   travMgr->settings.aig.bmcTrAbstrInit = 0;
 
@@ -5005,6 +5006,9 @@ Trav_MgrSetOptionItem(
     case Pdt_TravBmcMemLimit_c:
       travMgr->settings.aig.bmcMemLimit = optItem.optData.inum;
       break;
+    case Pdt_TravBmcItpRingsPeriod_c:
+      travMgr->settings.aig.bmcItpRingsPeriod = optItem.optData.inum;
+      break;
     case Pdt_TravBmcTrAbstrPeriod_c:
       travMgr->settings.aig.bmcTrAbstrPeriod = optItem.optData.inum;
       break;
@@ -5600,6 +5604,9 @@ Trav_MgrReadOption(
       break;
     case Pdt_TravBmcMemLimit_c:
       *(int *)optRet = travMgr->settings.aig.bmcMemLimit;
+      break;
+    case Pdt_TravBmcItpRingsPeriod_c:
+      *(int *)optRet = travMgr->settings.aig.bmcItpRingsPeriod;
       break;
     case Pdt_TravBmcTrAbstrPeriod_c:
       *(int *)optRet = travMgr->settings.aig.bmcTrAbstrPeriod;

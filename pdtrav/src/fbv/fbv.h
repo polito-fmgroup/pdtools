@@ -121,7 +121,7 @@ typedef struct {
     int itpIteOptTh;            // command line parameter
     int itpStructOdcTh;         // command line parameter
     int itpMap;                 // command line parameter
-    int itpLoad;                // command line parameter
+    char *itpLoad;                // command line parameter
     int itpDrup;                // command line parameter
     int itpCompute;             // command line parameter
     int nnfClustSimplify;       // command line parameter
@@ -297,11 +297,12 @@ typedef struct {
     int bmcStrategy;            // command line parameter -> used in fbv only!
     int interpolantBmcSteps;    // command line parameter -> used in fbv only!
     int bmcLearnStep;           // command line parameter
+    int bmcItpRingsPeriod;      // command line parameter
     int bmcTrAbstrPeriod;       // command line parameter
-    int bmcTrAbstrInit;       // command line parameter
+    int bmcTrAbstrInit;         // command line parameter
 
     /* trav.pdr */
-    int pdrMaxBlock;          // command line parameter
+    int pdrMaxBlock;            // command line parameter
     int pdrReuseRings;          // command line parameter
     int pdrFwdEq;               // command line parameter
     int pdrUnfold;              // command line parameter

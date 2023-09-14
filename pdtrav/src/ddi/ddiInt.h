@@ -403,7 +403,7 @@ typedef struct {
     int itpMem;
     int itpMap;
     char *itpStore;
-    int itpLoad;
+    char *itpLoad;
     int itpCompute;
     int partialItp;
     int itpCompact;    

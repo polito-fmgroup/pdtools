@@ -729,7 +729,7 @@ Ddi_MgrInit (
   ddiMgr->settings.aig.itpMem = 4;
   ddiMgr->settings.aig.itpMap = 0;
   ddiMgr->settings.aig.itpStore = NULL;
-  ddiMgr->settings.aig.itpLoad = 0;
+  ddiMgr->settings.aig.itpLoad = NULL;
   ddiMgr->settings.aig.itpDrup = 0;
   ddiMgr->settings.aig.itpUseCare = 0;
   ddiMgr->settings.aig.itpCompute = 0;
@@ -1121,6 +1121,7 @@ Ddi_MgrQuit(
   Ddi_Free(dd->zero);
   Pdtutil_Free (dd->settings.aig.satSolver);
   Pdtutil_Free (dd->settings.aig.itpStore);
+  Pdtutil_Free (dd->settings.aig.itpLoad);
   
   Pdtutil_Free (dd->cnf.cnf2aig);
   Pdtutil_Free (dd->cnf.cnfActive);
@@ -3592,7 +3593,7 @@ Ddi_MgrReadAigItpStore (
 
 ******************************************************************************/
 
-int
+char *
 Ddi_MgrReadAigItpLoad (
   Ddi_Mgr_t *ddiMgr        /* IN: Source dd manager */
   )
@@ -3849,9 +3850,10 @@ Ddi_MgrSetAigItpAbc (
 void
 Ddi_MgrSetAigItpLoad (
   Ddi_Mgr_t *ddiMgr        /* IN: Source dd manager */,
-  int itpLoad               /* IN: itpLoad */
+  char *itpLoad               /* IN: itpLoad */
   )
 {
+  Pdtutil_Free(ddiMgr->settings.aig.itpLoad);
   ddiMgr->settings.aig.itpLoad = itpLoad;
   return;
 }
@@ -4445,7 +4447,8 @@ Ddi_MgrSetOptionItem(
     ddiMgr->settings.aig.itpStore = Pdtutil_StrDup(optItem.optData.pchar);
     break;
   case Pdt_DdiItpLoad_c:
-    ddiMgr->settings.aig.itpLoad = optItem.optData.inum;
+    Pdtutil_Free(ddiMgr->settings.aig.itpLoad);
+    ddiMgr->settings.aig.itpLoad = Pdtutil_StrDup(optItem.optData.pchar);
     break;
   case Pdt_DdiItpDrup_c:
     ddiMgr->settings.aig.itpDrup = optItem.optData.inum;
@@ -4589,7 +4592,7 @@ Ddi_MgrReadOption (
       *(char **)optRet = ddiMgr->settings.aig.itpStore;
       break;
   case Pdt_DdiItpLoad_c:
-      *(int *)optRet = ddiMgr->settings.aig.itpLoad;
+      *(char **)optRet = ddiMgr->settings.aig.itpLoad;
       break;
   case Pdt_DdiItpDrup_c:
       *(int *)optRet = ddiMgr->settings.aig.itpDrup;

@@ -2510,6 +2510,7 @@ TravBmcMgrInit(
   bmcMgr->dummyRefs = NULL;
   bmcMgr->unrollArray = NULL;
 
+  bmcMgr->itpRingsPeriod = 0;
   bmcMgr->trAbstrItpNumFrames = 0;
   bmcMgr->trAbstrItpPeriod = 0;
   bmcMgr->trAbstrItpCheck = 0;
@@ -2769,15 +2770,16 @@ TravBmcMgrInit(
       
   }
   
-  if (ddm->settings.aig.itpStore != NULL) {
+  if (ddm->settings.aig.itpLoad != NULL) {
     Ddi_Bddarray_t *itpRings;
     char filename[100];
     int nRings;
 
-    itpRings = Ddi_AigarrayNetLoadAiger(ddm,NULL,ddm->settings.aig.itpStore);
+    itpRings = Ddi_AigarrayNetLoadAiger(ddm,NULL,ddm->settings.aig.itpLoad);
     Pdtutil_Assert( itpRings != NULL  ,"Unexpected NULL pointer");
 
     bmcMgr->itpRings = itpRings;
+    bmcMgr->itpRingsPeriod = travMgr->settings.aig.bmcItpRingsPeriod;
   }
 
   if (0) {
@@ -3109,25 +3111,25 @@ TravBmcMgrAddFrames(
 
     if (bmcMgr->itpRings != NULL) {
       int nRings = Ddi_BddarrayNum(bmcMgr->itpRings);
+      int period = bmcMgr->itpRingsPeriod;
       int iMid = nRings/2;
       //      if (k==(iMid+3) || 1&&(k==((iMid*3)/2+2))) {
-      if (k==(iMid+3) || 1&&(k==((iMid*3)/2+2))
-          //          || 1&&(k<=((iMid*4)/3) && k%4)
-          || 1&&(k==((iMid*1)/2+2))
-          || 1&&(k==((iMid*1)/4+2))) {
-        if (k<nRings) {
+      if (k>0 && k%period == 0 && k<nRings) {
         Ddi_Bdd_t *constr_k = Ddi_BddDup(Ddi_BddarrayRead(bmcMgr->itpRings,k));
         Ddi_Bdd_t *myOne = Ddi_BddMakeConstAig(ddm, 1);
+        int sz = Ddi_BddSize(constr_k);
         Ddi_BddComposeAcc(constr_k, ns, bmcMgr->unroll);
         while (Ddi_BddPartNum(bmcMgr->bmcConstr) <= k) {
           Ddi_BddPartInsertLast(bmcMgr->bmcConstr,myOne);
         }
         Ddi_BddAndAcc(Ddi_BddPartRead(bmcMgr->bmcConstr, k), constr_k);
+        Pdtutil_VerbosityMgrIf(bmcMgr->travMgr, Pdtutil_VerbLevelUsrMed_c) {
+          fprintf(tMgrO(bmcMgr->travMgr), "++ ITP Constr (size: %d)) added at frame: %d.\n", sz, k);
+        }
         Ddi_Free(constr_k);
         Ddi_Free(myOne);
-        }
       }
-      if (1 && (k>=(iMid) && (k%2==0))) {
+      if (0 && (k>=(iMid) && (k%2==0))) {
         int bckConeDepth = nRings-(iMid);
         int kConstr = k + bckConeDepth;
         Ddi_Bdd_t *constr_k = Ddi_BddDup(Ddi_BddarrayRead(bmcMgr->itpRings,iMid));
