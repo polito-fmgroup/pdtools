@@ -26001,7 +26001,7 @@ SHORT:
 
 SUPERSHORT:
   lglprs (lgl, "LGL: %d/%d vars/clauses", lglnvars(lgl),lglnclauses(lgl));
-  lglprs (lgl, "LGL: %d conflicts - %d decisions - %d propagations", 
+  lglprs (lgl, "LGL: %ld conflicts - %ld decisions - %ld propagations", 
 	  (LGLL) s->confs, (LGLL) s->decisions, (LGLL) p);
   return;
 }

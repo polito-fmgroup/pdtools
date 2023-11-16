@@ -2462,6 +2462,10 @@ Tr_TrComputeCoiVars(
 
   int i, j, np;
 
+  return computeCoiVars(tr,p,maxIter);
+
+  // disabled for aux var handling
+  
   psv = Tr_MgrReadPS(trMgr);
   nsv = Tr_MgrReadNS(trMgr);
   ps = Ddi_VarsetMakeFromArray(psv);
@@ -3101,6 +3105,7 @@ computeCoiVars(
 
     Ddi_VarsetUnionAcc(cone, newvs);
     Ddi_VarsetarrayInsertLast(coirings, cone);
+    Ddi_VarsetarrayInsertLast(coirings, newvs);
     Ddi_VarsetSwapVarsAcc(newvs, psv, nsv);
     newnew = Ddi_VarsetVoid(ddm);
     do {

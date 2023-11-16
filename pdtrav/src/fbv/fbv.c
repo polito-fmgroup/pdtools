@@ -985,7 +985,7 @@ static Ddi_Varsetarray_t *computeFsmCoiVars(
   int maxIter,
   int verbosity
 );
-static Ddi_Varsetarray_t *computeFsmCoiVars1(
+static Ddi_Varsetarray_t *computeFsmCoiRings(
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t * p,
   Ddi_Varset_t * extraVars,
@@ -8367,7 +8367,10 @@ invarVerif(
 
         coi = computeFsmCoiVars(fsmMgr, invarspec, NULL, opt->tr.coiLimit, 1);
         if (opt->pre.wrCoi != NULL) {
-          writeCoiShells(opt->pre.wrCoi, coi, ps);
+          Ddi_Varsetarray_t *coiRings;
+          coiRings = computeFsmCoiRings(fsmMgr, invarspec, NULL, opt->tr.coiLimit, 1);
+          writeCoiShells(opt->pre.wrCoi, coiRings, ps);
+          Ddi_Free(coiRings);
         }
         nCoi = Ddi_VarsetarrayNum(coi);
         fsmCoiReduction(fsmMgr, Ddi_VarsetarrayRead(coi, nCoi - 1));
@@ -9493,7 +9496,7 @@ invarVerif(
     if (opt->pre.wrCoi != NULL) {
       Ddi_Varsetarray_t *coi;
 
-      coi = computeCoiVars(tr, invarspec, opt->tr.coiLimit);
+      coi = Tr_TrComputeCoiVars(tr, invarspec, opt->tr.coiLimit);
       writeCoiShells(opt->pre.wrCoi, coi, ps);
       Ddi_Free(coi);
     }
@@ -15809,7 +15812,7 @@ coiSccInfoQuit(
   SeeAlso     []
 ******************************************************************************/
 static Ddi_Varsetarray_t *
-computeFsmCoiVars1(
+computeFsmCoiRings(
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t * p,
   Ddi_Varset_t * extraVars,
@@ -15818,7 +15821,7 @@ computeFsmCoiVars1(
 )
 {
   Ddi_Varsetarray_t *coirings;
-  Ddi_Varset_t *ps, *ns, *supp, *cone, *New, *newnew;
+  Ddi_Varset_t *ps, *ns, *supp, *cone, *New, *newNew;
   Ddi_Bddarray_t *delta;
   Ddi_Vararray_t *psv;
   Ddi_Vararray_t *nsv;
@@ -15875,56 +15878,46 @@ computeFsmCoiVars1(
 
   j = 0;
 
-  while (((j++ < maxIter) || (maxIter <= 0)) && (!Ddi_VarsetIsVoid(New))) {
+  newNew = Ddi_VarsetDup(New);
+  
+  while ((j++ < maxIter) || ((maxIter <= 0)) && (!Ddi_VarsetIsVoid(newNew))) {
 
+    Ddi_Free(newNew);
     if (Ddi_VarsetIsArray(New)) {
       Ddi_VarsetSetArray(cone);
     }
     Ddi_VarsetUnionAcc(cone, New);
-    Ddi_VarsetarrayInsertLast(coirings, cone);
+    Ddi_VarsetarrayInsertLast(coirings, New);
     Ddi_VarsetSwapVarsAcc(New, psv, nsv);
-    newnew = Ddi_VarsetVoid(ddiMgr);
 
     //      fprintf(stdout, "NNN: %d\n", j);
     //  Ddi_VarsetPrint(New,0,0,stdout);
 
-    for (i = 0; i < np; i++) {
-      Ddi_Varset_t *common;
-
-      supp = Ddi_VarsetarrayRead(range, i);
-      if (Ddi_VarsetIsArray(New)) {
-        Ddi_VarsetSetArray(supp);
-      }
-      common = Ddi_VarsetIntersect(supp, New);
-      // fprintf(stdout, "SSS: %d\n", i);
-      // Ddi_VarsetPrint(supp,0,0,stdout);
-      if (!Ddi_VarsetIsVoid(common)) {
-#if 0
-        if ((opt->pre.coiSets != NULL) && (opt->pre.coiSets[i] != NULL)) {
-          Ddi_VarsetUnionAcc(cone, opt->pre.coiSets[i]);
-        } else
-#endif
-        {
-          //        fprintf(stdout, "CCC: %d\n", i);
-          if (Ddi_VarsetIsArray(Ddi_VarsetarrayRead(domain, i))) {
-            Ddi_VarsetSetArray(newnew);
-          }
-          if (Ddi_VarsetIsArray(newnew)) {
-            Ddi_VarsetSetArray(Ddi_VarsetarrayRead(domain, i));
-          }
-          Ddi_VarsetUnionAcc(newnew, Ddi_VarsetarrayRead(domain, i));
-          //        printf("I: %d - ", i);
-          //      Ddi_VarsetPrint(Ddi_VarsetarrayRead(domain,i),0,NULL,stdout);
-        }
-      }
-      Ddi_Free(common);
-    }
+    Ddi_VarsetWriteMark (ps, 0);
+    Ddi_VarsetWriteMark (ns, 0);
+    Ddi_VarsetWriteMark (New, 1);
     Ddi_Free(New);
-    if (Ddi_VarsetIsArray(cone)) {
-      Ddi_VarsetSetArray(newnew);
+    New = Ddi_VarsetVoid(ddiMgr);
+    
+    for (i = 0; i < np; i++) {
+      Ddi_Var_t *ns_i = Ddi_VararrayRead(nsv,i);
+      if (Ddi_VarReadMark(ns_i) > 0) {
+        supp = Ddi_VarsetarrayRead(domain, i);
+        Ddi_VarsetWriteMark (supp, 1);
+      }
     }
-    New = Ddi_VarsetDiff(newnew, cone);
-    Ddi_Free(newnew);
+    Ddi_VarsetWriteMark (ns, 0);
+    
+    for (i = 0; i < np; i++) {
+      Ddi_Var_t *ps_i = Ddi_VararrayRead(psv,i);
+      if (Ddi_VarReadMark(ps_i) > 0) {
+        Ddi_VarsetAddAcc(New,ps_i);
+      }
+    }
+
+    newNew = Ddi_VarsetDiff(New,cone);
+    
+    Ddi_VarsetWriteMark (ps, 0);
 
     Pdtutil_VerbosityLocal(verbosityLocal, Pdtutil_VerbLevelUsrMax_c,
       fprintf(stdout, ".(%d)", Ddi_VarsetNum(cone))
@@ -15941,6 +15934,7 @@ computeFsmCoiVars1(
     );
 
   Ddi_Free(New);
+  Ddi_Free(newNew);
   Ddi_Free(domain);
   Ddi_Free(range);
   Ddi_Free(ps);

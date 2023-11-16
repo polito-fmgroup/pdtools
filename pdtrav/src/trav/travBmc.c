@@ -1586,11 +1586,12 @@ Trav_TravSatBmcIncrVerif(
         Ddi_Bdd_t *target = Ddi_BddPartRead(bmcMgr->bmcTarget, i);
         Ddi_Bdd_t *abstrTarget = Ddi_BddPartRead(bmcMgr->bmcAbstrTarget, i);
 	Ddi_Bdd_t *abstrCheckPart = NULL;
-#if 1
+#if 0
         Ddi_Bdd_t *checkPart = Ddi_BddDup(target);
 #else
         Ddi_Bdd_t *checkPart = Ddi_BddDup(bmcMgr->bmcConstr);
-	if (0 && Ddi_BddIsOne(bmcMgr->bmcConstr)) {
+        //	if (1 && Ddi_BddIsOne(bmcMgr->bmcConstr)) { // can be part
+	if (Ddi_BddSize(bmcMgr->bmcConstr)==0) {
 	  Ddi_Free(checkPart);
 	  checkPart = Ddi_AigPartitionTop(target, 1);
 	}
@@ -2966,7 +2967,7 @@ TravBmcMgrAddFrames(
 
   for (k = start_k; k <= end_k; k++) {
     Ddi_Bdd_t *target_k, *prevTarget=NULL, *abstrTarget_k=NULL;
-    Ddi_Bdd_t *constr_k;
+    Ddi_Bdd_t *constr_k=NULL;
     Ddi_Bddarray_t *delta_k;
     Ddi_Vararray_t *newPi;
     Ddi_Varset_t *tfSupp;
@@ -3089,24 +3090,32 @@ TravBmcMgrAddFrames(
       Ddi_Free(invar_k);
     }
 
-    if (multipleTarget && bmcMgr->constraint != NULL) {
-      constr_k = Ddi_BddCompose(bmcMgr->constraint, ps, bmcMgr->unroll);
-      Ddi_BddSubstVarsAcc(constr_k, pi, newPi);
+    if (multipleTarget && (bmcMgr->constraint != NULL ||
+                           k==0 && bmcMgr->initStubConstr!=NULL)) {
+      if (bmcMgr->constraint != NULL) {
+        constr_k = Ddi_BddCompose(bmcMgr->constraint, ps, bmcMgr->unroll);
+        Ddi_BddSubstVarsAcc(constr_k, pi, newPi);
+      }
+      else {
+        constr_k = Ddi_BddMakeConstAig(ddm, 1);
+      }    
       if (k==0 && bmcMgr->initStubConstr!=NULL) {
 	Ddi_BddAndAcc(constr_k,bmcMgr->initStubConstr);
       }
-      if (Ddi_BddPartNum(bmcMgr->bmcConstr) == (k + 1)) {
-        Pdtutil_Assert(k == 0, "wrong constr num");
-        Ddi_BddAndAcc(Ddi_BddPartRead(bmcMgr->bmcConstr, 0), constr_k);
-      } else {
-        if (Ddi_BddPartNum(bmcMgr->bmcConstr) != k) {
-          printf("k = %d, constr: %d\n", k, Ddi_BddPartNum(bmcMgr->bmcConstr));
+      if (constr_k != NULL) {
+        if (Ddi_BddPartNum(bmcMgr->bmcConstr) == (k + 1)) {
+          Pdtutil_Assert(k == 0, "wrong constr num");
+          Ddi_BddAndAcc(Ddi_BddPartRead(bmcMgr->bmcConstr, 0), constr_k);
+        } else {
+          if (Ddi_BddPartNum(bmcMgr->bmcConstr) != k) {
+            printf("k = %d, constr: %d\n", k, Ddi_BddPartNum(bmcMgr->bmcConstr));
+          }
+          Pdtutil_Assert(Ddi_BddPartNum(bmcMgr->bmcConstr) == k,
+                         "wrong target num");
+          Ddi_BddPartInsertLast(bmcMgr->bmcConstr, constr_k);
         }
-        Pdtutil_Assert(Ddi_BddPartNum(bmcMgr->bmcConstr) == k,
-          "wrong target num");
-        Ddi_BddPartInsertLast(bmcMgr->bmcConstr, constr_k);
+        Ddi_Free(constr_k);
       }
-      Ddi_Free(constr_k);
     }
 
     if (bmcMgr->itpRings != NULL) {
