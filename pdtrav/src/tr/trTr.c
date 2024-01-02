@@ -2373,7 +2373,8 @@ Tr_TrCoiReductionWithAssume(
   if (n > 0) {
 
     nocoi = Ddi_VarsetMakeFromArray(ps);
-    Ddi_VarsetDiffAcc(nocoi, Ddi_VarsetarrayRead(coiVars, n - 1));
+    for (int i=0; i<n; i++) 
+      Ddi_VarsetDiffAcc(nocoi, Ddi_VarsetarrayRead(coiVars, i));
     nocoiNS = Ddi_VarsetSwapVars(nocoi, ps, ns);
 
 #if 0

@@ -1723,7 +1723,7 @@ Trav_TravSatBmcIncrVerif(
 		    cex = Ddi_AigSatMinisat22WithCexAndAbortIncremental(
 			       ddiS,p_j, NULL, 0,
 			       satTimeLimit, &abort);
-		    printf(" P:%d", j); fflush(stdout);
+		    printf(" P:%d ", j); fflush(stdout);
 		    if (cex!=NULL) break;
 		  }
 		}

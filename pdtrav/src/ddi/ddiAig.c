@@ -2370,7 +2370,8 @@ Ddi_AigNnfStats (
    Ddi_VararrayWriteMark (supp, 1);
 
    Ddi_Bdd_t *cube = Ddi_BddMakeConstAig(ddm, 1);
-
+   Ddi_Bddarray_t *lits = Ddi_BddarrayAlloc(ddm,0);
+   
    int mon0 = 0, mon1 = 0, v01 = 0;
    int maxfo = 0, maxfl=0, ifo=-1, ifl=-1, mfl0, mfl1, mfo0, mfo1;
    for (int i=0; i<Ddi_VararrayNum(vars); i++) {
@@ -2400,12 +2401,14 @@ Ddi_AigNnfStats (
        mon0++;
        Ddi_Bdd_t *lit = Ddi_BddMakeLiteralAig(v_i, 0);
        Ddi_BddAndAcc(cube,lit);
+       Ddi_BddarrayInsertLast(lits,lit);
        Ddi_Free(lit);
      }
      else {
        mon1++;
        Ddi_Bdd_t *lit = Ddi_BddMakeLiteralAig(v_i, 1);
        Ddi_BddAndAcc(cube,lit);
+       Ddi_BddarrayInsertLast(lits,lit);
        Ddi_Free(lit);
      }
    }
@@ -2417,9 +2420,31 @@ Ddi_AigNnfStats (
            mon0, mon1, v01);
    Ddi_Bdd_t *fSmooth = NULL;
    if (doExist) {
+     int nExist = 0;
+     Ddi_Bdd_t *cubeSm = Ddi_BddMakeConstAig(ddm, 1);
      fSmooth = Ddi_BddDup(f);
-     Ddi_AigConstrainCubeAcc(fSmooth,cube);
-     printf("quantify %d vars: %d->%d\n", mon0+mon1, Ddi_BddSize(f), Ddi_BddSize(fSmooth));
+     for (int i = 0; nExist<doExist && i<Ddi_BddarrayNum(lits); i++) {
+       Ddi_Bdd_t *lit = Ddi_BddarrayRead(lits,i);
+       Ddi_Bdd_t *fDup = Ddi_BddDup(fSmooth);
+       int sz0 = Ddi_BddSize(fDup);
+       Ddi_AigConstrainCubeAcc(fDup,lit);
+       Ddi_Var_t *v = Ddi_BddTopVar(lit); 
+       Ddi_BddNotAcc(fDup);
+       int enSmooth = strstr(Ddi_VarName(v),"PDTRAV")==NULL;
+       enSmooth &= Ddi_AigSat(fDup);
+       Ddi_BddNotAcc(fDup);
+       if (enSmooth && Ddi_BddSize(fDup)>sz0/2) {
+         nExist++;
+         Pdtutil_Assert(Ddi_BddIncluded(fSmooth,fDup),"wrong var abstraction");
+         Ddi_DataCopy(fSmooth,fDup);
+         Ddi_BddAndAcc(cubeSm,lit);
+       }
+       Ddi_Free(fDup);
+     }
+     //     DdiLogBdd(cubeSm,0);
+     printf("quantify %d/%d vars: %d->%d\n",
+            nExist, mon0+mon1, Ddi_BddSize(f), Ddi_BddSize(fSmooth));
+     Ddi_Free(cubeSm);
    }
    Ddi_Free(vars);
    Ddi_Free(cube);

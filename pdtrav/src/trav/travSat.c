@@ -750,7 +750,8 @@ static Ddi_Bdd_t *
 genComposedTr(
   Trav_ItpMgr_t * itpMgr,
   int nFrames,
-  int timeShift
+  int timeShift,
+  Ddi_Vararray_t *filterVars
 );
 static void
 itpMgrApplyRingEq(
@@ -865,6 +866,13 @@ optTrConstr(
   Trav_ItpMgr_t * itpMgr,
   Ddi_Bddarray_t *trConstrA0,
   int nFrames
+);
+static Ddi_Bddarray_t *
+optTrConstrForBmcCone(
+  Trav_ItpMgr_t * itpMgr,
+  Ddi_Bddarray_t *trConstrA,
+  int nFrames,
+  int doItp
 );
 static Ddi_Bddarray_t *
 genTrConstrFromBmcCone(
@@ -9448,6 +9456,7 @@ Trav_TravTrAbstrItp(
   Trav_Mgr_t * travMgr /* Traversal Manager */ ,
   Fsm_Mgr_t * fsmMgr,
   int nFrames,
+  int optLevel,
   int firstFwdStep,
   int maxFwdStep,
   int bmcBound
@@ -9467,12 +9476,24 @@ Trav_TravTrAbstrItp(
   
   if (travMgr->settings.aig.trAbstrItpLoad != NULL) {
     int nFrames;
-    Ddi_Bddarray_t *trConstrA0 = TravTravTrAbstrLoad(travMgr,&nFrames); 
+    //    Ddi_Bddarray_t *trConstrA0 = TravTravTrAbstrLoad(travMgr,&nFrames); 
+    Ddi_Bddarray_t *trConstrA0 = itpMgr->trItpAbstr.psNsConstr;
+    nFrames = itpMgr->trItpAbstr.nFrames;
+
     char *s = strstr(travMgr->settings.aig.trAbstrItpLoad, "_tr_abstr_");
     Pdtutil_Assert(s!=NULL, "wrong file name for tr constr");
     sprintf(fileSuffix,"_opt%s", s);
-    trConstrA = optTrConstr(itpMgr,trConstrA0,nFrames);    
-    Ddi_Free(trConstrA0);
+    //    trConstrA = optTrConstr(itpMgr,trConstrA0,nFrames);
+    if (optLevel < 0) {
+      Ddi_Bdd_t *trOpt = Ddi_AigNnfStats(Ddi_BddarrayRead(trConstrA0,0),0,-optLevel);
+      trConstrA = Ddi_BddarrayAlloc(ddm,1);
+      Ddi_BddarrayWrite(trConstrA,0,trOpt);
+      Ddi_Free(trOpt);
+    }
+    else {
+      trConstrA = optTrConstrForBmcCone(itpMgr,trConstrA0,nFrames,optLevel>1?1:0);    
+    }
+    //    Ddi_Free(trConstrA0);
   }
   else if (bmcBound > 0) {
     int lastRing = firstFwdStep + nFrames;
@@ -13330,9 +13351,11 @@ static Ddi_Bdd_t *
 genComposedTr(
   Trav_ItpMgr_t * itpMgr,
   int nFrames,
-  int timeShift
+  int timeShift,
+  Ddi_Vararray_t *filterVars
 )
 {
+  
   Ddi_Mgr_t *ddm = itpMgr->ddiMgr;
   int i;
   Ddi_Bddarray_t *unroll = NULL;
@@ -13360,8 +13383,25 @@ genComposedTr(
     unroll = myDelta;
   }
 
-  tr = Ddi_BddRelMakeFromArray(unroll, ns);
-
+  if (filterVars==NULL)
+    tr = Ddi_BddRelMakeFromArray(unroll, ns);
+  else {
+    Ddi_VararrayWriteMark(filterVars, 1);
+    Ddi_Vararray_t *vars = Ddi_VararrayAlloc(ddm, 0);
+    Ddi_Bddarray_t *funcs = Ddi_BddarrayAlloc(ddm, 0);
+    for (int i=0; i<Ddi_VararrayNum(ns); i++) {
+      Ddi_Var_t *ns_i = Ddi_VararrayRead(ns,i);
+      if (Ddi_VarReadMark(ns_i)!=0) {
+        Ddi_VararrayInsertLast(vars,ns_i);
+        Ddi_BddarrayInsertLast(funcs,Ddi_BddarrayRead(unroll,i));
+      }
+    }
+    tr = Ddi_BddRelMakeFromArray(funcs, vars);
+    Ddi_Free(funcs);
+    Ddi_Free(vars);
+    Ddi_VararrayWriteMark(filterVars, 0);
+  }
+  
   Ddi_Free(unroll);
 
   return tr;
@@ -16252,6 +16292,7 @@ itpStrengthenReachedGfp(
   if (Ddi_BddSize(targetNs) < 10) {
     constrWithTarget = 0;
   }
+  constrWithTarget = 0;
   if (doExist) {
     targetNsProj = Ddi_BddExistProject(targetNs,itpMgr->nsvars);
   }
@@ -24007,7 +24048,7 @@ optTrConstr(
     Ddi_BddAndAcc(invarConstr, invarNs);
   }
 
-  tr = genComposedTr(itpMgr,nFrames,0);
+  tr = genComposedTr(itpMgr,nFrames,0,NULL);
   Ddi_AigAndCubeAcc(tr,invarPs);
   Ddi_AigAndCubeAcc(tr,invarNs);
   //  Ddi_AigConstrainCubeAcc(tr,invarConstr);
@@ -24117,6 +24158,128 @@ optTrConstr(
   SeeAlso     []
 ******************************************************************************/
 static Ddi_Bddarray_t *
+optTrConstrForBmcCone(
+  Trav_ItpMgr_t * itpMgr,
+  Ddi_Bddarray_t *trConstrA,
+  int nFrames,
+  int doItp
+)
+{
+  Trav_Mgr_t *travMgr = itpMgr->travMgr;
+  Ddi_Mgr_t *ddm = Trav_MgrReadDdiMgrDefault(travMgr);
+  Pdtutil_VerbLevel_e verbosity = Trav_MgrReadVerbosity(travMgr);
+  Ddi_Vararray_t *ns = itpMgr->ns;
+  Ddi_Vararray_t *ps = itpMgr->ps;
+  Ddi_Bdd_t *invarConstr = NULL; 
+  Ddi_Bdd_t *invarConstrCube = NULL; 
+  Ddi_Bdd_t *tr, *trConstr, *trConstrOpt;
+  Ddi_Bddarray_t *trConstrOptA;
+  int i;
+  int doBwdRing = 0;
+  
+  Ddi_Bdd_t *invarPs = NULL;
+  Ddi_Bdd_t *invarNs = NULL;
+  if (1) {
+    Ddi_Var_t *iv = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$PS");
+    Ddi_Var_t *ivNs = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$NS");
+    Ddi_Var_t *ipNs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$NS");
+    invarConstr = Ddi_BddDup(itpMgr->invarConstr);  
+    Pdtutil_Assert (iv != NULL,"missing invar var");
+    invarPs = Ddi_BddMakeLiteralAig(iv, 1);
+    invarNs = Ddi_BddMakeLiteralAig(ivNs, 1);
+    invarConstrCube = Ddi_BddAnd(invarPs,invarNs);
+    if (invarConstr==NULL) {
+      invarConstr = Ddi_BddMakeConstAig(ddm, 1);
+    }      
+    Ddi_BddAndAcc(invarConstr, invarPs);
+    Ddi_BddAndAcc(invarConstr, invarNs);
+  }
+
+  trConstr = Ddi_BddarrayRead(trConstrA,0);
+  Ddi_Vararray_t *trSupp = Ddi_BddSuppVararray(trConstr);
+  Ddi_Vararray_t *constrSupp = Ddi_BddSuppVararray(invarConstr);
+  Ddi_VararrayIntersectAcc(trSupp,ns);
+  Ddi_VararrayUnionAcc(trSupp,constrSupp);
+  tr = genComposedTr(itpMgr,nFrames,0/*shift*/,trSupp);
+  // tr = genComposedTr(itpMgr,nFrames,0/*shift*/,NULL);
+  Ddi_Free(trSupp);
+  Ddi_Free(constrSupp);
+  Ddi_AigAndCubeAcc(tr,invarConstrCube); 
+  
+  trConstrOptA = Ddi_BddarrayAlloc(ddm,0);
+
+
+  Pdtutil_VerbosityMgrIf(travMgr, Pdtutil_VerbLevelUsrMed_c) {
+    Ddi_Vararray_t *supp = Ddi_BddSuppVararray(trConstr);
+    int n = Ddi_VararrayNum(supp);
+    Ddi_Vararray_t *psupp = Ddi_VararrayIntersect(supp,ps);
+    Ddi_VararrayIntersectAcc(supp,ns);
+    fprintf(dMgrO(ddm), "TR constraint (size: %d) has %d->%d (%d) ps->ns (pi) vars\n",
+            Ddi_BddSize(trConstr), Ddi_VararrayNum(psupp), Ddi_VararrayNum(supp),
+            n-(Ddi_VararrayNum(psupp)+Ddi_VararrayNum(supp)));
+    Ddi_Free(supp);      
+    Ddi_Free(psupp);
+  }
+
+  Ddi_BddSetAig(tr);
+  if (doItp) {
+    Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+      printf("\nAbstrRef - strengthening trConstr by ITP\n\n");
+    }
+    Ddi_BddNotAcc(trConstr);
+    int sat1;
+    trConstrOpt = Ddi_AigSat22AndWithInterpolant(NULL,trConstr,
+                                                       tr, NULL,
+                                                       NULL, NULL, 0, NULL, NULL, NULL,
+                                                       &sat1, 0, 1, 0, -1.0);
+    Ddi_BddNotAcc(trConstrOpt);
+  }
+  else
+    trConstrOpt = Ddi_BddDup(trConstr);
+  
+  Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+    printf("\nAbstrRef - strengthening by NNF\n\n");
+  }
+  Ddi_AigOptByMonotoneCoreAcc(trConstrOpt,tr,NULL,1,-1.0);
+  Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+    printf("\n");
+  }
+
+  Ddi_BddarrayInsertLast(trConstrOptA,trConstrOpt);
+  Ddi_Free(trConstrOpt);
+
+  Ddi_AigarrayConstrainCubeAcc(trConstrOptA,invarConstr);
+  Ddi_Var_t *pvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$PS");
+
+  //  Ddi_BddarrayCofactorAcc(trConstrA, pvarPs, 1);
+  Pdtutil_VerbosityMgrIf(travMgr, Pdtutil_VerbLevelUsrMed_c) {
+    Ddi_Vararray_t *supp = Ddi_BddarraySuppVararray(trConstrOptA);
+    int n = Ddi_VararrayNum(supp);
+    Ddi_Vararray_t *psupp = Ddi_VararrayIntersect(supp,ps);
+    Ddi_VararrayIntersectAcc(supp,ns);
+    fprintf(dMgrO(ddm), "Optimized TR constraint has %d->%d (%d) ps->ns (pi) vars\n",
+            Ddi_VararrayNum(psupp), Ddi_VararrayNum(supp),
+            n-(Ddi_VararrayNum(psupp)+Ddi_VararrayNum(supp)));
+    Ddi_Free(supp);      
+    Ddi_Free(psupp);      
+  }
+
+  Ddi_Free(invarPs);
+  Ddi_Free(invarNs);
+  Ddi_Free(invarConstr);
+  Ddi_Free(invarConstrCube);
+  Ddi_Free(tr);
+    
+  return trConstrOptA;
+}
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Bddarray_t *
 genTrConstrFromBmcCone(
   Trav_ItpMgr_t * itpMgr,
   int first,
@@ -24160,7 +24323,7 @@ genTrConstrFromBmcCone(
     Ddi_BddAndAcc(invarConstr, invarNs);
   }
 
-  tr0 = genComposedTr(itpMgr,first,0);
+  tr0 = genComposedTr(itpMgr,first,0,NULL);
   Ddi_AigAndCubeAcc(tr0,invarConstrCube);
   //  Ddi_AigConstrainCubeAcc(tr0,invarConstr);
   if (itpMgr->initStub!=NULL) {
@@ -24187,10 +24350,6 @@ genTrConstrFromBmcCone(
   else
 #endif
   {
-    tr = genComposedTr(itpMgr,last-first,first/*shift*/);
-    Ddi_AigAndCubeAcc(tr,invarConstrCube); 
-    //  Ddi_AigConstrainCubeAcc(tr,invarConstr);
-
     cone = Ddi_BddDup(itpMgr->target);
     Ddi_BddWriteMark (cone, last);
     Ddi_BddSubstVarsAcc(cone, itpMgr->ps, itpMgr->ns);
@@ -24199,6 +24358,12 @@ genTrConstrFromBmcCone(
       growConeBwd(itpMgr, cone, bmcBound-1, last, NULL,
                           NULL, 0, -1, 0 /*boundK */ );
     Ddi_AigAndCubeAcc(cone,invarNs);
+    Ddi_Vararray_t *coneSupp = Ddi_BddSuppVararray(cone);
+    tr = genComposedTr(itpMgr,last-first,first/*shift*/,coneSupp);
+    Ddi_Free(coneSupp);
+    Ddi_AigAndCubeAcc(tr,invarConstrCube); 
+    //  Ddi_AigConstrainCubeAcc(tr,invarConstr);
+
   }
   
   trConstrA = Ddi_BddarrayAlloc(ddm,0);
@@ -24239,7 +24404,7 @@ genTrConstrFromBmcCone(
   Ddi_Free(supp);
   
   Ddi_Free(bForItp);
-
+  int enBddOpt = 0;
   Pdtutil_VerbosityMgrIf(travMgr, Pdtutil_VerbLevelUsrMed_c) {
     Ddi_Vararray_t *supp = Ddi_BddSuppVararray(itp_i);
     int n = Ddi_VararrayNum(supp);
@@ -24249,7 +24414,8 @@ genTrConstrFromBmcCone(
             Ddi_VararrayNum(psupp), Ddi_VararrayNum(supp),
             n-(Ddi_VararrayNum(psupp)+Ddi_VararrayNum(supp)));
     Ddi_Free(supp);      
-    Ddi_Free(psupp);      
+    Ddi_Free(psupp);
+    if (n<250) enBddOpt = 0;
   }
   
   int doItp2 = Ddi_BddSize(itp_i)>5000 ? 2: 0;
@@ -24258,6 +24424,8 @@ genTrConstrFromBmcCone(
       printf("\nAbstrRef - strengthening by ITP\n\n");
     }
     Ddi_BddNotAcc(itp_i);
+    if (enBddOpt)
+      Ddi_AigOptByBddSweepTop(itp_i, NULL, 1);
     int sat1;
     Ddi_Bdd_t *itp_i1 = Ddi_AigSat22AndWithInterpolant(NULL,itp_i,
                                                        tr, NULL,
@@ -24365,7 +24533,7 @@ genTrConstrFromItpRings(
     }
   }
 
-  tr = genComposedTr(itpMgr,nFrames,0);
+  tr = genComposedTr(itpMgr,nFrames,0,NULL);
   Ddi_AigConstrainCubeAcc(tr,invarConstr);
 
   int doSccReduction = 0;
@@ -24534,7 +24702,7 @@ getConeWithTrAbstrItp(
 		  NULL, NULL,NULL,0,NULL/*bwdCare*/,NULL,
 		  &sat, 0, 1, 0, -1.0);
   Ddi_Free(myB);
-  
+  int doSubst = 0;
   if (!sat || !computeTrAbstr) {
     Ddi_Bddarray_t *psNsConstr = itpMgr->trItpAbstr.psNsConstr;
     if (psNsConstr==NULL) {
@@ -24543,12 +24711,15 @@ getConeWithTrAbstrItp(
     }
     else {
       Pdtutil_Assert(itpMgr->trItpAbstr.nFrames == split_i - end_i,"wrong num of frames");
-#if 0
-      Ddi_BddAndAcc(myTrAbstr,psNsConstr);
+#if 1
+      Ddi_BddAndAcc(myTrAbstr,Ddi_BddarrayRead(psNsConstr,0));
       Ddi_Free(itpMgr->trItpAbstr.psNsConstr);
+      psNsConstr = Ddi_BddarrayAlloc(ddm,0);
+      itpMgr->trItpAbstr.psNsConstr = psNsConstr;
+      doSubst=1;
 #endif
     }
-    int doOpt = !Ddi_BddIsOne(myTrAbstr);
+    int doOpt = 0&&!Ddi_BddIsOne(myTrAbstr);
     if (doOpt) {
       Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
         printf("\nAbstrRef - strengthening by NNF\n\n");
@@ -24560,6 +24731,10 @@ getConeWithTrAbstrItp(
     }
     //    itpMgr->trItpAbstr.psNsConstr = Ddi_BddDup(myTrAbstr);
     Ddi_BddarrayInsertLast(itpMgr->trItpAbstr.psNsConstr,myTrAbstr);
+    if (doSubst) {
+      Ddi_BddSubstVarsAcc(myTrAbstr,splitRefV,splitV);
+      Ddi_BddSubstVarsAcc(myTrAbstr,itpMgr->ps,itpMgr->ns);
+    }
     itpMgr->trItpAbstr.nFrames = split_i - end_i;
     char *store = travMgr->settings.aig.trAbstrItpStore;
     if (store != NULL) {

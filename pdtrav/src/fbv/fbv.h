@@ -279,6 +279,7 @@ typedef struct {
     int abstrRefItp;            // command line parameter
     int abstrRefItpMaxIter;     // command line parameter
     int trAbstrItp;             // command line parameter
+    int trAbstrItpOpt;          // command line parameter
     int trAbstrItpFirstFwdStep; // command line parameter
     int trAbstrItpMaxFwdStep;   // command line parameter
     char *trAbstrItpLoad;       // command line parameter
@@ -461,6 +462,7 @@ typedef struct {
     char *rInit;                // command line parameter -> used in fbv only!
     char *ord;                  // command line parameter -> used in fbv only!
 
+    char **task;                // command line parameter -> used in fbv only!
     char *strategy;             // command line parameter -> used in fbv only!
     char *wRes;                 // command line parameter -> used in fbv only!
     char *wFsm;                 // command line parameter -> used in fbv only!

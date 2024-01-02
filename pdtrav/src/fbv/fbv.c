@@ -178,6 +178,8 @@ static char *help[] = {
   "SAT based Bounded Model Checking (bound k)", NULL,
   "-hwmccSetup",
   "initialize setup for HWMCC competition", NULL,
+  "-task <arguments>",
+  "select a task (not model checking) with command string", NULL,
   "-strategy <s>",
   "select a given strategy/engine among (bdd|ic3|itp(0..6)|igr(0..6)",
   "for engines itp and igr",
@@ -306,6 +308,8 @@ static char *help[] = {
   "set ITP abstraction refinement max iterations (default 4)", NULL,
   "-trAbstrItp <nframes>",
   "set ITP TR abstraction frames (default 0 = disabled)", NULL,
+  "-trAbstrItpOpt <level>",
+  "set ITP TR abstraction optimization level (default 0 = disabled)", NULL,
   "-trAbstrItpFirstFwdStep <max>",
   "set ITP TR abstraction first Fwd step (default 0)", NULL,
   "-trAbstrItpMaxFwdStep <max>",
@@ -3650,7 +3654,10 @@ if (opt->ddi.itpCompact > -1)     //-1 is the default value
    *  Custom behavior for combinational circuits
    */
 
-  if (opt->mc.custom<0) {
+  if (opt->mc.task != NULL) {
+    FbvTask(opt);
+  }
+  else if (opt->mc.custom<0) {
     fbvCustom = -opt->mc.custom;
   }
   else if (opt->mc.custom) {
@@ -5044,6 +5051,12 @@ FbvParseArgs(
       argc--;
       argv++;
       argc--;
+    } else if (strcmp(argv[1], "-trAbstrItpOpt") == 0) {
+      opt->trav.trAbstrItpOpt = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
     } else if (strcmp(argv[1], "-trAbstrItpFirstFwdStep") == 0) {
       opt->trav.trAbstrItpFirstFwdStep = atoi(argv[2]);
       argv++;
@@ -5960,6 +5973,9 @@ FbvParseArgs(
       opt->ddi.itpDrup = 1;
       argv++;
       argc--;
+    } else if (strcmp(argv[1], "-task") == 0) {
+      opt->mc.task = argv+2;
+      argc=0;
     } else if (strcmp(argv[1], "-strategy") == 0
       || strcmp(argv[1], "-engine") == 0) {
       int j;
@@ -8586,9 +8602,10 @@ invarVerif(
     
     if (opt->trav.trAbstrItp > 0 &&
         (opt->mc.bmc>0 || Trav_MgrReadNewi(travMgrAig) != NULL ||
-         opt->trav.trAbstrItpLoad != NULL)) {
+         opt->trav.trAbstrItpLoad != NULL || opt->trav.trAbstrItpOpt != 0)) {
       Trav_TravTrAbstrItp(travMgrAig,fsmMgr,
                           opt->trav.trAbstrItp,
+                          opt->trav.trAbstrItpOpt,
                           opt->trav.trAbstrItpFirstFwdStep,
                           opt->trav.trAbstrItpMaxFwdStep,
                           opt->mc.bmc
@@ -21571,6 +21588,89 @@ quitMem:
   SideEffects []
   SeeAlso     []
 ******************************************************************************/
+void
+FbvTask(
+  Fbv_Globals_t * opt
+)
+{
+  Ddi_Mgr_t *ddiMgr;
+
+  ddiMgr = Ddi_MgrInit("DDI_manager", NULL, 0, DDI_UNIQUE_SLOTS,
+                       DDI_CACHE_SLOTS * 10, 0, -1, -1);
+
+  if (((Pdtutil_VerbLevel_e) opt->verbosity) >= Pdtutil_VerbLevelNone_c &&
+      ((Pdtutil_VerbLevel_e) opt->verbosity) <= Pdtutil_VerbLevelSame_c) {
+    Ddi_MgrSetVerbosity(ddiMgr, Pdtutil_VerbLevel_e(opt->verbosity));
+  }
+
+  Ddi_AigInit(ddiMgr, 100);
+
+  Ddi_MgrSiftEnable(ddiMgr, Ddi_ReorderingMethodString2Enum("sift"));
+  Ddi_MgrSetSiftThresh(ddiMgr, opt->ddi.siftTh);
+
+  Ddi_MgrSetAigCnfLevel(ddiMgr, opt->ddi.aigCnfLevel);
+  Ddi_MgrSetAigRedRemLevel(ddiMgr, opt->ddi.aigRedRem);
+  Ddi_MgrSetAigRedRemMaxCnt(ddiMgr, opt->ddi.aigRedRemPeriod);
+  Ddi_MgrSetAigAbcOptLevel(ddiMgr, opt->common.aigAbcOpt);
+
+  Ddi_MgrSetAigItpAbc(ddiMgr, opt->ddi.itpAbc);
+  Ddi_MgrSetAigItpCore(ddiMgr, opt->ddi.itpCore);
+  Ddi_MgrSetAigItpMem(ddiMgr, opt->ddi.itpMem);
+  Ddi_MgrSetAigItpOpt(ddiMgr, opt->ddi.itpOpt);
+  Ddi_MgrSetAigItpStore(ddiMgr, opt->ddi.itpStore);
+  Ddi_MgrSetAigItpPartTh(ddiMgr, opt->ddi.itpPartTh);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpActiveVars_c, inum, opt->ddi.itpActiveVars);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpStoreTh_c, inum, opt->ddi.itpStoreTh);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpAigCore_c, inum, opt->ddi.itpAigCore);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpTwice_c, inum, opt->ddi.itpTwice);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpIteOptTh_c, inum, opt->ddi.itpIteOptTh);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpStructOdcTh_c, inum,
+                   opt->ddi.itpStructOdcTh);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiNnfClustSimplify_c, inum,
+                   opt->ddi.nnfClustSimplify);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpNorm_c, inum, opt->ddi.itpNorm);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpSimp_c, inum, opt->ddi.itpSimp);
+
+
+  char **argv = opt->mc.task;
+  char *task = argv[0]; argv++;
+  if (strcmp(task,"op")==0) {
+    char *op = argv[0]; argv++;
+    Ddi_Bdd_t *op0, *op1, *res;
+    op0 = Ddi_AigNetLoadAiger(ddiMgr, NULL, argv[0]);
+    op1 = Ddi_AigNetLoadAiger(ddiMgr, NULL, argv[1]);
+    if (strcmp(op,"and")==0) {
+      res = Ddi_BddAnd(op0,op1);
+    }
+    else if (strcmp(op,"or")==0) {
+      res = Ddi_BddOr(op0,op1);
+    }
+    Pdtutil_VerbosityMgrIf(ddiMgr, Pdtutil_VerbLevelUsrMax_c) {
+      fprintf(dMgrO(ddiMgr),
+              "op done: |%d| %s |%d| -> |%d|\n",
+              Ddi_BddSize(op0), op, Ddi_BddSize(op1), Ddi_BddSize(res));
+    }
+    Ddi_AigNetStoreAiger(res, 0, argv[2]);
+    Ddi_Free(op0);
+    Ddi_Free(op1);
+    Ddi_Free(res);
+  }
+
+  Ddi_MgrQuit(ddiMgr);
+  exit(8);
+}
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
 Pdtutil_OptList_t *
 FbvOpt2OptList(
   Fbv_Globals_t * opt
@@ -22536,6 +22636,7 @@ new_settings(
 
   opt->verbosity = 0;
   opt->expName = NULL;
+  opt->mc.task = NULL;
   opt->mc.strategy = NULL;
   opt->expt.expertArgv = NULL;
   opt->expt.expertArgc = 0;
@@ -22656,6 +22757,7 @@ new_settings(
   opt->trav.abstrRefItp = 0;
   opt->trav.abstrRefItpMaxIter = 4;
   opt->trav.trAbstrItp = 0;
+  opt->trav.trAbstrItpOpt = 0;
   opt->trav.trAbstrItpFirstFwdStep = 0;
   opt->trav.trAbstrItpMaxFwdStep = 0;
   opt->trav.trAbstrItpLoad = NULL;
@@ -23094,6 +23196,7 @@ FbvDupSettings(
   opt->trav.storeCNF = Pdtutil_StrDup(opt0->trav.storeCNF);
   opt->tr.en = Pdtutil_StrDup(opt0->tr.en);
   opt->pre.wrCoi = Pdtutil_StrDup(opt0->pre.wrCoi);
+  opt->mc.task = opt0->mc.task;
   opt->mc.strategy = Pdtutil_StrDup(opt0->mc.strategy);
 
   //opt->common.clk = NULL;

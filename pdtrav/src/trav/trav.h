@@ -1128,6 +1128,7 @@ EXTERN int Trav_TravTrAbstrItp(
   Trav_Mgr_t * travMgr /* Traversal Manager */ ,
   Fsm_Mgr_t * fsmMgr,
   int nFrames,
+  int optLevel,
   int firstFwdStep,
   int maxFwdStep,
   int bmcBound
