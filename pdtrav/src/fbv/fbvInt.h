@@ -347,6 +347,9 @@ EXTERN Fbv_Globals_t *FbvDupSettings(
 EXTERN void FbvFreeSettings(
   Fbv_Globals_t * opt
 );
+EXTERN void FbvTask(
+  Fbv_Globals_t * opt
+);
 
 /**AutomaticEnd***************************************************************/
 
