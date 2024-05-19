@@ -11538,7 +11538,7 @@ invarDecompVerif(
   Ddi_Bdd_t *leftover = NULL;
   int doGenNew = 0, useTot = 0;
   float projVarsRate = 0.5;
-  int replaceReached = 0; // do not and reached at each k - replace it
+  int replaceReached = 1; // do not and reached at each k - replace it
   int useFullPropAsConstr=0&&(opt->pre.specDecompCore>0);
   int igrFpRing = -1;
   int useRplusAsConstr = opt->trav.itpGfp>0;

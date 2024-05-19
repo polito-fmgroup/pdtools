@@ -436,6 +436,27 @@ Fsm_MgrLoadAiger(
     //    fsmMgr->name.c[i] = Pdtutil_StrDup (name);
     Ddi_Free(cBdd);
   }
+  int chkConstr = 1;
+  if (chkConstr) {
+    Ddi_Bdd_t *myChk = Ddi_BddMakeConstAig(dd, 1);
+    for (int i = 0; i<Ddi_BddPartNum(fsmMgr->constraint.bdd); i++) {
+      Ddi_Bdd_t *c_i = Ddi_BddPartRead(fsmMgr->constraint.bdd, i);
+      if (!Ddi_AigSatAnd(myChk,c_i,NULL)) {
+        printf("unconsistency found: %d\n", i);
+        //Ddi_BddPartRemove(fsmMgr->constraint.bdd,i); i--; continue;
+        for (int j = 0; j<i; j++) {
+          Ddi_Bdd_t *c_j = Ddi_BddPartRead(fsmMgr->constraint.bdd, j);
+          if (!Ddi_AigSatAnd(c_i,c_j,NULL)) {
+            printf("couple found: %d %d\n", j, i);
+            break;
+          }
+        }
+        break;
+      }
+      Ddi_BddAndAcc(myChk,c_i);
+    }
+    Ddi_Free(myChk);
+  }
 
   Ddi_BddSetAig(fsmMgr->constraint.bdd);
   fsmMgr->stats.externalConstr = nc;

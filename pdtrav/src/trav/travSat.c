@@ -686,6 +686,7 @@ itpStrengthenReachedGfp(
   int *lastRingP,
   int enUpdateFromRings,
   int enUpdateConstr,
+  int useInvarConstr,
   int useGen
 );
 static int
@@ -9392,6 +9393,7 @@ Trav_TravSatItpGfp(
   }
 
   int sizeR0 = Ddi_BddSize(itpTravMgr->reached);
+  int doReplaceConstr = 0;
   for (int i=0; i<gfp; i++) {
     int size0 = Ddi_BddSize(itpTravMgr->reached);
     int enStrong = (gfp>3) && (i<gfp-1);
@@ -9405,8 +9407,13 @@ Trav_TravSatItpGfp(
       itpStrengthenRingsBwdByBmc(itpMgr,1,lastRing,1,itpMgr->delta,3,0,0,0);
       Ddi_MgrSetVerbosity(ddm,verbosity);
     }
+    int useInvarConstr=0;
+    if (lastRing<0 && Ddi_BddIsOne(itpTravMgr->reached) && !Ddi_BddIsOne(itpMgr->invarConstr)) {
+      useInvarConstr = 1;
+      doReplaceConstr = 1;
+    }
     int ret = itpStrengthenReachedGfp(itpTravMgr, &lastRing,
-                                      enStrong,i==(gfp-1),0);
+                                      enStrong,i==(gfp-1),useInvarConstr,0);
     if (!ret) break;
     if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
       printf("GFP reached reduction iter %d: %d -> %d\n",
@@ -9430,13 +9437,17 @@ Trav_TravSatItpGfp(
   Fsm_MgrSetCareBDD(fsmMgr,r);
   Ddi_Bdd_t *constr = Fsm_MgrReadConstraintBDD(fsmMgr);
   if (constr!=NULL) {
-    Ddi_BddAndAcc(r,constr);
+    if (!doReplaceConstr)
+      Ddi_BddAndAcc(r,constr);
   }
   Fsm_MgrSetConstraintBDD(fsmMgr,r);
   Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
   int iConstr = Ddi_BddarrayNum(delta)-2;
   Ddi_Bdd_t *dConstr = Ddi_BddarrayRead(delta,iConstr);
-  Ddi_BddAndAcc(dConstr,r);
+  if (doReplaceConstr)
+    Ddi_DataCopy(dConstr,r);
+  else
+    Ddi_BddAndAcc(dConstr,r);
   Ddi_Free(r);
   
   itpTravMgrFree(itpTravMgr);
@@ -16135,6 +16146,7 @@ itpStrengthenReachedGfp(
   int *lastRingP,
   int enUpdateFromRings,
   int enUpdateConstr,
+  int useInvarConstr,
   int useGen
 )
 {
@@ -16154,7 +16166,7 @@ itpStrengthenReachedGfp(
   Ddi_Bdd_t *invarPs=NULL, *invarNs=NULL;
   Ddi_Bdd_t *reached = NULL;
   int lastRing = *lastRingP;
-  int useItp = 0;
+  int useItp = enUpdateFromRings;
   int itpBoundK = 2;
   int chk = 1;
   int useRingConstr = 1;
@@ -16224,6 +16236,28 @@ itpStrengthenReachedGfp(
 				     itpMgr->ps,itpMgr->ns);
   }
  
+  Ddi_Bdd_t *from = Ddi_BddSubstVars(reached, ns, ps);
+  Ddi_Bdd_t *notReached = Ddi_BddNot(reached);
+  Ddi_Bdd_t *itp=NULL, *fromAndTr;
+  Ddi_Bddarray_t *myDelta = Ddi_BddarrayDup(deltaNs);
+
+  if (useInvarConstr) {
+    Pdtutil_Assert(Ddi_BddIsZero(notReached), "wrong use of invarconstr");
+    Ddi_Free(notReached);
+    notReached = Ddi_BddNot(invarConstr);
+    Ddi_Vararray_t *suppA = Ddi_BddSuppVararray(notReached);
+    Ddi_VararrayDiffAcc(suppA,itpMgr->ns);
+    if (Ddi_VararrayNum(suppA)>0) {
+      Ddi_Vararray_t *vAux =
+        Ddi_VararrayMakeNewVars(suppA,
+                              "PDT_ITP_PI_INVARCONSTR_AUX_", NULL, 1);
+      Ddi_BddSubstVarsAcc(notReached,suppA,vAux);
+      Ddi_Free(vAux);
+    }
+    useItp=1;
+    Ddi_Free(suppA);
+  }
+
   if (1) {
     Ddi_Var_t *iv = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$PS");
     Ddi_Var_t *ivNs = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$NS");
@@ -16238,12 +16272,7 @@ itpStrengthenReachedGfp(
       Ddi_BddAndAcc(invarConstr, invarNs);
     }
   }
-
-  Ddi_Bdd_t *from = Ddi_BddSubstVars(reached, ns, ps);
-  Ddi_Bdd_t *notReached = Ddi_BddNot(reached);
-  Ddi_Bdd_t *itp=NULL, *fromAndTr;
-  Ddi_Bddarray_t *myDelta = Ddi_BddarrayDup(deltaNs);
-
+  
   if (1 && invarNs!=NULL) {
     Ddi_BddAndAcc(notReached,invarNs);
     //Ddi_AigarrayConstrainCubeAcc(myDelta,invarNs);
@@ -16257,8 +16286,9 @@ itpStrengthenReachedGfp(
 
   if (itpMgr->invarConstr!=NULL && !Ddi_BddIsOne(itpMgr->invarConstr)) {
     Ddi_BddAndAcc(from,itpMgr->invarConstr);
-    Ddi_Bdd_t *constrNs = Ddi_BddSubstVars(itpMgr->invarConstr, ns, ps);
-    Ddi_BddPartInsertLast(fromAndTr,constrNs);
+    Ddi_Bdd_t *constrNs = Ddi_BddSubstVars(itpMgr->invarConstr, ps, ns);
+    if (!useInvarConstr)
+      Ddi_BddPartInsertLast(fromAndTr,constrNs);
     Ddi_Free(constrNs);
   }
 
@@ -16378,7 +16408,7 @@ itpStrengthenReachedGfp(
       int sat;
       int saveItpAigCore;
       Ddi_Bdd_t *b = Ddi_BddDup(notReached);
-      if (itpBoundK > 1) {
+      if (itpBoundK > 1 && lastRing>=0) {
         int nFrames = itpBoundK;
         Ddi_BddWriteMark(b,0);
         growConeBwd(itpMgr, b, lastRing+nFrames-1, lastRing,
@@ -33817,7 +33847,7 @@ interpolantInnerLoop(
       for (int i=0; i<nIter; i++) {
 	int size0 = Ddi_BddSize(itpTravMgr->reached);
         int ret = itpStrengthenReachedGfp(itpTravMgr, &lastRing,
-					  1&&(i<nIter-1),0,0);
+					  1&&(i<nIter-1),0,0,0);
 	if (!ret) break;
 	if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
 	  printf("GFP reached reduction iter %d: %d -> %d\n",
