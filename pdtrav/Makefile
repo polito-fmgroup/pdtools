@@ -77,7 +77,7 @@ ifdef PDT32
 # StQ: 32-bit (2 rows) OK x cudd-2.4.1 OK ANCHE PER cudd-2.4.2 ma compilato con gcc e non con g++
 CUDD_ICFLAGS = 	-O6 -m32 -Wall -pthread
 # TOLTE O MESSE SEMBRA NON FARE DIFFERENZA -Wall -fPIC  -pthread
-CUDD_XCFLAGS =	-std=c++14 -mtune=native -fPIC -DHAVE_IEEE_754 -DBSD
+CUDD_XCFLAGS =	-mtune=native -fPIC -DHAVE_IEEE_754 -DBSD
 # TOLTE O MESSE SEMBRA NON FACCIA DIFFERENZA --> -DSTDC_HEADERS -DHAVE_STRSTR
 #XC_FLAGS = 	-pthread -m32 -mtune=native -DHAVE_IEEE_754 -DBSD
 XC_FLAGS =
@@ -86,15 +86,15 @@ XC_FLAGS =
 CFLAGS =	-DLIN -g -m32 -pthread
 else
 # StQ: 64-bit (2 rows)
-CUDD_ICFLAGS = 	-O6 -Wall -fPIC -pthread
+CUDD_ICFLAGS = 	-O6 -Wall -fPIC -fPIE -pthread
 #CUDD_ICFLAGS = 	-g -Wall -fPIC -pthread
 CUDD_XCFLAGS =	-ffloat-store -mtune=native -malign-double -DHAVE_IEEE_754 -DBSD -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4
 #ICFLAGS = 	-Wall -O6 -fPIC -pthread -mtune=native -malign-double -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8
 XC_FLAGS =	-DHAVE_IEEE_754=1 -DBSD=1 -DSTDC_HEADERS=1 -DHAVE_STRSTR=1
 ifdef PDTOPT
-CFLAGS =	-DLIN64 -O6 -Wall -fPIC -pthread
+CFLAGS =	-DLIN64 -O6 -Wall -fPIC -fPIE -pthread
 else
-CFLAGS =	-DLIN64 -g -Wall -fPIC -pthread 
+CFLAGS =	-DLIN64 -g -Wall -fPIC -fPIE -pthread 
 endif
 endif
 LINKER =	g++
