@@ -415,7 +415,7 @@ public:
       int j = 2*nVars()-i-1;
       Lit p = sorted[j];
       Var v = var(p);
-      int select = (countLits > 0) && (balanced ^ countLits[v]<2); 
+      int select = (countLits[v] > 0) && (balanced ^ countLits[v]<2); 
       if (!select) {
         if (doPrint)
           printf("skipping var %d with two lits selected\n", v);
