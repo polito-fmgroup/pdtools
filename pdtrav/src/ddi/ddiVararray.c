@@ -240,10 +240,10 @@ Ddi_VararrayMakeNewAigVars (
   Ddi_Vararray_t *data;
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(refArray);
   int i, n=Ddi_VararrayNum(refArray);
+  static char name[5000];
 
   data = Ddi_VararrayAlloc(ddm,n);
   for (i=0; i<n; i++) {
-    char name[1000];
     Ddi_Var_t *v = Ddi_VararrayRead(refArray,i);
     Ddi_Var_t *newv;
     Ddi_Bdd_t *newvLit;

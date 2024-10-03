@@ -9324,7 +9324,7 @@ Trav_TravSatCheckInvar(
     }
   }
   Fsm_FsmFree(fsmFsm);
-
+  Ddi_Free(target);
   return fp;
 }
 

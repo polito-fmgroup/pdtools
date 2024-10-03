@@ -2971,7 +2971,7 @@ TravBmcMgrAddFrames(
     Ddi_Bddarray_t *delta_k;
     Ddi_Vararray_t *newPi;
     Ddi_Varset_t *tfSupp;
-    char stepString[10];
+    char stepString[100];
 
     if (0 && k>0)
       prevTarget = Ddi_BddPartRead(bmcMgr->bmcTarget, k-1);

@@ -232,9 +232,11 @@ static char *help[] = {
   "-lazyRate <gr. rate>",
   "set lazy rate", NULL,
   "-checkInv",
-  "Strengthen reached plus by SAT  based GFP", NULL,
+  "Check reached plus by SAT  based GFP", NULL,
   "-gfp",
   "Strengthen reached plus by SAT  based GFP", NULL,
+  "-certify <file>",
+  "certify proof read from <file>", NULL,
   "-qbf",
   "QBF based Model Checking", NULL,
   "-diameter <s>",
@@ -4807,6 +4809,14 @@ FbvParseArgs(
       argc--;
       argv++;
       argc--;
+    } else if (strcmp(argv[1], "-certify") == 0) {
+      opt->mc.checkInv = Pdtutil_StrDup(argv[2]);
+      opt->pre.peripheralLatches = 0;
+      opt->mc.exit_after_checkInv = 1;
+      argv++;
+      argc--;
+      argv++;
+      argc--;
     } else if (strcmp(argv[1], "-meta") == 0) {
       if (strcmp(argv[2], "sch") == 0) {
         argv++;
@@ -4904,6 +4914,12 @@ FbvParseArgs(
       argv++;
       argc--;
     } else if (strcmp(argv[1], "-rp") == 0) {
+      opt->trav.rPlus = Pdtutil_StrDup(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-certify") == 0) {
       opt->trav.rPlus = Pdtutil_StrDup(argv[2]);
       argv++;
       argc--;
@@ -8622,9 +8638,11 @@ invarVerif(
       int chk, fp;
       fp = Trav_TravSatCheckInvar(travMgrAig,fsmMgr,
                                   myInvar,&chk);
+      Ddi_Free(myInvar);
       if (fp && !chk) {
         Fsm_MgrSetConstraintBDD(fsmMgr, myInvar);
       }
+      if (opt->mc.exit_after_checkInv) exit(0); 
     }
     
     if (opt->mc.wFsm != NULL) {
@@ -22938,6 +22956,7 @@ new_settings(
   opt->mc.lemmas = -1;
   opt->mc.lazy = -1;
   opt->mc.gfp = 0;
+  opt->mc.exit_after_checkInv = 0;
   opt->mc.qbf = 0;
   opt->mc.diameter = -1;
   opt->mc.checkMult = 0;

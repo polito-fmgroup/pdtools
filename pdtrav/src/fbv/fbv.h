@@ -485,6 +485,7 @@ typedef struct {
     int lemmas;                 // command line parameter
     int qbf;                    // command line parameter -> used in fbv only!
     int gfp;                    // command line parameter -> used in fbv only!
+    int exit_after_checkInv;    // command line parameter -> used in fbv only!
     int diameter;               // command line parameter -> used in fbv only!
     int checkMult;              // command line parameter -> used in fbv only!
     int checkDead;              // command line parameter -> used in fbv only!
