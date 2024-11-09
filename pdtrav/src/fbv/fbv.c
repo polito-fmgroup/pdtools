@@ -638,6 +638,8 @@ static char *help[] = {
 
   "-checkProof <val>",
   "enable/disable final proof checking (default 0: disabled)", NULL,
+  "-writeProof <fname>",
+  "enable/disable final proof storing (default 0: disabled)", NULL,
 
   "-sort_for_bck <sel>",
   "select TR sorting for preimage, allowed values for <sel> are:",
@@ -2683,7 +2685,7 @@ FbvFsmMgrLoad(
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(1);
     }
-  } else if (strstr(fsm, ".aig") != NULL) {
+  } else if (strstr(fsm, ".aig") != NULL || strstr(fsm, ".aag") != NULL) {
     if (strcmp(opt->mc.ord, "dfs") == 0) {
       Pdtutil_Free(opt->mc.ord);
       opt->mc.ord = NULL;
@@ -3409,7 +3411,7 @@ main(
       while (*ext != '.' && ext >= opt->mc.wRes) {
         ext--;
       }
-      if (strcmp(ext, ".aig") != 0 && strcmp(ext, ".blif") != 0) {
+      if (strcmp(ext, ".aig") != 0 && strcmp(ext, ".aag") != 0 && strcmp(ext, ".blif") != 0) {
         printf("Error: invalid circuit file extension.\n");
         exit(1);
       }
@@ -4611,6 +4613,12 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-checkProof") == 0) {
       opt->trav.checkProof = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-writeProof") == 0) {
+      opt->trav.writeProof = Pdtutil_StrDup(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -7258,7 +7266,7 @@ invarVerif(
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(1);
     }
-  } else if (strstr(fsm, ".aig") != NULL) {
+  } else if (strstr(fsm, ".aig") != NULL || strstr(fsm, ".aag") != NULL) {
     if (strcmp(opt->mc.ord, "dfs") == 0) {
       Pdtutil_Free(opt->mc.ord);
       opt->mc.ord = NULL;
@@ -8851,7 +8859,7 @@ invarVerif(
           } else {
             FbvWriteCexNormalized(opt->mc.wRes, fsmMgr, fsmMgrOriginal);
           }
-          fprintf(stdout, "\ncex written to: %s\n", opt->mc.wRes);
+          fprintf(stdout, "\ncex written to: %s.cex\n", opt->mc.wRes);
         }
 #if 0
         if ((Fsm_MgrReadCexBDD(fsmMgr) != NULL)) {
@@ -8866,7 +8874,7 @@ invarVerif(
 	  sprintf(fullCexName,"%s.cex",opt->mc.wRes);
 	  int invalidCex = Fsm_AigsimCex(opt->expName, fullCexName);
 
-	  if (!invalidCex) fprintf(stdout,"CEX NOT validated by aigsim !!!\n");
+	  if (invalidCex) fprintf(stdout,"CEX NOT validated by aigsim !!!\n");
 	  else 
 	  fprintf(stdout, "CEX validated by aigsim\n");
 	}
@@ -8950,7 +8958,7 @@ invarVerif(
     if (opt->trav.checkProof) {
       char name[1000];
       strcpy(name,fsm);
-      char *s = strstr(name,".");
+      char *s = strstr(name,".aig");
       if (s!=NULL) {
         strcpy(s,"-with-proof-inv.aig");
       }
@@ -8958,6 +8966,10 @@ invarVerif(
         strcat(name,"-with-proof-inv.aig");
       }      
       int ok = Trav_TravSatCheckProof(travMgrAig, fsmMgr, fsmMgrOriginal, name);
+    }
+    
+    if (opt->trav.writeProof!=NULL) {
+      int ok = Trav_TravSatStoreProofAiger(travMgrAig, fsmMgr, fsmMgrOriginal, opt->trav.writeProof);
     }
     
     if (opt->trav.wR != NULL) {
@@ -22045,6 +22057,7 @@ FbvOpt2OptList(
   opt->fsm.manualAbstr = NULL;
   opt->trav.hintsFile = NULL;
   opt->trav.invarFile = NULL;
+  opt->trav.writeProof = NULL;
   opt->mc.invSpec = NULL;
   opt->mc.ctlSpec = NULL;
   opt->trav.rPlus = NULL;
@@ -23138,6 +23151,7 @@ new_settings(
   opt->fsm.manualAbstr = NULL;
   opt->trav.hintsFile = NULL;
   opt->trav.invarFile = NULL;
+  opt->trav.writeProof = NULL;
   opt->mc.invSpec = NULL;
   opt->mc.ctlSpec = NULL;
   opt->mc.rInit = NULL;
@@ -23196,6 +23210,7 @@ FbvDupSettings(
   opt->fsm.manualAbstr = Pdtutil_StrDup(opt0->fsm.manualAbstr);
   opt->trav.hintsFile = Pdtutil_StrDup(opt0->trav.hintsFile);
   opt->trav.invarFile = Pdtutil_StrDup(opt0->trav.invarFile);
+  opt->trav.writeProof = Pdtutil_StrDup(opt0->trav.writeProof);
   opt->mc.invSpec = Pdtutil_StrDup(opt0->mc.invSpec);
   opt->mc.ctlSpec = Pdtutil_StrDup(opt0->mc.ctlSpec);
   opt->trav.rPlus = Pdtutil_StrDup(opt0->trav.rPlus);
@@ -23257,6 +23272,7 @@ dispose_settings(
   Pdtutil_Free(opt->trav.rPlus);
   Pdtutil_Free(opt->trav.rPlusRings);
   Pdtutil_Free(opt->trav.itpStoreRings);
+  Pdtutil_Free(opt->trav.writeProof);
   Pdtutil_Free(opt->mc.rInit);
   Pdtutil_Free(opt->trav.wP);
   Pdtutil_Free(opt->trav.wR);
