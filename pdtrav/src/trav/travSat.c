@@ -1042,6 +1042,11 @@ findOrTerms(
   Ddi_Bdd_t *f,
   int minNumTerms
 );
+static int proofHandleInitStub(
+  Fsm_Fsm_t *fsmFsmRef,
+  Ddi_Bdd_t *target,
+  int iSteps
+);
 
 
 
@@ -9263,6 +9268,321 @@ Trav_TravSatCheckProof(
   Fsm_FsmFree(fsmFsmRef);
 
   return result;
+}
+
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static int
+proofCheckInvar(
+  Fsm_Fsm_t * fsmFsm,
+  Ddi_Bdd_t *invar
+)
+{
+  Ddi_Mgr_t *ddm = Fsm_MgrReadDdManager(Fsm_FsmReadMgr(fsmFsm));
+  Pdtutil_VerbLevel_e verbosity = Ddi_MgrReadVerbosity(ddm);
+
+  Ddi_Bddarray_t *delta = Fsm_FsmReadDelta(fsmFsm); 
+  Ddi_Bddarray_t *lambda = Fsm_FsmReadLambda(fsmFsm); 
+  Ddi_Bdd_t *target = Ddi_BddNot(Ddi_BddarrayRead(lambda,0));
+
+  // check invariant (fix-point)
+  
+  Ddi_Vararray_t *ps = Fsm_FsmReadPS(fsmFsm);
+  Ddi_Vararray_t *ns = Fsm_FsmReadNS(fsmFsm);
+
+  Ddi_Bdd_t *notInv = Ddi_BddNot(invar);
+  Ddi_Vararray_t *suppPi = Ddi_BddSuppVararray(notInv);
+  Ddi_VararrayDiffAcc(suppPi,ps);
+  if (Ddi_VararrayNum(suppPi) > 0) {
+    Ddi_Vararray_t *auxVars = Ddi_VararrayMakeNewAigVars(suppPi,"PDT_PROOF_CHECK","");
+    Ddi_BddSubstVarsAcc(notInv, suppPi, auxVars);
+    Ddi_Free(auxVars);
+  }
+  Ddi_Free(suppPi);
+
+  if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
+    printf("Checking inductive invariant of size. %d\n",
+           Ddi_BddSize(invar));
+  }
+  Ddi_Bdd_t *notInvAndTr =  Ddi_BddCompose(notInv,ps,delta);
+  long myStartTime = util_cpu_time();
+  int fp = !Ddi_AigSatAnd(invar,notInvAndTr,NULL);
+  Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+      printf("\nCheck Done invariant %s - time: %s\n",
+             fp ? "proved" : "disproved",
+        util_print_time((util_cpu_time() - myStartTime)));
+  }
+  if (!fp) {
+    Ddi_Bdd_t *myNotInv = Ddi_BddDup(notInv);
+    Ddi_Bdd_t *tr = Ddi_BddRelMakeFromArray(delta, ns);
+    Ddi_Varset_t *nsv = Ddi_VarsetMakeFromArray(ns);
+    Ddi_BddSetAig(tr);
+    Ddi_BddSubstVarsAcc(myNotInv, ps, ns);
+    Ddi_BddNotAcc(myNotInv);
+    Ddi_BddExistProjectAcc(myNotInv,nsv);
+    Ddi_BddNotAcc(myNotInv);
+    Ddi_Bdd_t *cex = Ddi_AigSatAndWithCexAndAbort(invar,
+            myNotInv, tr, NULL, 100, NULL);  
+    Ddi_Free(nsv);
+    Ddi_Free(tr);
+    Ddi_Free(myNotInv);
+    Ddi_Free(cex);
+  }
+  Ddi_Free(notInvAndTr);
+  Ddi_Free(notInv);
+
+  int chk;
+  if (fp) {
+    myStartTime = util_cpu_time();
+    if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
+      printf("Checking property of size. %d\n",
+             Ddi_BddSize(target));
+    }
+    chk = Ddi_AigSatAnd(invar,target,NULL);
+    Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+      printf("\nCheck Done property %s - time: %s\n",
+             !chk ? "proved" : "disproved",
+             util_print_time((util_cpu_time() - myStartTime)));
+    }
+  }
+  Ddi_Free(target);
+  return fp && chk;
+}
+
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static int
+proofHandleInitStub(
+  Fsm_Fsm_t *fsmFsm,
+  Ddi_Bdd_t *invar,
+  int iSteps
+)
+{
+  Ddi_Mgr_t *ddm = Fsm_MgrReadDdManager(Fsm_FsmReadMgr(fsmFsm));
+
+  if (iSteps == 0)
+    return 0;
+
+  char name [100];
+  Ddi_Bddarray_t *delta = Fsm_FsmReadDelta(fsmFsm); 
+  Ddi_Bddarray_t *lambda = Fsm_FsmReadLambda(fsmFsm); 
+  Ddi_Vararray_t *pi = Fsm_FsmReadPI(fsmFsm);
+  Ddi_Vararray_t *ps = Fsm_FsmReadPS(fsmFsm);
+  Ddi_Vararray_t *ns = Fsm_FsmReadNS(fsmFsm);
+  Ddi_Bdd_t *init = Fsm_FsmReadInit(fsmFsm); 
+
+  int i, nl = Ddi_VararrayNum(ps), iLast = nl-1;
+
+  Ddi_Var_t *prevPs = NULL;
+  Ddi_Bddarray_t *unroll = Ddi_BddarrayMakeLiteralsAig(ps, 1);
+  Ddi_Bddarray_t *delta0 = Ddi_BddarrayDup(delta);
+  Ddi_Vararray_t *ps0 = Ddi_VararrayDup(ps);
+  Ddi_Vararray_t *suppPi = Ddi_BddarraySuppVararray(delta0);
+  Ddi_VararrayDiffAcc (suppPi,ps);
+  Ddi_AigarrayConstrainCubeAcc(unroll,init);
+  Ddi_Vararray_t *suppPs = Ddi_BddarraySuppVararray(unroll);
+  if (Ddi_VararrayNum(suppPs) > 0) {
+    Ddi_Vararray_t *isPsVars = Ddi_VararrayMakeNewAigVars(suppPs,"PDT_STUB_PS","");
+    Ddi_BddarraySubstVarsAcc(unroll, suppPs, isPsVars);
+    Ddi_Free(isPsVars);
+  }
+  Ddi_Free(suppPs);
+
+  Ddi_Bdd_t *prevStepsDone = Ddi_BddMakeConstAig(ddm, 1);
+  Ddi_Bdd_t *isInv = Ddi_BddMakeConstAig(ddm, 1);
+  for (i=0; i<iSteps; i++) {
+    sprintf(name, "PDT_TEMPOR_DECOMP_VAR_%d", i);
+    Ddi_Var_t *newvPs = Ddi_VarNewBaig(ddm, name);
+    sprintf(name, "PDT_TEMPOR_DECOMP_VAR_%d$NS", i);
+    Ddi_Var_t *newvNs = Ddi_VarNewBaig(ddm, name);
+    Ddi_VararrayInsertLast(ps,newvPs);
+    Ddi_VararrayInsertLast(ns,newvNs); // dummy, not stored on file
+    Ddi_Bdd_t *newD = i==0 ?
+      Ddi_BddMakeConstAig(ddm, 1) :
+      Ddi_BddMakeLiteralAig(prevPs, 1); 
+    Ddi_BddarrayInsertLast(delta,newD);
+    Ddi_Bdd_t *initLit = Ddi_BddMakeLiteralAig(newvPs, 0);
+    if (i==0) {
+      Ddi_Bdd_t *newInv = Ddi_BddNot(initLit);
+      Ddi_BddOrAcc(newInv,init);
+      Ddi_BddAndAcc(isInv,newInv);
+      Ddi_Free(newInv);
+    }
+    else {
+      Ddi_Bddarray_t *newUnroll = Ddi_BddarrayCompose(delta0,ps0,unroll);
+      char suffix[10];
+      sprintf(suffix, "%d", i-1);
+      Ddi_Vararray_t *isPiVars = Ddi_VararrayMakeNewAigVars(suppPi,"PDT_STUB_PI",suffix);
+      Ddi_BddarraySubstVarsAcc(newUnroll, suppPi, isPiVars);
+      Ddi_Free(isPiVars);
+      Ddi_Free(unroll);
+      unroll = newUnroll;
+      Ddi_Bdd_t *newInv = Ddi_BddRelMakeFromArray(unroll, ps0);
+      Ddi_Bdd_t *thisStep = Ddi_BddAnd(prevStepsDone,initLit);
+      Ddi_BddNotAcc(thisStep);
+      Ddi_BddSetAig(newInv);
+      Ddi_BddOrAcc(newInv,thisStep);
+      Ddi_BddAndAcc(isInv,newInv);
+      Ddi_Free(newInv);
+      Ddi_Free(thisStep);
+      // newvPs => prevPs
+      newInv = Ddi_BddDup(initLit);
+      Ddi_BddOrAcc(newInv,newD);
+      Ddi_BddAndAcc(isInv,newInv);
+      Ddi_Free(newInv);      
+    }
+    Ddi_BddAndAcc(init,initLit);
+    Ddi_BddDiffAcc(prevStepsDone,initLit);
+    prevPs = newvPs;
+    Ddi_Free(initLit);
+    Ddi_Free(newD);
+  }
+  Ddi_Free(suppPi);
+  Ddi_Free(delta0);
+  Ddi_Free(ps0);
+  Ddi_Free(unroll);
+
+  //  Ddi_Bdd_t *isDone = Ddi_BddMakeLiteralAig(prevPs, 1); 
+  Ddi_Bdd_t *isDone = Ddi_BddDup(prevStepsDone); 
+  Ddi_Bdd_t *refInvarspec = Ddi_BddarrayRead(lambda,0);
+  // stepinv => invariant
+  Ddi_BddNotAcc(isDone);
+  Ddi_BddOrAcc(invar,isDone);
+  Ddi_Free(isDone);
+
+
+  Ddi_Vararray_t *newPiVars = Ddi_BddSuppVararray(isInv);
+  Ddi_VararrayDiffAcc(newPiVars,ps);
+  Ddi_VararrayDiffAcc(newPiVars,pi);
+  Ddi_VararrayUnionAcc(pi,newPiVars);
+  Ddi_Free(newPiVars);
+  
+  // !stepInv => original invarspec
+  Ddi_BddAndAcc(invar,refInvarspec);
+  Ddi_BddAndAcc(invar,isInv);
+               
+  Ddi_Free(prevStepsDone);
+  Ddi_Free(isInv);
+ 
+  return 1;
+}
+
+
+
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+int
+Trav_TravSatStoreProofAiger(
+  Trav_Mgr_t * travMgr /* Traversal Manager */ ,
+  Fsm_Mgr_t * fsmMgr,
+  Fsm_Mgr_t * fsmMgrRef,
+  char *wFsm
+)
+{
+  Ddi_Mgr_t *ddm = Trav_MgrReadDdiMgrDefault(travMgr);
+  Pdtutil_VerbLevel_e verbosity = Trav_MgrReadVerbosity(travMgr);
+  int fp=0;
+  Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
+  Fsm_FsmUnfoldProperty(fsmFsm, 1);
+  Fsm_FsmUnfoldConstraint(fsmFsm);
+  Fsm_Fsm_t *fsmFsmRef = Fsm_FsmMakeFromFsmMgr(fsmMgrRef);
+  Fsm_FsmUnfoldProperty(fsmFsmRef, 1);
+  Fsm_FsmUnfoldConstraint(fsmFsmRef);
+  
+  Ddi_Bddarray_t *delta = Fsm_FsmReadDelta(fsmFsm); 
+  Ddi_Bddarray_t *deltaRef = Fsm_FsmReadDelta(fsmFsmRef); 
+  Ddi_Bdd_t *initRef = Fsm_FsmReadInit(fsmFsmRef); 
+  Ddi_Bddarray_t *lambda = Fsm_FsmReadLambda(fsmFsm); 
+  Ddi_Bddarray_t *lambdaRef = Fsm_FsmReadLambda(fsmFsmRef); 
+  Ddi_Bdd_t *constrRef = Fsm_FsmReadConstraint(fsmFsmRef); 
+  Ddi_Bdd_t *target = Ddi_BddNot(Ddi_BddarrayRead(lambda,0));
+  Ddi_Bdd_t *targetRef = Ddi_BddNot(Ddi_BddarrayRead(lambdaRef,0));
+
+  
+  Ddi_Vararray_t *psRef = Fsm_FsmReadPS(fsmFsmRef);
+  Ddi_Vararray_t *piRef = Fsm_FsmReadPI(fsmFsmRef);
+  Ddi_Vararray_t *ps = Fsm_FsmReadPS(fsmFsm);
+  Ddi_Vararray_t *ns = Fsm_FsmReadPS(fsmFsm);
+
+
+  Ddi_Bdd_t *r = Trav_MgrReadReached(travMgr);
+  Ddi_Vararray_t *auxV = Fsm_MgrReadVarAuxVar(fsmMgr);
+  Ddi_Bddarray_t *auxF = Fsm_MgrReadAuxVarBDD(fsmMgr);
+  if (r==NULL || wFsm == NULL) {
+    printf("mising invariant or filename\n");
+    Ddi_Free(target);
+    Ddi_Free(targetRef);
+    return 0;
+  }
+  // Ddi_BddComposeAcc(target,ps,delta);
+  // Ddi_BddComposeAcc(targetRef,psRef,deltaRef);
+  Ddi_Bdd_t *rUnfolded = Ddi_BddDup(r);
+
+  int custom = 1;
+  if (custom) {
+    Ddi_Var_t *v1 = Ddi_VarFromName(ddm,"l338");
+    Ddi_Var_t *v2 = Ddi_VarFromName(ddm,"l166");
+    Ddi_Bdd_t *l1 = Ddi_BddMakeLiteralAig(v1,1);
+    Ddi_Bdd_t *l2 = Ddi_BddMakeLiteralAig(v2,1);
+    Ddi_BddAndAcc(rUnfolded,l1);
+    Ddi_BddAndAcc(rUnfolded,l2);
+    Ddi_Free(l1);
+    Ddi_Free(l2);
+  }
+  
+  Ddi_Var_t *pVar = Fsm_MgrReadPdtSpecVar(fsmMgr);
+  Ddi_Var_t *cVar = Fsm_MgrReadPdtConstrVar(fsmMgr);
+
+  if (pVar!=NULL) {
+    Ddi_BddCofactorAcc(rUnfolded,pVar,1);
+    Ddi_BddCofactorAcc(target,pVar,1);
+    Ddi_BddCofactorAcc(targetRef,pVar,1);
+  }
+  if (cVar!=NULL) {
+    Ddi_BddCofactorAcc(rUnfolded,cVar,1);
+    Ddi_BddCofactorAcc(target,cVar,1);
+    Ddi_BddCofactorAcc(targetRef,cVar,1);
+  }
+
+  Ddi_BddComposeAcc(rUnfolded,auxV,auxF);
+  Ddi_Bdd_t *notR = Ddi_BddNot(rUnfolded);
+
+  proofHandleInitStub(fsmFsmRef, rUnfolded, Fsm_MgrReadInitStubSteps(fsmMgr));
+
+  proofCheckInvar(fsmFsmRef, rUnfolded);
+  
+  Ddi_BddarrayWrite(lambdaRef,0,rUnfolded);
+  //    Fsm_FsmWriteInvarspec(fsmFsmRef,rUnfolded);
+  Fsm_FsmWriteInvarspec(fsmFsmRef,notR);
+  
+  Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+    printf("storing proof in %s\n",wFsm);
+  }
+  Fsm_FsmMiniWriteAiger(fsmFsmRef, wFsm);
+  
+  Ddi_Free(notR);
+  Ddi_Free(rUnfolded);
+  Ddi_Free(target);
+  Ddi_Free(targetRef);
+  Fsm_FsmFree(fsmFsm);
+  Fsm_FsmFree(fsmFsmRef);
+
+  return 1;
 }
 
 /**Function*******************************************************************

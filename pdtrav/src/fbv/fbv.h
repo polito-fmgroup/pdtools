@@ -252,6 +252,7 @@ typedef struct {
     int noInit;                 // command line parameter -> used in fbv only!
     int cntReachedOK;           // INTERNAL FIELD --> replace with countReached?
     int checkProof;             // command line parameter
+    char *writeProof;           // command line parameter
     
     /* trav.tr */
     int sort_for_bck;           // command line parameter

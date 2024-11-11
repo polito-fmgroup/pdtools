@@ -2469,12 +2469,15 @@ Fsm_ReduceImpliedConstr(
 
             fsmMgr->stats.targetEnSteps++;
 
+            Ddi_Bdd_t *litConstr = Ddi_BddMakeLiteralAig(v_i, 0);
             for (k = 0; k < nstate; k++) {
               Ddi_Bdd_t *d_k = Ddi_BddarrayRead(delta, k);
 
               Ddi_BddCofactorAcc(d_k, v_i, !j);
+              if (0 && k!=i && k<nstate-2)
+                Ddi_BddAndAcc(d_k,litConstr);
             }
-
+            Ddi_Free(litConstr);
             if (!fsmMgr->stats.retimedConstr && (outInvar != NULL)) {
               // GPC
               // BUGGY @ HWMCC2014 on beemrshr2f1 and intels
