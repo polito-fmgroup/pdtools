@@ -1682,12 +1682,14 @@ Fsm_ReduceTerminalScc(
   if (nstate > 30000 && !hasConstraints)
     return NULL;
 
+  int iScc = -1;
+  
   if (1) {
     Ddi_Var_t *pvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$PS");
     Ddi_Var_t *pvarNs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$NS");
     Ddi_Var_t *cvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$PS");
     Ddi_Var_t *cvarNs = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$NS");
-    int iProp, iConstr = -1, iScc = -1;
+    int iProp, iConstr = -1;
     Ddi_Bdd_t *deltaProp;
     Ddi_Bdd_t *eqTr = Ddi_BddMakePartConjVoid(ddm);
     Ddi_Bdd_t *one = Ddi_BddMakeConstAig(ddm, 1);
@@ -1739,7 +1741,11 @@ Fsm_ReduceTerminalScc(
         Ddi_Free(d_i_0);
         Ddi_Free(d_i_1);
       }
-
+#if 0      
+      if (strstr(Ddi_VarName(v_i),"constr_out_reg")!=NULL) {
+        printf("found\n");
+      }
+#endif
       if (i == iProp)
         continue;
       if (i == iConstr)
@@ -1873,6 +1879,8 @@ Fsm_ReduceTerminalScc(
           Ddi_Bdd_t *lit = Ddi_BddMakeLiteralAig(v_i, !j);
           Ddi_Bdd_t *invar = Ddi_BddDup(d_i);
 
+          iScc = i;
+          
           if (!useAig) {
             Ddi_BddSetMono(constDelta);
             Ddi_BddSetMono(lit);
@@ -1881,7 +1889,7 @@ Fsm_ReduceTerminalScc(
             Ddi_BddNotAcc(invar);
           Ddi_BddCofactorAcc(invar, v_i, !j);
           nRed++;
-          iScc = i;
+
 	  enSearch=0;
           Pdtutil_VerbosityLocal
             (Pdtutil_VerbLevelNone_c,
@@ -2147,6 +2155,17 @@ Fsm_ReduceTerminalScc(
 
   }
 
+  // tryal seems not to pay, but benchmarking should be done.
+  int andDelta = 0 && (iScc >= 0);
+  if (andDelta) {
+    int i;
+    for (i = 0; i < nstate-2; i++) {
+      Ddi_Bdd_t *d_i = Ddi_BddarrayRead(delta, i);
+      if (i!=iScc)
+        Ddi_BddAndAcc(d_i,sccConstr);
+    }
+  }
+  
   if (nRed > 0 && weakScc) {
     nRed = -nRed;
   }

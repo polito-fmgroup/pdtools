@@ -7771,6 +7771,19 @@ invarVerif(
     Ddi_Free(coi);
   }
 
+  if (0 && opt->pre.impliedConstr) { // check order of implied and terminalScc
+    Ddi_Bdd_t *myInvar = Fsm_ReduceImpliedConstr(fsmMgr,
+      opt->pre.specDecompIndex, invar, &opt->pre.impliedConstrNum);
+
+    if (myInvar != NULL) {
+      if (invar == NULL) {
+        invar = myInvar;
+      } else {
+        Ddi_BddAndAcc(invar, myInvar);
+        Ddi_Free(myInvar);
+      }
+    }
+  }
   if (opt->pre.terminalScc) {
     opt->stats.verificationOK = 0;
     Ddi_Bdd_t *myInvar =
