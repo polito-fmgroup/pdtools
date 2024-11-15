@@ -9400,6 +9400,7 @@ proofHandleInitStub(
 
   Ddi_Bdd_t *prevStepsDone = Ddi_BddMakeConstAig(ddm, 1);
   Ddi_Bdd_t *isInv = Ddi_BddMakeConstAig(ddm, 1);
+  Ddi_Bdd_t *resetInv = Ddi_BddDup(init);
   for (i=0; i<iSteps; i++) {
     sprintf(name, "PDT_TEMPOR_DECOMP_VAR_%d", i);
     Ddi_Var_t *newvPs = Ddi_VarNewBaig(ddm, name);
@@ -9411,14 +9412,9 @@ proofHandleInitStub(
       Ddi_BddMakeConstAig(ddm, 1) :
       Ddi_BddMakeLiteralAig(prevPs, 1); 
     Ddi_BddarrayInsertLast(delta,newD);
-    Ddi_Bdd_t *initLit = Ddi_BddMakeLiteralAig(newvPs, 0);
-    if (i==0) {
-      Ddi_Bdd_t *newInv = Ddi_BddNot(initLit);
-      Ddi_BddOrAcc(newInv,init);
-      Ddi_BddAndAcc(isInv,newInv);
-      Ddi_Free(newInv);
-    }
-    else {
+    Ddi_Bdd_t *initDone_i = Ddi_BddMakeLiteralAig(newvPs, 1);
+    Ddi_BddOrAcc(resetInv,initDone_i);
+    if (i>0) {
       Ddi_Bddarray_t *newUnroll = Ddi_BddarrayCompose(delta0,ps0,unroll);
       char suffix[10];
       sprintf(suffix, "%d", i-1);
@@ -9428,7 +9424,7 @@ proofHandleInitStub(
       Ddi_Free(unroll);
       unroll = newUnroll;
       Ddi_Bdd_t *newInv = Ddi_BddRelMakeFromArray(unroll, ps0);
-      Ddi_Bdd_t *thisStep = Ddi_BddAnd(prevStepsDone,initLit);
+      Ddi_Bdd_t *thisStep = Ddi_BddDiff(prevStepsDone,initDone_i);
       Ddi_BddNotAcc(thisStep);
       Ddi_BddSetAig(newInv);
       Ddi_BddOrAcc(newInv,thisStep);
@@ -9436,15 +9432,15 @@ proofHandleInitStub(
       Ddi_Free(newInv);
       Ddi_Free(thisStep);
       // newvPs => prevPs
-      newInv = Ddi_BddDup(initLit);
+      newInv = Ddi_BddNot(initDone_i);
       Ddi_BddOrAcc(newInv,newD);
       Ddi_BddAndAcc(isInv,newInv);
       Ddi_Free(newInv);      
     }
-    Ddi_BddAndAcc(init,initLit);
-    Ddi_BddDiffAcc(prevStepsDone,initLit);
+    Ddi_BddDiffAcc(init,initDone_i);
+    Ddi_BddAndAcc(prevStepsDone,initDone_i);
     prevPs = newvPs;
-    Ddi_Free(initLit);
+    Ddi_Free(initDone_i);
     Ddi_Free(newD);
   }
   Ddi_Free(suppPi);
@@ -9461,17 +9457,25 @@ proofHandleInitStub(
   Ddi_Free(isDone);
 
 
-  Ddi_Vararray_t *newPiVars = Ddi_BddSuppVararray(isInv);
-  Ddi_VararrayDiffAcc(newPiVars,ps);
-  Ddi_VararrayDiffAcc(newPiVars,pi);
-  Ddi_VararrayUnionAcc(pi,newPiVars);
-  Ddi_Free(newPiVars);
+  Ddi_Vararray_t *newPsVars = Ddi_BddSuppVararray(isInv);
+  Ddi_VararrayDiffAcc(newPsVars,ps);
+  Ddi_VararrayDiffAcc(newPsVars,pi);
+  Ddi_VararrayUnionAcc(ps,newPsVars);
+  Ddi_Vararray_t *newNsVars = Ddi_VararrayMakeNewAigVars(newPsVars,NULL,"$NS");
+  Ddi_VararrayUnionAcc(ns,newNsVars);
+  Ddi_Bddarray_t *newDeltas = Ddi_BddarrayMakeLiteralsAig(newPsVars, 1);
+  Ddi_BddarrayAppend(delta, newDeltas);
+  Ddi_Free(newPsVars);
+  Ddi_Free(newNsVars);
+  Ddi_Free(newDeltas);
   
   // !stepInv => original invarspec
   Ddi_BddAndAcc(invar,refInvarspec);
   Ddi_BddAndAcc(invar,isInv);
+  Ddi_BddAndAcc(invar,resetInv);
                
   Ddi_Free(prevStepsDone);
+  Ddi_Free(resetInv);
   Ddi_Free(isInv);
  
   return 1;
