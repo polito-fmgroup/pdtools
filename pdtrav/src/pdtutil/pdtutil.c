@@ -3932,3 +3932,26 @@ Pdtutil_StrRemoveNumSuffix(
   }
   return ret;
 }
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+int
+Pdtutil_StrGetNumSuffix(
+  char *str,
+  char separator
+)
+{
+  int k, n = strlen(str);
+  int ret = -1;
+
+  for (k = n - 1; k > 0 && str[k] != separator; k--) ;
+
+  if (str[k] == separator) {
+    ret = atoi(str + k + 1);
+  }
+  return ret;
+}

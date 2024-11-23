@@ -133,6 +133,7 @@ Fsm_FsmInit(
   fsmFsm->justice = NULL;
   fsmFsm->fairness = NULL;
   fsmFsm->initStubConstraint = NULL;
+  fsmFsm->latchEqClasses = NULL;
 
   fsmFsm->iFoldedProp = -1;
   fsmFsm->iFoldedConstr = -1;
@@ -262,6 +263,11 @@ FsmFsmDupIntern(
       Fsm_FsmReadInitStubConstraint(fsmFsm));
   }
 
+  if (Fsm_FsmReadLatchEqClasses(fsmFsm) != NULL) {
+    Fsm_FsmWriteLatchEqClasses(fsmFsmNew,
+      Fsm_FsmReadLatchEqClasses(fsmFsm));
+  }
+  
   if (Fsm_FsmReadCex(fsmFsm) != NULL) {
     Fsm_FsmWriteCex(fsmFsmNew, Fsm_FsmReadCex(fsmFsm));
   }
@@ -428,6 +434,14 @@ Fsm_FsmReadInitStubConstraint(
 )
 {
   return (fsmFsm->initStubConstraint);
+}
+
+Ddi_Bdd_t *
+Fsm_FsmReadLatchEqClasses(
+  Fsm_Fsm_t * fsmFsm
+)
+{
+  return (fsmFsm->latchEqClasses);
 }
 
 Ddi_Bdd_t *
@@ -667,6 +681,18 @@ Fsm_FsmWriteInitStubConstraint(
 }
 
 void
+Fsm_FsmWriteLatchEqClasses(
+  Fsm_Fsm_t * fsmFsm,
+  Ddi_Bdd_t * lEq
+)
+{
+  Ddi_Unlock(fsmFsm->latchEqClasses);
+  Ddi_Free(fsmFsm->latchEqClasses);
+  fsmFsm->latchEqClasses = Ddi_BddDup(lEq);
+  Ddi_Lock(fsmFsm->latchEqClasses);
+}
+
+void
 Fsm_FsmWriteCex(
   Fsm_Fsm_t * fsmFsm,
   Ddi_Bdd_t * cex
@@ -809,6 +835,10 @@ Fsm_FsmMake(
   }
   if (Fsm_MgrReadFairnessBDD(fsmMgr) != NULL) {
     Fsm_FsmWriteFairness(fsmFsm, Fsm_MgrReadFairnessBDD(fsmMgr));
+  }
+
+  if (Fsm_MgrReadLatchEqClassesBDD(fsmMgr) != NULL) {
+    Fsm_FsmWriteLatchEqClasses(fsmFsm, Fsm_MgrReadLatchEqClassesBDD(fsmMgr));
   }
 
   if (initStubConstraint == NULL) {
@@ -962,6 +992,7 @@ Fsm_FsmWriteToFsmMgr(
   Fsm_MgrSetFairnessBDD(fsmMgr, Fsm_FsmReadFairness(fsmFsm));
   Fsm_MgrSetInitStubConstraintBDD(fsmMgr,
     Fsm_FsmReadInitStubConstraint(fsmFsm));
+  Fsm_MgrSetLatchEqClassesBDD(fsmMgr, Fsm_FsmReadLatchEqClasses(fsmFsm));
   Fsm_MgrSetInvarspecBDD(fsmMgr, Fsm_FsmReadInvarspec(fsmFsm));
 
   if (fsmFsm->iFoldedProp>0) {
@@ -2289,7 +2320,16 @@ Fsm_FsmFree(
     Ddi_Unlock(fsmFsm->constraint);
     Ddi_Free(fsmFsm->constraint);
     Ddi_Unlock(fsmFsm->invarspec);
-    Ddi_Free(fsmFsm->invarspec);;
+    Ddi_Free(fsmFsm->invarspec);
+    Ddi_Unlock(fsmFsm->justice);
+    Ddi_Free(fsmFsm->justice);
+    Ddi_Unlock(fsmFsm->fairness);
+    Ddi_Free(fsmFsm->fairness);
+    Ddi_Unlock(fsmFsm->initStubConstraint);
+    Ddi_Free(fsmFsm->initStubConstraint);
+    Ddi_Unlock(fsmFsm->latchEqClasses);
+    Ddi_Free(fsmFsm->latchEqClasses);
+
     Pdtutil_ListFree(fsmFsm->settings);
     Pdtutil_ListFree(fsmFsm->stats);
 

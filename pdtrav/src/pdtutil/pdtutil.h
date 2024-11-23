@@ -1503,6 +1503,10 @@ EXTERN int Pdtutil_StrRemoveNumSuffix(
   char *str,
   char separator
 );
+EXTERN int Pdtutil_StrGetNumSuffix(
+  char *str,
+  char separator
+);
 EXTERN char *Pdtutil_StrSkipPrefix(
   char *str,
   char *prefix

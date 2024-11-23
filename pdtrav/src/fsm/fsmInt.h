@@ -271,6 +271,7 @@ struct Fsm_Mgr_s {
   FsmBdd_t initStubConstraint;
   FsmBdd_t init;
   FsmBdd_t invarspec;
+  FsmBdd_t latchEqClasses;
 
   Ddi_Var_t *pdtSpecVar;        /* pdt invarpec fold var */
   Ddi_Var_t *pdtConstrVar;      /* pdt constrain fold var */
@@ -326,7 +327,8 @@ struct Fsm_Fsm_s {
   Ddi_Bdd_t *fairness;
   Ddi_Bdd_t *initStubConstraint;
   Ddi_Bdd_t *invarspec;
-
+  Ddi_Bdd_t *latchEqClasses;
+  
   struct Fsm_Fsm_s *prev;
   struct Fsm_Fsm_s *next;
 

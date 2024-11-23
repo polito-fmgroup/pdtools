@@ -9386,21 +9386,38 @@ proofHandleInitStub(
   Ddi_Var_t *prevPs = NULL;
   Ddi_Bddarray_t *unroll = Ddi_BddarrayMakeLiteralsAig(ps, 1);
   Ddi_Bddarray_t *delta0 = Ddi_BddarrayDup(delta);
+  Ddi_Bddarray_t *deltaSim = Ddi_BddarrayDup(delta);
   Ddi_Vararray_t *ps0 = Ddi_VararrayDup(ps);
   Ddi_Vararray_t *suppPi = Ddi_BddarraySuppVararray(delta0);
   Ddi_VararrayDiffAcc (suppPi,ps);
   Ddi_AigarrayConstrainCubeAcc(unroll,init);
   Ddi_Vararray_t *suppPs = Ddi_BddarraySuppVararray(unroll);
+  Ddi_Bdd_t *is0Inv = NULL;
+  Ddi_Vararray_t *isPsVars = NULL;
   if (Ddi_VararrayNum(suppPs) > 0) {
-    Ddi_Vararray_t *isPsVars = Ddi_VararrayMakeNewAigVars(suppPs,"PDT_STUB_PS","");
+    Ddi_Bddarray_t *unrollRef = Ddi_BddarrayDup(unroll);
+    Ddi_Bdd_t *is0Inv = Ddi_BddMakeConstAig(ddm, 1);
+    isPsVars = Ddi_VararrayMakeNewAigVars(suppPs,"PDT_STUB_PS","");
     Ddi_BddarraySubstVarsAcc(unroll, suppPs, isPsVars);
-    Ddi_Free(isPsVars);
+    for (int i=0; i<Ddi_BddarrayNum(unroll); i++)  {
+      Ddi_Bdd_t *u_i = Ddi_BddarrayRead(unroll,i);
+      if (!Ddi_BddIsConstant(u_i)) {
+        Ddi_Bdd_t *u0_i = Ddi_BddarrayRead(unroll,i);
+        Ddi_Bdd_t *c_i = Ddi_BddXnor(u0_i, u_i);
+        Ddi_BddAndAcc(is0Inv,c_i);
+        Ddi_Free(c_i);
+      }
+    }
+    Ddi_Free(unrollRef);
   }
   Ddi_Free(suppPs);
 
   Ddi_Bdd_t *prevStepsDone = Ddi_BddMakeConstAig(ddm, 1);
   Ddi_Bdd_t *isInv = Ddi_BddMakeConstAig(ddm, 1);
   Ddi_Bdd_t *resetInv = Ddi_BddDup(init);
+  Ddi_Bddarray_t *stepConstrNeg = Ddi_BddarrayAlloc(ddm,1);
+  Ddi_VararrayWriteMarkWithIndex (pi, 1);
+  Ddi_Vararray_t *cleanVarMarks = NULL;
   for (i=0; i<iSteps; i++) {
     sprintf(name, "PDT_TEMPOR_DECOMP_VAR_%d", i);
     Ddi_Var_t *newvPs = Ddi_VarNewBaig(ddm, name);
@@ -9420,12 +9437,22 @@ proofHandleInitStub(
       sprintf(suffix, "%d", i-1);
       Ddi_Vararray_t *isPiVars = Ddi_VararrayMakeNewAigVars(suppPi,"PDT_STUB_PI",suffix);
       Ddi_BddarraySubstVarsAcc(newUnroll, suppPi, isPiVars);
+      for (int j=0; j<Ddi_VararrayNum(isPiVars); j++) {
+        int m = Ddi_VarReadMark (Ddi_VararrayRead(suppPi,j));
+        Ddi_VarWriteMark (Ddi_VararrayRead(isPiVars,j),m);
+      }
+      if (cleanVarMarks == NULL)
+        cleanVarMarks = Ddi_VararrayDup(isPiVars);
+      else
+        Ddi_VararrayAppend(cleanVarMarks,isPiVars);
       Ddi_Free(isPiVars);
       Ddi_Free(unroll);
       unroll = newUnroll;
+
       Ddi_Bdd_t *newInv = Ddi_BddRelMakeFromArray(unroll, ps0);
       Ddi_Bdd_t *thisStep = Ddi_BddDiff(prevStepsDone,initDone_i);
       Ddi_BddNotAcc(thisStep);
+      Ddi_BddarrayWrite(stepConstrNeg,i,thisStep);
       Ddi_BddSetAig(newInv);
       Ddi_BddOrAcc(newInv,thisStep);
       Ddi_BddAndAcc(isInv,newInv);
@@ -9437,6 +9464,12 @@ proofHandleInitStub(
       Ddi_BddAndAcc(isInv,newInv);
       Ddi_Free(newInv);      
     }
+    else {
+      if (is0Inv!=NULL) {
+        Ddi_BddOrAcc(is0Inv,initDone_i);
+      }
+      Ddi_BddarrayWrite(stepConstrNeg,i,initDone_i);
+    }
     Ddi_BddDiffAcc(init,initDone_i);
     Ddi_BddAndAcc(prevStepsDone,initDone_i);
     prevPs = newvPs;
@@ -9445,8 +9478,11 @@ proofHandleInitStub(
   }
   Ddi_Free(suppPi);
   Ddi_Free(delta0);
+  Ddi_Free(deltaSim);
   Ddi_Free(ps0);
   Ddi_Free(unroll);
+
+  Ddi_VararrayWriteMark (pi, 0);
 
   //  Ddi_Bdd_t *isDone = Ddi_BddMakeLiteralAig(prevPs, 1); 
   Ddi_Bdd_t *isDone = Ddi_BddDup(prevStepsDone); 
@@ -9457,27 +9493,59 @@ proofHandleInitStub(
   Ddi_Free(isDone);
 
 
-  Ddi_Vararray_t *newPsVars = Ddi_BddSuppVararray(isInv);
-  Ddi_VararrayDiffAcc(newPsVars,ps);
-  Ddi_VararrayDiffAcc(newPsVars,pi);
+  Ddi_Vararray_t *supp = Ddi_BddSuppVararray(isInv);
+  Ddi_Vararray_t *newPsVars = Ddi_VararrayAlloc(ddm,0);
+  vec<int> varRefPiIndex;
+  for (int i=0; i<Ddi_VararrayNum(supp); i++) {
+    Ddi_Var_t *v_i = Ddi_VararrayRead(supp,i);
+    int m = Ddi_VarReadMark(v_i);
+    if (m>0) {
+      Ddi_VararrayInsertLast(newPsVars,v_i);
+      varRefPiIndex.push(m-1);
+    }
+  }
+  Ddi_Free(supp);
+  if (cleanVarMarks != NULL) {
+    Ddi_VararrayWriteMark (cleanVarMarks, 0);
+    Ddi_Free(cleanVarMarks);
+  }
   Ddi_VararrayUnionAcc(ps,newPsVars);
   Ddi_Vararray_t *newNsVars = Ddi_VararrayMakeNewAigVars(newPsVars,NULL,"$NS");
   Ddi_VararrayUnionAcc(ns,newNsVars);
   Ddi_Bddarray_t *newDeltas = Ddi_BddarrayMakeLiteralsAig(newPsVars, 1);
+  for (int i=0; i<Ddi_BddarrayNum(newDeltas); i++) {
+    Ddi_Bdd_t *d_i = Ddi_BddarrayRead(newDeltas,i);
+    Ddi_Var_t *newPs_i = Ddi_VararrayRead(newPsVars,i);
+    int step = Pdtutil_StrGetNumSuffix(Ddi_VarName(newPs_i),'_');
+    Pdtutil_Assert(step>=0 && step<Ddi_BddarrayNum(stepConstrNeg),"missing step suffix");
+    int piIndex = varRefPiIndex[i];
+    Pdtutil_Assert(piIndex>=0 && piIndex<Ddi_VararrayNum(pi),"wrong pi index");
+    Ddi_Var_t *pi_i = Ddi_VararrayRead(pi,piIndex);
+    Ddi_Bdd_t *stepCN_i = Ddi_BddarrayRead(stepConstrNeg,step);
+    Ddi_Bdd_t *piLit_i = Ddi_BddMakeLiteralAig(pi_i,1); 
+    Ddi_Bdd_t *newD_i = Ddi_BddIte(stepCN_i,d_i,piLit_i);
+    Ddi_BddarrayWrite(newDeltas,i,newD_i);
+    Ddi_Free(newD_i);
+    Ddi_Free(piLit_i);
+  }
   Ddi_BddarrayAppend(delta, newDeltas);
   Ddi_Free(newPsVars);
   Ddi_Free(newNsVars);
   Ddi_Free(newDeltas);
-  
   // !stepInv => original invarspec
   Ddi_BddAndAcc(invar,refInvarspec);
   Ddi_BddAndAcc(invar,isInv);
   Ddi_BddAndAcc(invar,resetInv);
+  if (is0Inv!=NULL)
+    Ddi_BddAndAcc(invar,is0Inv);
                
   Ddi_Free(prevStepsDone);
   Ddi_Free(resetInv);
+  Ddi_Free(is0Inv);
   Ddi_Free(isInv);
- 
+  Ddi_Free(isPsVars);
+  Ddi_Free(stepConstrNeg);
+  
   return 1;
 }
 
@@ -9537,16 +9605,23 @@ Trav_TravSatStoreProofAiger(
   // Ddi_BddComposeAcc(targetRef,psRef,deltaRef);
   Ddi_Bdd_t *rUnfolded = Ddi_BddDup(r);
 
-  int custom = 1;
+  int custom = 0;
   if (custom) {
     Ddi_Var_t *v1 = Ddi_VarFromName(ddm,"l338");
     Ddi_Var_t *v2 = Ddi_VarFromName(ddm,"l166");
+    //    Ddi_Var_t *v1 = Ddi_VarFromName(ddm,"b0");
+    //    Ddi_Var_t *v2 = Ddi_VarFromName(ddm,"b1");
     Ddi_Bdd_t *l1 = Ddi_BddMakeLiteralAig(v1,1);
     Ddi_Bdd_t *l2 = Ddi_BddMakeLiteralAig(v2,1);
     Ddi_BddAndAcc(rUnfolded,l1);
     Ddi_BddAndAcc(rUnfolded,l2);
     Ddi_Free(l1);
     Ddi_Free(l2);
+  }
+  if (Fsm_FsmReadLatchEqClasses(fsmFsm) != NULL) {
+    Ddi_Bdd_t *latchEqClasses = Ddi_BddMakeAig(Fsm_FsmReadLatchEqClasses(fsmFsm));
+    Ddi_BddAndAcc(rUnfolded,latchEqClasses);
+    Ddi_Free(latchEqClasses);
   }
   
   Ddi_Var_t *pVar = Fsm_MgrReadPdtSpecVar(fsmMgr);
@@ -9566,8 +9641,9 @@ Trav_TravSatStoreProofAiger(
   Ddi_BddComposeAcc(rUnfolded,auxV,auxF);
   Ddi_Bdd_t *notR = Ddi_BddNot(rUnfolded);
 
+  //  Ddi_Vararray_t *psRemoved = Ddi_VararrayDiff(psRef,ps);
   proofHandleInitStub(fsmFsmRef, rUnfolded, Fsm_MgrReadInitStubSteps(fsmMgr));
-
+  
   proofCheckInvar(fsmFsmRef, rUnfolded);
   
   Ddi_BddarrayWrite(lambdaRef,0,rUnfolded);

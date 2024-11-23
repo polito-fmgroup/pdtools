@@ -6085,6 +6085,33 @@ retimePeriferalLatches(
         Ddi_Free(dProp);
       }
       Ddi_AigarrayComposeAcc(lambda, substVars, substFuncs);
+      int getLatchEqClasses = 1;
+      if (getLatchEqClasses) {
+        Ddi_Vararray_t *sV = Ddi_VararrayAlloc(ddm, 0); 
+        Ddi_Bddarray_t *sF = Ddi_BddarrayAlloc(ddm, 0); 
+        for (int i=0; i<Ddi_VararrayNum(substVars); i++) {
+          Ddi_Var_t *v_i = Ddi_VararrayRead(substVars,i);
+          Ddi_Bdd_t *f_i = Ddi_BddarrayRead(substFuncs,i);
+          if (Ddi_BddIsConstant(f_i)) {
+            Ddi_VararrayInsertLast(sV,v_i);
+            Ddi_BddarrayInsertLast(sF,f_i);
+          }
+        }
+        Ddi_Bdd_t *eq0 = Fsm_MgrReadLatchEqClassesBDD(fsmMgr);
+        if (eq0 != NULL) {
+          Ddi_Vararray_t *vars = Ddi_BddReadEqVars(eq0);
+          Ddi_Bddarray_t *subst = Ddi_BddReadEqSubst(eq0);
+          Ddi_VararrayAppend(sV,vars);
+          Ddi_BddarrayAppend(sF,subst);
+        }
+        if (Ddi_VararrayNum(sV)>0) {
+          Ddi_Bdd_t *eq1 = Ddi_BddMakeEq(sV,sF);
+          Fsm_MgrSetLatchEqClassesBDD(fsmMgr,eq1);
+          Ddi_Free(eq1);
+        }
+        Ddi_Free(sV);
+        Ddi_Free(sF);
+      }      
     } else {
       for (i = 0; i < Ddi_BddarrayNum(delta); i++) {
         Ddi_BddComposeAcc(Ddi_BddarrayRead(delta, i), substVars, substFuncs);
@@ -6099,6 +6126,7 @@ retimePeriferalLatches(
     if (constraint != NULL) {
       Ddi_BddComposeAcc(constraint, substVars, substFuncs);
     }
+
   }
 
   Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {

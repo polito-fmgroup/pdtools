@@ -277,6 +277,9 @@ EXTERN Ddi_Bdd_t *Fsm_FsmReadFairness(
 EXTERN Ddi_Bdd_t *Fsm_FsmReadCex(
   Fsm_Fsm_t * fsmFsm
 );
+EXTERN Ddi_Bdd_t *Fsm_FsmReadLatchEqClasses(
+  Fsm_Fsm_t * fsmFsm
+);
 EXTERN Ddi_Bdd_t *Fsm_FsmReadInitStubConstraint(
   Fsm_Fsm_t * fsmFsm
 );
@@ -398,6 +401,10 @@ EXTERN void Fsm_FsmWriteInitStubConstraint(
 EXTERN void Fsm_FsmWriteCex(
   Fsm_Fsm_t * fsmFsm,
   Ddi_Bdd_t * cex
+);
+EXTERN void Fsm_FsmWriteLatchEqClasses(
+  Fsm_Fsm_t * fsmFsm,
+  Ddi_Bdd_t * lEq
 );
 EXTERN void Fsm_FsmWriteSettings(
   Fsm_Fsm_t * fsmFsm,
@@ -545,6 +552,9 @@ EXTERN Ddi_Bdd_t *Fsm_MgrReadCexBDD(
   Fsm_Mgr_t * fsmMgr
 );
 EXTERN Ddi_Bdd_t *Fsm_MgrReadInitStubConstraintBDD(
+  Fsm_Mgr_t * fsmMgr
+);
+EXTERN Ddi_Bdd_t *Fsm_MgrReadLatchEqClassesBDD(
   Fsm_Mgr_t * fsmMgr
 );
 EXTERN Ddi_Bdd_t *Fsm_MgrReadCareBDD(
@@ -715,6 +725,10 @@ EXTERN void Fsm_MgrSetCexBDD(
 EXTERN void Fsm_MgrSetInitStubConstraintBDD(
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t * con
+);
+EXTERN void Fsm_MgrSetLatchEqClassesBDD(
+  Fsm_Mgr_t * fsmMgr,
+  Ddi_Bdd_t * lEq
 );
 EXTERN void Fsm_MgrSetConstraintBDD(
   Fsm_Mgr_t * fsmMgr,

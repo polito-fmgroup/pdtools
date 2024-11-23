@@ -614,6 +614,10 @@ MgrDupIntern(
     Fsm_MgrSetInitStubConstraintBDD(fsmMgrNew,
       Fsm_MgrReadInitStubConstraintBDD(fsmMgr));
   }
+  if (Fsm_MgrReadLatchEqClassesBDD(fsmMgr) != NULL) {
+    Fsm_MgrSetLatchEqClassesBDD(fsmMgrNew,
+      Fsm_MgrReadLatchEqClassesBDD(fsmMgr));
+  }
   if (Fsm_MgrReadCareBDD(fsmMgr) != NULL) {
     Fsm_MgrSetCareBDD(fsmMgrNew, Fsm_MgrReadCareBDD(fsmMgr));
   }
@@ -1743,6 +1747,20 @@ Fsm_MgrReadInitStubConstraintBDD(
 }
 
 /**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bdd_t *
+Fsm_MgrReadLatchEqClassesBDD(
+  Fsm_Mgr_t * fsmMgr
+)
+{
+  return (fsmMgr->latchEqClasses.bdd);
+}
+
+/**Function********************************************************************
 
   Synopsis    []
 
@@ -2862,6 +2880,30 @@ Fsm_MgrSetInitStubConstraintBDD(
     fsmMgr->initStubConstraint.bdd = Ddi_BddCopy(fsmMgr->dd, con);
   } else {
     fsmMgr->initStubConstraint.bdd = NULL;
+  }
+
+  return;
+}
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+void
+Fsm_MgrSetLatchEqClassesBDD(
+  Fsm_Mgr_t * fsmMgr,
+  Ddi_Bdd_t * lEq
+)
+{
+  if (fsmMgr->latchEqClasses.bdd != NULL) {
+    Ddi_Free(fsmMgr->latchEqClasses.bdd);
+  }
+  if (lEq != NULL) {
+    fsmMgr->latchEqClasses.bdd = Ddi_BddCopy(fsmMgr->dd, lEq);
+  } else {
+    fsmMgr->latchEqClasses.bdd = NULL;
   }
 
   return;
