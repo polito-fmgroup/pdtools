@@ -2177,6 +2177,16 @@ Fsm_ReduceTerminalScc(
     *provedP = provedProperty;
   }
 
+  if (sccConstr != NULL) {
+    Ddi_Bdd_t *newCInv = Ddi_BddNot(sccConstr);
+    Ddi_Bdd_t *cInv0 = Fsm_MgrReadConstrInvarBDD(fsmMgr);
+    if (cInv0 != NULL) {
+      Ddi_BddOrAcc(newCInv,cInv0);
+    }
+    Fsm_MgrSetConstrInvarBDD(fsmMgr,newCInv);
+    Ddi_Free(newCInv);
+  }
+  
   return (sccConstr);
 }
 

@@ -134,6 +134,7 @@ Fsm_FsmInit(
   fsmFsm->fairness = NULL;
   fsmFsm->initStubConstraint = NULL;
   fsmFsm->latchEqClasses = NULL;
+  fsmFsm->constrInvar = NULL;
 
   fsmFsm->iFoldedProp = -1;
   fsmFsm->iFoldedConstr = -1;
@@ -266,6 +267,11 @@ FsmFsmDupIntern(
   if (Fsm_FsmReadLatchEqClasses(fsmFsm) != NULL) {
     Fsm_FsmWriteLatchEqClasses(fsmFsmNew,
       Fsm_FsmReadLatchEqClasses(fsmFsm));
+  }
+  
+  if (Fsm_FsmReadConstrInvar(fsmFsm) != NULL) {
+    Fsm_FsmWriteConstrInvar(fsmFsmNew,
+      Fsm_FsmReadConstrInvar(fsmFsm));
   }
   
   if (Fsm_FsmReadCex(fsmFsm) != NULL) {
@@ -442,6 +448,14 @@ Fsm_FsmReadLatchEqClasses(
 )
 {
   return (fsmFsm->latchEqClasses);
+}
+
+Ddi_Bdd_t *
+Fsm_FsmReadConstrInvar(
+  Fsm_Fsm_t * fsmFsm
+)
+{
+  return (fsmFsm->constrInvar);
 }
 
 Ddi_Bdd_t *
@@ -693,6 +707,18 @@ Fsm_FsmWriteLatchEqClasses(
 }
 
 void
+Fsm_FsmWriteConstrInvar(
+  Fsm_Fsm_t * fsmFsm,
+  Ddi_Bdd_t * cInv
+)
+{
+  Ddi_Unlock(fsmFsm->constrInvar);
+  Ddi_Free(fsmFsm->constrInvar);
+  fsmFsm->constrInvar = Ddi_BddDup(cInv);
+  Ddi_Lock(fsmFsm->constrInvar);
+}
+
+void
 Fsm_FsmWriteCex(
   Fsm_Fsm_t * fsmFsm,
   Ddi_Bdd_t * cex
@@ -839,6 +865,10 @@ Fsm_FsmMake(
 
   if (Fsm_MgrReadLatchEqClassesBDD(fsmMgr) != NULL) {
     Fsm_FsmWriteLatchEqClasses(fsmFsm, Fsm_MgrReadLatchEqClassesBDD(fsmMgr));
+  }
+
+  if (Fsm_MgrReadConstrInvarBDD(fsmMgr) != NULL) {
+    Fsm_FsmWriteConstrInvar(fsmFsm, Fsm_MgrReadConstrInvarBDD(fsmMgr));
   }
 
   if (initStubConstraint == NULL) {
@@ -993,6 +1023,7 @@ Fsm_FsmWriteToFsmMgr(
   Fsm_MgrSetInitStubConstraintBDD(fsmMgr,
     Fsm_FsmReadInitStubConstraint(fsmFsm));
   Fsm_MgrSetLatchEqClassesBDD(fsmMgr, Fsm_FsmReadLatchEqClasses(fsmFsm));
+  Fsm_MgrSetConstrInvarBDD(fsmMgr, Fsm_FsmReadConstrInvar(fsmFsm));
   Fsm_MgrSetInvarspecBDD(fsmMgr, Fsm_FsmReadInvarspec(fsmFsm));
 
   if (fsmFsm->iFoldedProp>0) {
@@ -2329,6 +2360,8 @@ Fsm_FsmFree(
     Ddi_Free(fsmFsm->initStubConstraint);
     Ddi_Unlock(fsmFsm->latchEqClasses);
     Ddi_Free(fsmFsm->latchEqClasses);
+    Ddi_Unlock(fsmFsm->constrInvar);
+    Ddi_Free(fsmFsm->constrInvar);
 
     Pdtutil_ListFree(fsmFsm->settings);
     Pdtutil_ListFree(fsmFsm->stats);

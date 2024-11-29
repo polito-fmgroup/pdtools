@@ -158,6 +158,14 @@ Fsm_MgrInit(
   fsmMgr->invarspec.name = NULL;
   fsmMgr->invarspec.string = NULL;
   fsmMgr->invarspec.bdd = NULL;
+
+  fsmMgr->latchEqClasses.name = NULL;
+  fsmMgr->latchEqClasses.string = NULL;
+  fsmMgr->latchEqClasses.bdd = NULL;
+  fsmMgr->constrInvar.name = NULL;
+  fsmMgr->constrInvar.string = NULL;
+  fsmMgr->constrInvar.bdd = NULL;
+
   fsmMgr->retimedPis = NULL;
   fsmMgr->initStubPiConstr = NULL;
   fsmMgr->pdtSpecVar = NULL;
@@ -409,6 +417,14 @@ Fsm_MgrQuit(
   Pdtutil_Free(fsmMgr->invarspec.name);
   Ddi_Free(fsmMgr->invarspec.bdd);
 
+  /* latch eq classes */
+  Pdtutil_Free(fsmMgr->latchEqClasses.name);
+  Ddi_Free(fsmMgr->latchEqClasses.bdd);
+
+    /* constr invar */
+  Pdtutil_Free(fsmMgr->constrInvar.name);
+  Ddi_Free(fsmMgr->constrInvar.bdd);
+
   Ddi_Free(fsmMgr->retimedPis);
   Ddi_Free(fsmMgr->initStubPiConstr);
   /* vars */
@@ -617,6 +633,10 @@ MgrDupIntern(
   if (Fsm_MgrReadLatchEqClassesBDD(fsmMgr) != NULL) {
     Fsm_MgrSetLatchEqClassesBDD(fsmMgrNew,
       Fsm_MgrReadLatchEqClassesBDD(fsmMgr));
+  }
+  if (Fsm_MgrReadConstrInvarBDD(fsmMgr) != NULL) {
+    Fsm_MgrSetConstrInvarBDD(fsmMgrNew,
+      Fsm_MgrReadConstrInvarBDD(fsmMgr));
   }
   if (Fsm_MgrReadCareBDD(fsmMgr) != NULL) {
     Fsm_MgrSetCareBDD(fsmMgrNew, Fsm_MgrReadCareBDD(fsmMgr));
@@ -1758,6 +1778,20 @@ Fsm_MgrReadLatchEqClassesBDD(
 )
 {
   return (fsmMgr->latchEqClasses.bdd);
+}
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bdd_t *
+Fsm_MgrReadConstrInvarBDD(
+  Fsm_Mgr_t * fsmMgr
+)
+{
+  return (fsmMgr->constrInvar.bdd);
 }
 
 /**Function********************************************************************
@@ -2904,6 +2938,30 @@ Fsm_MgrSetLatchEqClassesBDD(
     fsmMgr->latchEqClasses.bdd = Ddi_BddCopy(fsmMgr->dd, lEq);
   } else {
     fsmMgr->latchEqClasses.bdd = NULL;
+  }
+
+  return;
+}
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+void
+Fsm_MgrSetConstrInvarBDD(
+  Fsm_Mgr_t * fsmMgr,
+  Ddi_Bdd_t * cInv
+)
+{
+  if (fsmMgr->constrInvar.bdd != NULL) {
+    Ddi_Free(fsmMgr->constrInvar.bdd);
+  }
+  if (cInv != NULL) {
+    fsmMgr->constrInvar.bdd = Ddi_BddCopy(fsmMgr->dd, cInv);
+  } else {
+    fsmMgr->constrInvar.bdd = NULL;
   }
 
   return;

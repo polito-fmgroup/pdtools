@@ -9618,12 +9618,18 @@ Trav_TravSatStoreProofAiger(
     Ddi_Free(l1);
     Ddi_Free(l2);
   }
+  
+  if (Fsm_FsmReadConstrInvar(fsmFsm) != NULL) {
+    Ddi_Bdd_t *constrInvar = Fsm_FsmReadConstrInvar(fsmFsm);
+    Ddi_BddOrAcc(rUnfolded,constrInvar);
+  }
+  
   if (Fsm_FsmReadLatchEqClasses(fsmFsm) != NULL) {
     Ddi_Bdd_t *latchEqClasses = Ddi_BddMakeAig(Fsm_FsmReadLatchEqClasses(fsmFsm));
     Ddi_BddAndAcc(rUnfolded,latchEqClasses);
     Ddi_Free(latchEqClasses);
   }
-  
+
   Ddi_Var_t *pVar = Fsm_MgrReadPdtSpecVar(fsmMgr);
   Ddi_Var_t *cVar = Fsm_MgrReadPdtConstrVar(fsmMgr);
 
