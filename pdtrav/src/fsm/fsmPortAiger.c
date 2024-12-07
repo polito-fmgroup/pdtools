@@ -101,7 +101,7 @@ Fsm_MgrLoadAiger(
   aiger *mgr;
   const char *error;
   Ddi_Bdd_t *litBdd;
-  static char buf[5000];
+  static char buf[100000];
   int sortDfs = 1;
   Ddi_Bdd_t *bddZero = NULL;
   aiger_symbol *targets;

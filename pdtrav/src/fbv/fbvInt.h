@@ -339,7 +339,8 @@ EXTERN void FbvWriteCex(
 EXTERN void FbvWriteCexNormalized(
   char *fname,
   Fsm_Mgr_t * fsmMgr,
-  Fsm_Mgr_t * fsmMgrOriginal
+  Fsm_Mgr_t * fsmMgrOriginal,
+  int badId
 );
 EXTERN Fbv_Globals_t *FbvDupSettings(
   Fbv_Globals_t * opt0
