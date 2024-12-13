@@ -1042,6 +1042,11 @@ findOrTerms(
   Ddi_Bdd_t *f,
   int minNumTerms
 );
+static int proofHandlePhaseAbstr(
+  Fsm_Fsm_t *fsmFsm,
+  Ddi_Bdd_t *invar,
+  int phAbstr
+);
 static int proofHandleInitStub(
   Fsm_Fsm_t *fsmFsmRef,
   Ddi_Bdd_t *target,
@@ -9362,6 +9367,112 @@ proofCheckInvar(
   SeeAlso     []
 ******************************************************************************/
 static int
+proofHandlePhaseAbstr(
+  Fsm_Fsm_t *fsmFsm,
+  Ddi_Bdd_t *invar,
+  int phAbstr
+)
+{
+  Ddi_Mgr_t *ddm = Fsm_MgrReadDdManager(Fsm_FsmReadMgr(fsmFsm));
+
+  if (phAbstr == 0)
+    return 0;
+
+  char name [100];
+  Ddi_Bddarray_t *delta = Fsm_FsmReadDelta(fsmFsm); 
+  Ddi_Bddarray_t *lambda = Fsm_FsmReadLambda(fsmFsm); 
+  Ddi_Vararray_t *pi = Fsm_FsmReadPI(fsmFsm);
+  Ddi_Vararray_t *ps = Fsm_FsmReadPS(fsmFsm);
+  Ddi_Vararray_t *ns = Fsm_FsmReadNS(fsmFsm);
+  Ddi_Bddarray_t *initStub = Fsm_FsmReadInitStub(fsmFsm);
+  Ddi_Bdd_t *init = Fsm_FsmReadInit(fsmFsm); 
+
+  int i, nl = Ddi_VararrayNum(ps), iLast = nl-1;
+
+  Ddi_Var_t *prevPs = NULL;
+
+  Ddi_Vararray_t *psPrevVars = Ddi_VararrayMakeNewAigVars(ps,"PDT_PHASE_ABSTR_PREV_PS",NULL);
+  Ddi_Vararray_t *piPrevVars = Ddi_VararrayMakeNewAigVars(pi,"PDT_PHASE_ABSTR_PREV_PI",NULL);
+  Ddi_Vararray_t *newPsVars = Ddi_VararrayUnion(psPrevVars,piPrevVars);
+  Ddi_Vararray_t *newNsVars = Ddi_VararrayMakeNewAigVars(newPsVars,NULL,"$NS");
+  Ddi_Bddarray_t *newDeltasPs = Ddi_BddarrayMakeLiteralsAig(ps, 1);
+  Ddi_Bddarray_t *newDeltasPi = Ddi_BddarrayMakeLiteralsAig(pi, 1);
+
+  Ddi_Bddarray_t *delta0 = Ddi_BddarrayDup(delta);
+
+  Ddi_BddarraySubstVarsAcc(delta0,pi,piPrevVars);
+  Ddi_BddarraySubstVarsAcc(delta0,ps,psPrevVars);
+  Ddi_Bdd_t *newInv = Ddi_BddRelMakeFromArray(delta0, ps);
+  Ddi_BddSetAig(newInv);
+  Ddi_Bdd_t *prevInv = Ddi_BddSubstVars(invar,ps,psPrevVars);
+  Ddi_BddAndAcc(newInv,prevInv); // so this is the imag of invar
+  Ddi_Free(prevInv);
+  
+  Ddi_Var_t *newvPs = Ddi_VarNewBaig(ddm, "PDT_PHASE_ABSTR_CTRL_0");
+  Ddi_Var_t *newvNs = Ddi_VarNewBaig(ddm, "PDT_PHASE_ABSTR_CTRL_0$NS");
+  Ddi_VararrayInsertLast(ps,newvPs);
+  Ddi_VararrayInsertLast(ns,newvNs); 
+  Ddi_Bdd_t *newD = Ddi_BddMakeLiteralAig(newvPs, 0); 
+  Ddi_BddarrayInsertLast(delta,newD);
+  if (initStub==NULL) {
+    Ddi_Bdd_t *lit = Ddi_BddMakeLiteralAig(newvPs, 0); 
+    Ddi_BddAndAcc(init,lit);
+    Ddi_Free(lit);
+  }
+  else {
+    Ddi_Bdd_t *zero = Ddi_BddMakeConstAig(ddm, 0);
+    Ddi_BddarrayInsertLast(initStub,zero);
+    Ddi_Free(zero);
+  }
+
+  Ddi_BddarrayAppend(delta, newDeltasPs);
+  Ddi_BddarrayAppend(delta, newDeltasPi);
+
+  Ddi_VararrayAppend(ps,newPsVars);
+  Ddi_VararrayAppend(ns,newNsVars);
+  Ddi_Free(psPrevVars);
+  Ddi_Free(piPrevVars);
+
+  if (initStub==NULL) {
+    Ddi_Bddarray_t *litArray = Ddi_BddarrayMakeLiteralsAig(newPsVars, 0); 
+    Ddi_Bdd_t *newInit = Ddi_BddMakePartConjFromArray(litArray);
+    Ddi_BddSetAig(newInit);
+    Ddi_BddAndAcc(init,newInit);
+    Ddi_Free(litArray);
+    Ddi_Free(newInit);
+  }
+  else {
+    Ddi_Bdd_t *zero = Ddi_BddMakeConstAig(ddm, 0);
+    for (int i=0; i<Ddi_VararrayNum(newPsVars); i++) 
+      Ddi_BddarrayInsertLast(initStub,zero);
+    Ddi_Free(zero);
+  }
+
+  Ddi_BddOrAcc(newInv,newD);
+  Ddi_BddNotAcc(newD);
+  Ddi_BddOrAcc(invar,newD);
+  Ddi_BddAndAcc(invar,newInv);
+  
+  Ddi_Free(newD);
+  Ddi_Free(delta0);
+  Ddi_Free(newInv);
+  Ddi_Free(newPsVars);
+  Ddi_Free(newNsVars);
+  Ddi_Free(newDeltasPi);
+  Ddi_Free(newDeltasPs);
+
+  
+  return 1;
+}
+
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static int
 proofHandleInitStub(
   Fsm_Fsm_t *fsmFsm,
   Ddi_Bdd_t *invar,
@@ -9646,6 +9757,9 @@ Trav_TravSatStoreProofAiger(
 
   Ddi_BddComposeAcc(rUnfolded,auxV,auxF);
   Ddi_Bdd_t *notR = Ddi_BddNot(rUnfolded);
+
+  //  Ddi_Vararray_t *psRemoved = Ddi_VararrayDiff(psRef,ps);
+  proofHandlePhaseAbstr(fsmFsmRef, rUnfolded, Fsm_MgrReadPhaseAbstr(fsmMgr));
 
   //  Ddi_Vararray_t *psRemoved = Ddi_VararrayDiff(psRef,ps);
   proofHandleInitStub(fsmFsmRef, rUnfolded, Fsm_MgrReadInitStubSteps(fsmMgr));

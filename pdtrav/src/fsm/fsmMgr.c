@@ -2950,6 +2950,41 @@ Fsm_MgrSetLatchEqClassesBDD(
   SeeAlso     []
 ******************************************************************************/
 void
+Fsm_MgrAddLatchEqClassesBDD(
+  Fsm_Mgr_t * fsmMgr,
+  Ddi_Bdd_t * lEq
+)
+{
+  if (lEq == NULL)
+    return;
+
+  Ddi_Bdd_t *lEqCopy = Ddi_BddCopy(fsmMgr->dd, lEq);
+  
+  if (fsmMgr->latchEqClasses.bdd != NULL) {
+    Ddi_Bdd_t *eq0 = fsmMgr->latchEqClasses.bdd;
+    Ddi_Vararray_t *vars0 = Ddi_BddReadEqVars(eq0);
+    Ddi_Bddarray_t *subst0 = Ddi_BddReadEqSubst(eq0);
+    Ddi_Vararray_t *vars1 = Ddi_BddReadEqVars(lEqCopy);
+    Ddi_Bddarray_t *subst1 = Ddi_BddReadEqSubst(lEqCopy);
+    Ddi_VararrayAppend(vars1,vars0);
+    Ddi_BddarrayAppend(subst1,subst0);
+    Ddi_Bdd_t *eq1 = Ddi_BddMakeEq(vars1,subst1);
+    Ddi_Free(lEqCopy);
+    lEqCopy = eq1;
+  }
+  Ddi_Free(fsmMgr->latchEqClasses.bdd);
+  fsmMgr->latchEqClasses.bdd = lEqCopy;
+
+  return;
+}
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+void
 Fsm_MgrSetConstrInvarBDD(
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t * cInv

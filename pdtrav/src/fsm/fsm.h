@@ -736,6 +736,11 @@ EXTERN void Fsm_MgrSetInitStubConstraintBDD(
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t * con
 );
+EXTERN void
+Fsm_MgrAddLatchEqClassesBDD(
+  Fsm_Mgr_t * fsmMgr,
+  Ddi_Bdd_t * lEq
+);
 EXTERN void Fsm_MgrSetLatchEqClassesBDD(
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t * lEq

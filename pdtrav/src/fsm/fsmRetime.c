@@ -5633,6 +5633,10 @@ Fsm_FsmStructReduction(
         fprintf(stdout,
           "Found %d seq EQ - Reduced DELTA - size: %d - components: %d\n",
           neq, Ddi_BddarraySize(delta), n));
+
+      Ddi_Bdd_t *eq1 = Ddi_BddMakeEq(substV,substF);
+      Fsm_MgrAddLatchEqClassesBDD(fsmMgr,eq1);
+      Ddi_Free(eq1);
     }
 
     Ddi_Free(substV);
@@ -6107,16 +6111,9 @@ retimePeriferalLatches(
             Ddi_BddarrayInsertLast(sF,f_i);
           }
         }
-        Ddi_Bdd_t *eq0 = Fsm_MgrReadLatchEqClassesBDD(fsmMgr);
-        if (eq0 != NULL) {
-          Ddi_Vararray_t *vars = Ddi_BddReadEqVars(eq0);
-          Ddi_Bddarray_t *subst = Ddi_BddReadEqSubst(eq0);
-          Ddi_VararrayAppend(sV,vars);
-          Ddi_BddarrayAppend(sF,subst);
-        }
         if (Ddi_VararrayNum(sV)>0) {
           Ddi_Bdd_t *eq1 = Ddi_BddMakeEq(sV,sF);
-          Fsm_MgrSetLatchEqClassesBDD(fsmMgr,eq1);
+          Fsm_MgrAddLatchEqClassesBDD(fsmMgr,eq1);
           Ddi_Free(eq1);
         }
         Ddi_Free(sV);
