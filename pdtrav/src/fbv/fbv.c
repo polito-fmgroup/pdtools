@@ -6891,7 +6891,8 @@ void
 FbvWriteCexNormalized(
   char *fname,
   Fsm_Mgr_t * fsmMgr,
-  Fsm_Mgr_t * fsmMgrOriginal
+  Fsm_Mgr_t * fsmMgrOriginal,
+  int badId
 )
 {
   static char buf[1000] = "";
@@ -6964,7 +6965,7 @@ FbvWriteCexNormalized(
   FILE *cexOut = fopen(buf, "w");
 
   //printf("print header witness\n");
-  fprintf(cexOut, "1\nb0\n");
+  fprintf(cexOut, "1\nb%d\n", badId);
 
   for (i = 0; (i < ps) && (initStr[i] != '\0'); i++) {
     char c = initStr[i];
@@ -8868,9 +8869,9 @@ invarVerif(
 	    ret2 = Fsm_CexNormalize(fsmMgrOriginal);
 	    Pdtutil_Assert(!ret2,"error extending cex");
             FbvWriteCexNormalized(opt->mc.wRes, fsmMgrOriginal,
-              fsmMgrOriginal);
+                                  fsmMgrOriginal,opt->mc.ilambda);
           } else {
-            FbvWriteCexNormalized(opt->mc.wRes, fsmMgr, fsmMgrOriginal);
+            FbvWriteCexNormalized(opt->mc.wRes, fsmMgr, fsmMgrOriginal,opt->mc.ilambda);
           }
           fprintf(stdout, "\ncex written to: %s.cex\n", opt->mc.wRes);
         }
@@ -8882,7 +8883,7 @@ invarVerif(
 	  //     FbvWriteCex(opt->mc.wRes, fsmMgr, fsmMgrOriginal);
         }
 #else
-	{
+        if ((Fsm_MgrReadCexBDD(fsmMgr) != NULL)) {
 	  char fullCexName[1000];
 	  sprintf(fullCexName,"%s.cex",opt->mc.wRes);
 	  int invalidCex = Fsm_AigsimCex(opt->expName, fullCexName);

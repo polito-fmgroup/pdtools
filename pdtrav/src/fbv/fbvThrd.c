@@ -2275,9 +2275,9 @@ logThrdCex(
 	  Fsm_MgrReadCexBDD(fsmMgrRef));
 	ret2 = Fsm_CexNormalize(fsmMgrRef);
 	Pdtutil_Assert(!ret2,"error extending cex");
-        FbvWriteCexNormalized(fname, fsmMgrRef, fsmMgrRef);
+        FbvWriteCexNormalized(fname, fsmMgrRef, fsmMgrRef, 0);
       } else {
-        FbvWriteCexNormalized(fname, fsmMgr, fsmMgrRef);
+        FbvWriteCexNormalized(fname, fsmMgr, fsmMgrRef, 0);
       }
       fprintf(stdout, "\ncex written to: %s.cex\n", fname);
     }
