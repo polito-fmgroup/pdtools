@@ -3355,7 +3355,7 @@ TravBmcMgrAddFrames(
     }
     //    Ddi_BddarrayAppend(bmcMgr->dummyRefs,bmcMgr->unroll);
   }
-
+  return 0; 
 }
 
 

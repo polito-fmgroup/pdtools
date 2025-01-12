@@ -2,7 +2,7 @@ RANLIB = ranlib
 AR = ar
 
 CC=gcc
-CFLAGS=-g -Wall -fPIC -DLIN64 -pthread -ffloat-store -mtune=native -malign-double -DHAVE_IEEE_754 -DBSD -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4
+CFLAGS=-g -Wall -fPIE -DLIN64 -pthread -ffloat-store -mtune=native -malign-double -DHAVE_IEEE_754 -DBSD -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4
 
 LIB_SRCS = aigsim.c aiger.c
 LIB_OBJS = $(LIB_SRCS:.c=.o)

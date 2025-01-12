@@ -844,7 +844,7 @@ static int chkConeBmc(
   int boundK,
   int split
 );
-static int itpImgTrSetup(
+static void itpImgTrSetup(
   Trav_ItpTravMgr_t * itpTravMgr,
   Ddi_Bdd_t * cone
 );
@@ -23860,7 +23860,7 @@ tion []
   SideEffects []
   SeeAlso     []
 ******************************************************************************/
-static int
+static void
 itpImgTrSetup(
   Trav_ItpTravMgr_t * itpTravMgr,
   Ddi_Bdd_t * cone
@@ -24160,7 +24160,7 @@ itpImgTrSetup(
     }
   }
   //  substStalledLatches(itpMgr,itpTravMgr->from);
-
+  
 }
 
 /**Function*******************************************************************
