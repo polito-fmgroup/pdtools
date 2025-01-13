@@ -45,7 +45,7 @@ then
 	then
 # StQ: 64-bit = Original Makefile Version
 	CFLAGS="-O3 -DNDEBUG"
-	CFLAGS="-g -Wall -fPIC -DLIN64 -pthread -ffloat-store -mtune=native -malign-double -DHAVE_IEEE_754 -DBSD -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4"
+	CFLAGS="-g -Wall -fPIE -DLIN64 -pthread -ffloat-store -mtune=native -malign-double -DHAVE_IEEE_754 -DBSD -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4"
 	else
 # StQ: 32-bit
 	CFLAGS="-O3 -DNDEBUG -m32"

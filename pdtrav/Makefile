@@ -86,15 +86,15 @@ XC_FLAGS =
 CFLAGS =	-DLIN -g -m32 -pthread
 else
 # StQ: 64-bit (2 rows)
-CUDD_ICFLAGS = 	-O6 -Wall -fPIC -fPIE -pthread
+CUDD_ICFLAGS = 	-O6 -Wall -fPIE -pthread -std=c++14
 #CUDD_ICFLAGS = 	-g -Wall -fPIC -pthread
 CUDD_XCFLAGS =	-ffloat-store -mtune=native -malign-double -DHAVE_IEEE_754 -DBSD -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4
 #ICFLAGS = 	-Wall -O6 -fPIC -pthread -mtune=native -malign-double -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8
 XC_FLAGS =	-DHAVE_IEEE_754=1 -DBSD=1 -DSTDC_HEADERS=1 -DHAVE_STRSTR=1
 ifdef PDTOPT
-CFLAGS =	-DLIN64 -O6 -Wall -fPIC -fPIE -pthread
+CFLAGS =	-DLIN64 -O6 -Wall -fPIE -pthread
 else
-CFLAGS =	-DLIN64 -g -Wall -fPIC -fPIE -pthread 
+CFLAGS =	-DLIN64 -g -Wall -fPIE -pthread 
 endif
 endif
 LINKER =	g++

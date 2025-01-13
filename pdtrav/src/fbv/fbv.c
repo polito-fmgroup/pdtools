@@ -636,7 +636,7 @@ static char *help[] = {
   "check deadlock. verified spec is:",
   "AG (EX 1 | invarspec)", NULL,
 
-  "-checkProof <val>",
+  "-checkProof <val>",		/*  */
   "enable/disable final proof checking (default 0: disabled)", NULL,
   "-writeProof <fname>",
   "enable/disable final proof storing (default 0: disabled)", NULL,
@@ -4619,6 +4619,7 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-writeProof") == 0) {
       opt->trav.writeProof = Pdtutil_StrDup(argv[2]);
+      opt->trav.pdrReuseRings = 1;
       argv++;
       argc--;
       argv++;
@@ -4947,6 +4948,7 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-wr") == 0) {
       opt->trav.wR = Pdtutil_StrDup(argv[2]);
+      opt->trav.pdrReuseRings = 1;
       argv++;
       argc--;
       argv++;
@@ -20195,6 +20197,7 @@ FbvFsmCheckComposePi(
   Ddi_Free(piv);
   Ddi_Free(substVar);
   Ddi_Free(substFunc);
+  return 0;
 }
 
 /**Function*******************************************************************

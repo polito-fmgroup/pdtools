@@ -1876,6 +1876,7 @@ HashTableAdd(
 #if HEAD_INSERT
   bnext(manager,bAig_NonInvertedEdge(nodeIndexParent)) = nodeIndex;
   manager->HashTable[key] = nodeIndexParent;
+  return TRUE;
 #else
   if  (nodeIndex == bAig_NULL) {
     manager->HashTable[key] = nodeIndexParent;

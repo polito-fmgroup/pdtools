@@ -236,7 +236,7 @@ Pdtutil_WresNum(
 
       fd = open(buf, O_RDWR | O_CREAT, 0666);
       if (fd == -1) {
-        fd = open(buf, O_WRONLY | O_CREAT);
+        fd = open(buf, O_WRONLY | O_CREAT, 0666);
         n = -1;
         nr = nb;
       } else {
@@ -271,7 +271,7 @@ Pdtutil_WresNum(
 	fprintf(pdtResOut,"%s",buf); fflush(pdtResOut);
       }
       else {
-	fd = open(wRes, O_APPEND | O_WRONLY);
+	fd = open(wRes, O_APPEND | O_WRONLY, 0666);
 	if (fd == -1) {
 	  fprintf(stdout, "Error opening file %s\n", wRes);
 	  return 1;
@@ -3223,6 +3223,7 @@ Pdtutil_EqClassState_e Pdtutil_EqClassUpdate(Pdtutil_EqClasses_t * eqCl, int i
       return Pdtutil_EqClass_SameClass_c;
     }
   }
+  return Pdtutil_EqClass_SameClass_c;
 
 }
 
