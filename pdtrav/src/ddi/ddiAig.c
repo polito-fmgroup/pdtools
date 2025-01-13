@@ -17549,7 +17549,7 @@ Ddi_NnfDualRailVars (
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(refVars);
   Ddi_Vararray_t *vA;
   int i, n, useBddVars=1;
-  char name[100];
+  char name[10000];
 
   n = Ddi_VararrayNum(refVars);
   vA = Ddi_VararrayAlloc(ddm,0);
@@ -18002,7 +18002,7 @@ Ddi_AigarrayNnf (
   int i, n;
   Ddi_Bddarray_t *newFa;
   int  useAigNnfVars = 0, fullSubst = auxVars1!=NULL;
-  char name[100];
+  char name[10000];
 
   n = Ddi_BddarrayNum(fA);
 
@@ -18430,7 +18430,7 @@ Ddi_AigarrayStructRedRem (
   int i, n, nshared=0;
   Ddi_Bddarray_t *newFa;
   int  useAigMonotoneVars = 0;
-  char name[100];
+  char name[10000];
 
   n = Ddi_BddarrayNum(fA);
 
@@ -18574,7 +18574,7 @@ Ddi_AigarrayStructRedRemOdcWithAssume (
   int i, n, na, nshared=0;
   Ddi_Bddarray_t *newFa;
   int  useAigMonotoneVars = 0;
-  char name[100];
+  char name[10000];
   nnfCoreMgr_t *nnfCoreMgr = (nnfCoreMgr_t *)nnfCoreMgrVoid;
 
   n = Ddi_BddarrayNum(fA);
@@ -18696,7 +18696,7 @@ Ddi_AigarrayInsertCuts (
   int i, n, nshared=0;
   Ddi_Bddarray_t *newFa;
   int  useAigMonotoneVars = 0;
-  char name[100];
+  char name[10000];
 
   n = Ddi_BddarrayNum(fA);
 
@@ -18866,7 +18866,7 @@ Ddi_AigarrayConstrain (
   int i, n, nshared=0;
   Ddi_Bddarray_t *newFa;
   int  useAigMonotoneVars = 0;
-  char name[100];
+  char name[10000];
   Ddi_Bdd_t *myConstr = Ddi_BddDup(constrain);
 
   if (!Ddi_BddIsPartConj(myConstr)) {
@@ -21881,7 +21881,7 @@ AigRedRemovalIncrementalIntern1 (
 
       /* create cut var and wire connection var */
       if (Ddi_BddarrayNum(cutLits)/2 <= nCuts) {
-	char name[100];
+	char name[10000];
         sprintf(name,"_RED_REM_CUTV_%d",nCuts);
         Pdtutil_Assert(Ddi_VarFromName(ddm,name)==NULL,"Duplicate cut var");
         Pdtutil_Assert(bAig_VarNodeFromName(bmgr,name)==bAig_NULL,
@@ -22542,7 +22542,7 @@ AigRedRemovalIncrementalIntern (
 
       /* create cut var and wire connection var */
       if (Ddi_BddarrayNum(cutLits)/2 <= nCuts) {
-	char name[100];
+	char name[10000];
         sprintf(name,"_RED_REM_CUTV_%d",nCuts);
         Pdtutil_Assert(Ddi_VarFromName(ddm,name)==NULL,"Duplicate cut var");
         Pdtutil_Assert(bAig_VarNodeFromName(bmgr,name)==bAig_NULL,
@@ -22570,7 +22570,7 @@ AigRedRemovalIncrementalIntern (
     else {
       Ddi_Var_t *cutV=NULL, *wireV=NULL;
       Ddi_Bdd_t *cutL, *wireL;
-      char name[100];
+      char name[10000];
 
       Pdtutil_Assert(nodeClass[i]>1,"wrong node class");
       //      nodeClass[i]=2; /* out of red candidate class */
@@ -23229,7 +23229,7 @@ AigRedRemovalIncrByRefinementIntern (
   Ddi_Var_t *cutV, *wireV;
   Ddi_Bddarray_t *cutLits;
   unsigned long time_limit = ~0;
-  char name[100];
+  char name[10000];
   Lit wireLit;
   Solver S;
 
@@ -24288,7 +24288,7 @@ AigArrayRedRemovalIncrementalIntern (
 
       /* create cut var and wire connection var */
       if (Ddi_BddarrayNum(cutLits)/2 <= nCuts) {
-	char name[100];
+	char name[10000];
         sprintf(name,"_RED_REM_CUTV_%d",nCuts);
         Pdtutil_Assert(Ddi_VarFromName(ddm,name)==NULL,"Duplicate cut var");
         Pdtutil_Assert(bAig_VarNodeFromName(bmgr,name)==bAig_NULL,
@@ -25061,7 +25061,7 @@ AigOptOrIncrementalIntern (
 
         /* create cut var and wire connection var */
         if (Ddi_BddarrayNum(cutLits)/2 <= nCuts) {
-  	  char name[100];
+  	  char name[10000];
           sprintf(name,"_RED_REM_CUTV_%d",nCuts);
           Pdtutil_Assert(Ddi_VarFromName(ddm,name)==NULL,"Duplicate cut var");
           Pdtutil_Assert(bAig_VarNodeFromName(bmgr,name)==bAig_NULL,
@@ -27785,7 +27785,7 @@ Ddi_AigOptByFoCntWithCare(
 	  //	  bAig_Ref(manager, baig0); bAig_Ref(manager, baig1);
 	}
 	else if (useAuxVars && cutLdr[i]==i && cutSize[i]>50) {
-	  char name[100];
+	  char name[10000];
 	  Ddi_Var_t *aV;
 
 	  Pdtutil_Assert(auxvCntP!=NULL,"NULL auxvCntP");
@@ -28636,7 +28636,7 @@ Ddi_AigFilterStructMonotone(
 	  Ddi_Bdd_t *constr = Ddi_BddMakeFromBaig(ddm,
 						  bAig_NonInvertedEdge(baig));
 	  Ddi_Var_t *v = NULL;
-	  char name[100];
+	  char name[10000];
 	  bAigEdge_t vBaig;
 	  sprintf(name,"_REPAR_AUXV__%d", nFreeReparVars++);
 	  v = Ddi_VarNewBaig(ddm,name);
@@ -29129,7 +29129,7 @@ Ddi_AigOptByPart(
 	  // baigOr = bAig_Zero;
 	  if (baigRef == bAig_NULL) {
 	    if (useCutVars) {
-	      char name[100];
+	      char name[10000];
 	      Ddi_Var_t *aV;
 	      auxvId[i] = Ddi_VararrayNum(cutFVars);
 	      sprintf(name,"_AUXV_PART_%d", auxvId[i]);
@@ -29621,7 +29621,7 @@ Ddi_AigOptByCut(
 	complEq[j]=equal%2;
       }
       else {
-	char name[100];
+	char name[10000];
 	Ddi_Var_t *aV;
 	sprintf(name,"_AUXV_%d_%d", optLevel, Ddi_VararrayNum(cutFVars));
 	aV = Ddi_VarFromName(ddm,name);
@@ -29933,7 +29933,7 @@ Ddi_AigSplitByCut(
 	complEq[j]=equal%2;
       }
       else {
-	char name[100];
+	char name[10000];
 	Ddi_Var_t *aV;
 	sprintf(name,"_AUXV_CUT_%d", Ddi_VararrayNum(cutFVars));
 	aV = Ddi_VarFromName(ddm,name);
@@ -31241,7 +31241,7 @@ DdiAigExistEqIncrementalAcc (
   nVars = Ddi_MgrReadNumVars(ddm);
 
   for (i=0;i<n;i++) {
-    char name[100];
+    char name[10000];
     Ddi_Var_t *vAux, *v = Ddi_VararrayRead(vA,i);
     Ddi_Bdd_t *lit;
     sprintf(name,"PDTRAV_AIG_EXIST_DUMMY_VAR_%d",i);

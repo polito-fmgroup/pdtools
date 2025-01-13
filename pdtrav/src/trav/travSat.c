@@ -2067,7 +2067,7 @@ Trav_TravSatFwdVerif(
 
       newPiLit = Ddi_BddarrayAlloc(ddm, Ddi_VararrayNum(itpMgr->pi));
       for (j = 0; j < Ddi_VararrayNum(itpMgr->pi); j++) {
-        char name[1000];
+        char name[10000];
         Ddi_Var_t *v = Ddi_VararrayRead(itpMgr->pi, j);
         Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
         Ddi_Bdd_t *newvLit;
@@ -2361,7 +2361,7 @@ Trav_TravSatFwdExactVerif(
 
     for (j = 0; j < Ddi_VararrayNum(ps); j++) {
       Ddi_Bdd_t *lit;
-      char name[1000];
+      char name[10000];
       Ddi_Var_t *v = Ddi_VararrayRead(ps, j);
       Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
 
@@ -2391,7 +2391,7 @@ Trav_TravSatFwdExactVerif(
 
     for (j = 0; j < Ddi_VararrayNum(ps); j++) {
       Ddi_Bdd_t *inpLit, *ctrlLit, *d_i, *c1;
-      char name[1000];
+      char name[10000];
       Ddi_Var_t *v = Ddi_VararrayRead(ps, j);
       Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
 
@@ -2981,7 +2981,7 @@ Trav_TravSatFwdExactVerif(
 
       newPiLit = Ddi_BddarrayAlloc(ddm, Ddi_VararrayNum(pi));
       for (j = 0; j < Ddi_VararrayNum(pi); j++) {
-        char name[1000];
+        char name[10000];
         Ddi_Var_t *v = Ddi_VararrayRead(pi, j);
         Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
         Ddi_Bdd_t *newvLit;
@@ -3210,7 +3210,7 @@ Trav_TravSatFwdInterpolantVerif(
 
   deltaPlus = Ddi_BddarrayDup(delta);
   for (i = 0; i < Ddi_BddarrayNum(deltaPlus); i++) {
-    char name[1000];
+    char name[10000];
     Ddi_Var_t *v = Ddi_VararrayRead(pi, 0);
     Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
     Ddi_Bdd_t *newvLit, *wire_i, *dp_i, *d_i;
@@ -3341,7 +3341,7 @@ Trav_TravSatFwdInterpolantVerif(
 
           newPiLit = Ddi_BddarrayAlloc(ddm, Ddi_VararrayNum(pi));
           for (j = 0; j < Ddi_VararrayNum(pi); j++) {
-            char name[1000];
+            char name[10000];
             Ddi_Var_t *v = Ddi_VararrayRead(pi, j);
             Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
             Ddi_Bdd_t *newvLit;
@@ -3621,7 +3621,7 @@ Trav_TravSatFwdInterpolantVerif(
 
       newPiLit = Ddi_BddarrayAlloc(ddm, Ddi_VararrayNum(pi));
       for (j = 0; j < Ddi_VararrayNum(pi); j++) {
-        char name[1000];
+        char name[10000];
         Ddi_Var_t *v = Ddi_VararrayRead(pi, j);
         Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
         Ddi_Bdd_t *newvLit;
@@ -3834,7 +3834,7 @@ Trav_TravSatBwdInterpolantVerif(
 
     for (j = 0; j < Ddi_VararrayNum(ps); j++) {
       Ddi_Bdd_t *lit;
-      char name[1000];
+      char name[10000];
       Ddi_Var_t *v = Ddi_VararrayRead(ps, j);
       Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
 
@@ -4570,7 +4570,7 @@ Trav_TravSatBwdInterpolantVerif(
 
       newPiLit = Ddi_BddarrayAlloc(ddm, Ddi_VararrayNum(pi));
       for (j = 0; j < Ddi_VararrayNum(pi); j++) {
-        char name[1000];
+        char name[10000];
         Ddi_Var_t *v = Ddi_VararrayRead(pi, j);
         Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
         Ddi_Bdd_t *newvLit;
@@ -4761,7 +4761,7 @@ Trav_TravSatFwdApprox(
 
     newPiLit = Ddi_BddarrayAlloc(ddm, Ddi_VararrayNum(pi));
     for (j = 0; j < Ddi_VararrayNum(pi); j++) {
-      char name[1000];
+      char name[10000];
       Ddi_Var_t *v = Ddi_VararrayRead(pi, j);
       Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
       Ddi_Bdd_t *newvLit;
@@ -4942,7 +4942,7 @@ Trav_TravSatBckAllSolVerif(
       Ddi_Bdd_t *careAig = Ddi_BddNot(reached);
 
       for (j = 0; j < Ddi_VararrayNum(pi); j++) {
-        char name[1000];
+        char name[10000];
         Ddi_Var_t *v = Ddi_VararrayRead(pi, j);
         Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
         Ddi_Bdd_t *newvLit;
@@ -5497,7 +5497,7 @@ Trav_TravSatInductiveTrVerif(
       oldCoi = nCoi;
       nCoi = 0;
       for (j = 0; j < Ddi_VararrayNum(pi); j++) {
-        char name[1000];
+        char name[10000];
         Ddi_Var_t *v = Ddi_VararrayRead(pi, j);
         Ddi_Var_t *newv;
         Ddi_Bdd_t *newvLit;
@@ -5518,7 +5518,7 @@ Trav_TravSatInductiveTrVerif(
         Ddi_Free(newvLit);
       }
       for (j = 0; j < Ddi_VararrayNum(ns); j++) {
-        char name[1000];
+        char name[10000];
         Ddi_Var_t *v = Ddi_VararrayRead(ns, j);
         Ddi_Var_t *newv;
         Ddi_Bdd_t *newvLit;
@@ -5829,7 +5829,7 @@ Trav_TravSatDiameterVerif(
       Ddi_Varset_t *coiSupp = Ddi_VarsetVoid(ddm);
 
       for (j = 0; j < Ddi_VararrayNum(pi); j++) {
-        char name[1000];
+        char name[10000];
         Ddi_Var_t *v = Ddi_VararrayRead(pi, j);
         Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
         Ddi_Bdd_t *newvLit;
@@ -5842,7 +5842,7 @@ Trav_TravSatDiameterVerif(
         Ddi_Free(newvLit);
       }
       for (j = 0; j < Ddi_VararrayNum(ns); j++) {
-        char name[1000];
+        char name[10000];
         Ddi_Var_t *v = Ddi_VararrayRead(ns, j);
         Ddi_Var_t *newv = Ddi_VarNewAfterVar(v);
         Ddi_Bdd_t *newvLit;
@@ -6131,7 +6131,7 @@ Trav_TravSatFwdDiameterVerif(
       Ddi_Varset_t *coiSupp = Ddi_VarsetVoid(ddm);
 
       for (j = 0; j < Ddi_VararrayNum(pi); j++) {
-        char name[1000];
+        char name[10000];
         Ddi_Var_t *v = Ddi_VararrayRead(pi, j);
         Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
         Ddi_Bdd_t *newvLit;
@@ -6144,7 +6144,7 @@ Trav_TravSatFwdDiameterVerif(
         Ddi_Free(newvLit);
       }
       for (j = 0; j < Ddi_VararrayNum(ns); j++) {
-        char name[1000];
+        char name[10000];
         Ddi_Var_t *v = Ddi_VararrayRead(ns, j);
         Ddi_Var_t *newv = Ddi_VarNewAfterVar(v);
         Ddi_Bdd_t *newvLit;
@@ -8275,7 +8275,7 @@ Trav_TravSatItpVerif0(
           saveConeAuxLits = Ddi_BddarrayAlloc(ddm, Ddi_VararrayNum(ps));
           for (j = 0; j < Ddi_VararrayNum(ps); j++) {
             Ddi_Bdd_t *lit, *constr;
-            char name[1000];
+            char name[10000];
             Ddi_Var_t *v = Ddi_VararrayRead(ps, j);
             Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
 
@@ -8730,8 +8730,8 @@ Trav_TravSatItpVerif0(
 
           if (itpMgr->boundkOptPis != NULL) {
             Ddi_Var_t *newv, *newv2;
-            char name[1000];
-            char name2[1000];
+            char name[10000];
+            char name2[10000];
             Ddi_Bdd_t *boundkCone1, *boundkCone0, *boundkConeTot,
               *boundkLit, *boundkLit2;
 
@@ -12161,7 +12161,7 @@ Trav_TravSatItpVerif(
           saveConeAuxLits = Ddi_BddarrayAlloc(ddm, Ddi_VararrayNum(itpMgr->ps));
           for (j = 0; j < Ddi_VararrayNum(itpMgr->ps); j++) {
             Ddi_Bdd_t *lit, *constr;
-            char name[1000];
+            char name[10000];
             Ddi_Var_t *v = Ddi_VararrayRead(itpMgr->ps, j);
             Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
 
@@ -12621,8 +12621,8 @@ Trav_TravSatItpVerif(
 
           if (itpMgr->boundkOptPis != NULL) {
             Ddi_Var_t *newv, *newv2;
-            char name[1000];
-            char name2[1000];
+            char name[10000];
+            char name2[10000];
             Ddi_Bdd_t *boundkCone1, *boundkCone0, *boundkConeTot,
               *boundkLit, *boundkLit2;
 
@@ -22576,7 +22576,7 @@ Trav_TravSatQbfVerif(
       Ddi_Varset_t *coiSupp = Ddi_VarsetVoid(ddm);
 
       for (j = 0; j < Ddi_VararrayNum(pi); j++) {
-        char name[1000];
+        char name[10000];
         Ddi_Var_t *v = Ddi_VararrayRead(pi, j);
         Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
         Ddi_Bdd_t *newvLit;
@@ -22589,7 +22589,7 @@ Trav_TravSatQbfVerif(
         Ddi_Free(newvLit);
       }
       for (j = 0; j < Ddi_VararrayNum(ns); j++) {
-        char name[1000];
+        char name[10000];
         Ddi_Var_t *v = Ddi_VararrayRead(ns, j);
         Ddi_Var_t *newv = Ddi_VarNewAfterVar(v);
         Ddi_Bdd_t *newvLit;
@@ -22902,7 +22902,7 @@ Trav_RefPiVars(
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(vars);
   int j, k, n = Ddi_VararrayNum(vars);
   Ddi_Vararray_t *refVars = Ddi_VararrayAlloc(ddm, n);
-  static char buf[1000], *buf2;
+  static char buf[10000], *buf2;
 
   for (j = 0; j < Ddi_VararrayNum(vars); j++) {
     Ddi_Var_t *v_ref_j, *v_j = Ddi_VararrayRead(vars, j);
@@ -24087,7 +24087,7 @@ itpImgTrSetup(
     itpTravMgr->from = newFrom;
   } else if (itpTravMgr->settings.enConcurTr && itpMgr->concurTr) {
     /* img by chaining */
-    char name[1000];
+    char name[10000];
     int i;
     Ddi_Bdd_t *cLit;
     Ddi_Bddarray_t *cSubstPs = Ddi_BddarrayAlloc(ddm, 0);
@@ -29932,7 +29932,8 @@ itpImg(
 
       if (chkSupp) {
         Ddi_Varset_t *fSupp = Ddi_BddSupp(itpTravMgr->from);
-
+        if (Ddi_VarsetIsArray(psvars))
+          Ddi_VarsetSetArray(fSupp);
         Ddi_VarsetDiffAcc(fSupp, psvars);
         Pdtutil_Assert(Ddi_VarsetIsVoid(fSupp), "non state var in from");
         Ddi_Free(fSupp);
@@ -39848,7 +39849,7 @@ timeFrameFindOrAdd(
 {
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(ns);
   int j, nCoi,freePs=0;
-  char name[1000];
+  char name[10000];
 
   if (i + 1 > timeFrames->Num) {
     timeFrameFindOrAdd(timeFrames,pi,ps,ns,psVars,i-1,
@@ -40258,7 +40259,7 @@ itpAbstrRefInit(
 
   for (j = jj = 0; j < Ddi_VararrayNum(abstrVars); j++) {
     Ddi_Bdd_t *inpLit, *refLit, *ctrlLit, *mux_i = NULL, *lit_i;
-    char name[1000];
+    char name[10000];
     Ddi_Var_t *v = Ddi_VararrayRead(abstrVars, j);
     Ddi_Var_t *newi, *refi, *newc;
     int nCut = nCtrl - Ddi_VarReadMark(v);
@@ -40362,7 +40363,7 @@ itpAbstrRefInit(
     Ddi_Vararray_t *cutCtrl;
     int i, ne = Ddi_BddarrayNum(enables);
     Ddi_Bddarray_t *muxesGla = Ddi_BddarrayAlloc(ddm, ne);
-    char name[100];
+    char name[10000];
     int chk=1;
 
     Pdtutil_Assert(itpMgr->abstrRefNnf==0,
@@ -41599,7 +41600,7 @@ Trav_ItpMgrInit(
 
     for (j = 0; j < Ddi_VararrayNum(itpMgr->ps); j++) {
       Ddi_Bdd_t *lit;
-      char name[1000];
+      char name[10000];
       Ddi_Var_t *v = Ddi_VararrayRead(itpMgr->ps, j);
       Ddi_Var_t *newv = NULL;
 
@@ -41988,7 +41989,7 @@ Trav_ItpMgrInit(
     itpMgr->auxVarPis = Ddi_VararrayAlloc(ddm, nPi);
     for (j = 0; j < nPi; j++) {
       Ddi_Bdd_t *lit;
-      char name[1000];
+      char name[10000];
       Ddi_Var_t *v = Ddi_VararrayRead(itpMgr->pi, j);
       Ddi_Var_t *newv = NULL;
 
@@ -42572,7 +42573,7 @@ genLemmas(
   lemmasBaseUnroll = Ddi_BddarrayDup(lemmasBase);
 
   for (i = 0; i < simulDepth; i++) {
-    char name[1000];
+    char name[10000];
     int j;
     Ddi_Var_t *newSelV;
     Ddi_Bdd_t *newSelVLit = NULL;
@@ -43310,7 +43311,7 @@ newTimeFrameVars(
   int j;
 
   for (j = 0; j < Ddi_VararrayNum(baseVars); j++) {
-    char name[1000];
+    char name[10000];
     Ddi_Var_t *newv, *v = Ddi_VararrayRead(baseVars, j);
 
     sprintf(name, "%s_%s", Ddi_VarName(v), nameSuffix);
@@ -44453,7 +44454,7 @@ trLinearSquaring(
 
   for (i = 0; i < nFrames; i++) {
     for (j = 0; j < Ddi_VararrayNum(oldPi); j++) {
-      char name[1000];
+      char name[10000];
       Ddi_Var_t *v = Ddi_VararrayRead(oldPi, j);
       Ddi_Var_t *newv = Ddi_VarNewBeforeVar(v);
       Ddi_Bdd_t *newvLit;
