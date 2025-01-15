@@ -1886,6 +1886,26 @@ Fsm_MgrReadIFoldedProp(
 
 ******************************************************************************/
 
+int
+Fsm_MgrReadIFoldedConstr(
+  Fsm_Mgr_t * fsmMgr
+)
+{
+  return (fsmMgr->iFoldedConstr);
+}
+
+/**Function********************************************************************
+
+  Synopsis    []
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+******************************************************************************/
+
 Ddi_Bdd_t *
 Fsm_MgrReadInitStubPiConstr(
   Fsm_Mgr_t * fsmMgr

@@ -52,6 +52,8 @@
 /* Variable declarations                                                     */
 /*---------------------------------------------------------------------------*/
 
+int fbvCustom = -1;
+
 /*---------------------------------------------------------------------------*/
 /* Macro declarations                                                        */
 /*---------------------------------------------------------------------------*/
@@ -2982,7 +2984,6 @@ Fsm_ReduceCustom(
     }
     nstate = Ddi_VararrayNum(ps);
 
-    extern int fbvCustom;
     disjDecomp = fbvCustom > 0;
     if (disjDecomp) {
       int nRed = 0;

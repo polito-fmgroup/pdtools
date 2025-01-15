@@ -9803,8 +9803,10 @@ Trav_TravSatCheckInvar(
   Pdtutil_VerbLevel_e verbosity = Trav_MgrReadVerbosity(travMgr);
   int fp=0;
   Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
-  Fsm_FsmUnfoldProperty(fsmFsm, 1);
-  Fsm_FsmUnfoldConstraint(fsmFsm);
+  if (Fsm_MgrReadIFoldedProp(fsmMgr)>=0)
+    Fsm_FsmUnfoldProperty(fsmFsm, 1);
+  if (Fsm_MgrReadIFoldedConstr(fsmMgr)>=0)
+    Fsm_FsmUnfoldConstraint(fsmFsm);
   
   Ddi_Bddarray_t *delta = Fsm_FsmReadDelta(fsmFsm); 
   Ddi_Bddarray_t *lambda = Fsm_FsmReadLambda(fsmFsm); 

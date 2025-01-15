@@ -576,6 +576,9 @@ EXTERN Ddi_Bdd_t *Fsm_MgrReadInvarspecBDD(
 EXTERN int Fsm_MgrReadIFoldedProp(
   Fsm_Mgr_t * fsmMgr
 );
+EXTERN int Fsm_MgrReadIFoldedConstr(
+  Fsm_Mgr_t * fsmMgr
+);
 EXTERN Ddi_Varsetarray_t *Fsm_MgrReadRetimedPis(
   Fsm_Mgr_t * fsmMgr
 );

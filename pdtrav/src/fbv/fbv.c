@@ -93,9 +93,9 @@ typedef struct coi_scc_info {
 /* Variable declarations                                                     */
 /*---------------------------------------------------------------------------*/
 
-static int hwmccOut = 0;
+extern int fbvCustom;
 
-int fbvCustom = -1;
+static int hwmccOut = 0;
 
 static int bmcSerialTime = 0;
 static int bmcParallTime = 0;
@@ -4624,6 +4624,13 @@ FbvParseArgs(
       argc--;
       argv++;
       argc--;
+    } else if (strcmp(argv[1], "-writeInvar") == 0) {
+      opt->trav.writeInvar = Pdtutil_StrDup(argv[2]);
+      opt->trav.pdrReuseRings = 1;
+      argv++;
+      argc--;
+      argv++;
+      argc--;
     } else if (strcmp(argv[1], "-trPreimgSort") == 0) {
       opt->trav.trPreimgSort = 1;
       argv++;
@@ -8988,6 +8995,22 @@ invarVerif(
       int ok = Trav_TravSatStoreProofAiger(travMgrAig, fsmMgr, fsmMgrOriginal, opt->trav.writeProof);
     }
     
+    if (opt->trav.writeInvar != NULL) {
+      Ddi_Bdd_t *r = Trav_MgrReadReached(travMgrAig);
+      if (r!=NULL) {
+        if (opt->verbosity >= Pdtutil_VerbLevelUsrMax_c) {
+          printf("Writing invar to %s\n", opt->trav.writeInvar);
+        }
+        Ddi_Bdd_t *rUnfolded = Ddi_BddDup(r);
+        Ddi_Var_t *pVar = Fsm_MgrReadPdtSpecVar(fsmMgr);
+        Ddi_Var_t *cVar = Fsm_MgrReadPdtConstrVar(fsmMgr);
+        if (pVar!=NULL) Ddi_BddCofactorAcc(rUnfolded,pVar,1);
+        if (cVar!=NULL) Ddi_BddCofactorAcc(rUnfolded,cVar,1);
+        Ddi_AigNetStoreAiger(rUnfolded,0,opt->trav.writeInvar);
+        Ddi_Free(rUnfolded);
+      }
+    }
+
     if (opt->trav.wR != NULL) {
       Ddi_Bdd_t *r = Trav_MgrReadReached(travMgrAig);
       if (r!=NULL) {
@@ -22074,6 +22097,7 @@ FbvOpt2OptList(
   opt->fsm.manualAbstr = NULL;
   opt->trav.hintsFile = NULL;
   opt->trav.invarFile = NULL;
+  opt->trav.writeInvar = NULL;
   opt->trav.writeProof = NULL;
   opt->mc.invSpec = NULL;
   opt->mc.ctlSpec = NULL;
@@ -23168,6 +23192,7 @@ new_settings(
   opt->fsm.manualAbstr = NULL;
   opt->trav.hintsFile = NULL;
   opt->trav.invarFile = NULL;
+  opt->trav.writeInvar = NULL;
   opt->trav.writeProof = NULL;
   opt->mc.invSpec = NULL;
   opt->mc.ctlSpec = NULL;
@@ -23227,6 +23252,7 @@ FbvDupSettings(
   opt->fsm.manualAbstr = Pdtutil_StrDup(opt0->fsm.manualAbstr);
   opt->trav.hintsFile = Pdtutil_StrDup(opt0->trav.hintsFile);
   opt->trav.invarFile = Pdtutil_StrDup(opt0->trav.invarFile);
+  opt->trav.writeInvar = Pdtutil_StrDup(opt0->trav.writeInvar);
   opt->trav.writeProof = Pdtutil_StrDup(opt0->trav.writeProof);
   opt->mc.invSpec = Pdtutil_StrDup(opt0->mc.invSpec);
   opt->mc.ctlSpec = Pdtutil_StrDup(opt0->mc.ctlSpec);
@@ -23289,6 +23315,7 @@ dispose_settings(
   Pdtutil_Free(opt->trav.rPlus);
   Pdtutil_Free(opt->trav.rPlusRings);
   Pdtutil_Free(opt->trav.itpStoreRings);
+  Pdtutil_Free(opt->trav.writeInvar);
   Pdtutil_Free(opt->trav.writeProof);
   Pdtutil_Free(opt->mc.rInit);
   Pdtutil_Free(opt->trav.wP);

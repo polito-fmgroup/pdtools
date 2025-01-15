@@ -127,6 +127,9 @@ PDTOOLS_DIR 	= $(shell cd $(pdtools_dir);pwd)
 pdtrav_dir 	= .
 PDTRAV_DIR 	= $(shell cd $(pdtrav_dir);pwd)
 
+app_dir 	= ./src/app
+APP_DIR 	= $(shell cd $(app_dir);pwd)
+
 fbv_dir 	= ./src/fbv
 FBV_DIR 	= $(shell cd $(fbv_dir);pwd)
 
@@ -195,6 +198,7 @@ LIBS = $(cuddlib) $(aigerlib) $(lgllib) $(minisatlib) $(minisat22lib) $(abclib)
 PRODUCT = PdTRAV
 VERSION = 3.5.0
 EXE = pdtrav
+APP = pdtapp
 
 # Compile and version information
 #
@@ -220,6 +224,12 @@ EXESRC = $(FBV_DIR)/fbv.c \
 
 EXEHDR = $(FBV_DIR)/fbv.h  $(FBV_DIR)/fbvInt.h
 
+APPSRC = $(APP_DIR)/app.c \
+	$(APP_DIR)/appMgr.c \
+	$(APP_DIR)/appCertify.c
+
+APPHDR = $(APP_DIR)/app.h  $(APP_DIR)/appInt.h
+
 #--------------------------------------------------#
 # Include the make templates from all the packages #
 #--------------------------------------------------#
@@ -231,6 +241,7 @@ include $(MAKEINCLUDES)
 
 OBJECTS = $(addprefix $(objectdir)/,$(GENERATEDCSRC:.c=.o) $(CSRC:.c=.o))
 EXEOBJ = $(EXESRC:.c=.o)
+APPOBJ = $(APPSRC:.c=.o)
 
 #--------------------------------------------------------------#
 # Form the the list of directories to search for header files. #
@@ -326,6 +337,7 @@ $(includedir) :
 		(ln -s $(PDTRAV_DIR)/src/$$dir/*.h $(includedir); )\
 	done
 	ln -s $(FBV_DIR)/*.h $(includedir)
+	ln -s $(APP_DIR)/*.h $(includedir)
 
 #------------------------------------------------------#
 # Rules to compile and build libraries and executables #
@@ -375,10 +387,13 @@ pdtlib:	$(objectdir) $(libdir) $(bindir) $(includedir) $(PDTLIB)
 $(EXE): $(EXESRC) $(EXEHDR) $(EXEOBJ) $(PDTLIB) $(LIBS)
 	umask 2 ; $(LINKER) $(ALLCFLAGS) $(LDFLAGS) -o $(bindir)/$(EXE) $(INCLUDEDIRS) $(EXEOBJ) $(PDTLIB) $(LIBS) $(OTHERLIBS)
 
+$(APP): $(APPSRC) $(APPHDR) $(APPOBJ) $(PDTLIB) $(LIBS)
+	umask 2 ; $(LINKER) $(ALLCFLAGS) $(LDFLAGS) -o $(bindir)/$(APP) $(INCLUDEDIRS) $(APPOBJ) $(PDTLIB) $(LIBS) $(OTHERLIBS)
+
 #$(EXE): $(EXESRC) $(EXEHDR) $(EXEOBJ) $(PDTLIB) $(LIBS)
 #	umask 2 ; $(LINKER) $(ALLCFLAGS) -o $(bindir)/$(EXE) $(INCLUDEDIRS) $(EXESRC) $(PDTLIB) $(LIBS) $(OTHERLIBS)
 
-all : abc aiger lgl minisat $(MINISAT22LIB) cudd pdtlib $(EXE)
+all : abc aiger lgl minisat $(MINISAT22LIB) cudd pdtlib $(EXE) $(APP)
 	  (echo "using $(MINISAT22LIB)")
 
 #all : abc aiger minisat minisat22s cudd pdtlib $(EXE)
@@ -399,6 +414,7 @@ pdtrav_clean:
 	${RM} $(PDTRAV_DIR)/src/*/#*
 	${RM} $(PDTRAV_DIR)/src/*/*~
 	${RM} $(FBV_DIR)/*.o
+	${RM} $(APP_DIR)/*.o
 
 abc_clean:
 	${MAKE} -C ${abc_dir} clean
