@@ -1566,6 +1566,14 @@ EXTERN void Ddi_PostOrderBddAigVisitIntern(Ddi_Bdd_t *fAig, bAig_array_t *visite
 EXTERN void Ddi_PostOrderAigClearVisitedIntern(bAig_Manager_t *bmgr, bAig_array_t *visitedNodes);
 EXTERN Ddi_Bdd_t *Ddi_AbcInterpolant (Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Varset_t *globalVars, Ddi_Varset_t *domainVars, int *psat, float timeLimit);
 EXTERN Ddi_Bddarray_t *Ddi_AigarrayNetLoadAiger(Ddi_Mgr_t *dd, Ddi_Vararray_t *vars, char *filename);
+    var = Ddi_VarFromName(dd,name);
+EXTERN Ddi_Bddarray_t *
+Ddi_AigarrayNetLoadAigerMapVars(
+  Ddi_Mgr_t *dd,
+  Ddi_Vararray_t *vars,
+  Ddi_Vararray_t *mapVars,
+  char *filename
+) ;
 EXTERN Ddi_Bdd_t *Ddi_AigNetLoadAiger(Ddi_Mgr_t *dd, Ddi_Vararray_t *vars, char *filename);
 EXTERN int Ddi_AigarrayNetStoreAiger(Ddi_Bddarray_t *fA, int badOrOutput, char *filename);
 EXTERN int Ddi_AigNetStoreAiger(Ddi_Bdd_t *f, int badOrOutput, char *filename);
