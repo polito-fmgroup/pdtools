@@ -63,6 +63,7 @@ typedef int (* AppMainFunc_t) (int, char **);
 
 struct App_Mgr_s {
   char *appName;
+  App_TaskSelection_e task;
 
   Ddi_Mgr_t *ddiMgr;
   Fsm_Mgr_t *fsmMgr;
@@ -73,9 +74,18 @@ struct App_Mgr_s {
     long appTime;
   } stats;
 
-  //  App_Settings_t settings;
-  Pdtutil_OptList_t *optList;
-
+  struct {
+    Pdtutil_VerbLevel_e verbosity;
+  } settings;
+    
+  union {
+    struct {
+    } certify;
+    struct {
+    } none;
+  } app;
+  
+  // Pdtutil_OptList_t *optList;
   void *auxPtr;
 
 };

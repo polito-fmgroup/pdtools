@@ -52,6 +52,11 @@
 
 typedef struct App_Mgr_s App_Mgr_t;
 
+typedef enum {
+  App_TaskCertify_c,
+  App_TaskNone_c
+} App_TaskSelection_e;
+
 /*---------------------------------------------------------------------------*/
 /* Structure declarations                                                    */
 /*---------------------------------------------------------------------------*/
@@ -71,6 +76,16 @@ typedef struct App_Mgr_s App_Mgr_t;
 /*---------------------------------------------------------------------------*/
 /* Function prototypes                                                       */
 /*---------------------------------------------------------------------------*/
+
+App_Mgr_t *
+App_MgrInit(
+  char *appName /* Name of the APP */,
+  App_TaskSelection_e task
+);
+EXTERN void
+App_MgrQuit(
+  App_Mgr_t * appMgr
+);
 
 EXTERN int App_Certify (
   int argc,
