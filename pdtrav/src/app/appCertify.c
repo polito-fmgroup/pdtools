@@ -76,18 +76,39 @@ int App_Certify (
 ) {
   App_Mgr_t *appMgr;
   
+  char *fsmName = NULL;
+  char *invarName = NULL;
+  char *simpInvarName = NULL;
+
   printf("certify app:");
-  for (int i=0; i<argc; i++)
+  for (int i=0; i<argc; i++) {
     printf(" %s", argv[i]);
+    if (strcmp(argv[i],"-s")==0) {
+      i++;
+      if (i>=argc) {
+        printf("\nmissing file name for simplification invariant (-s)\n");
+        return 0;
+      }
+      simpInvarName = argv[i];
+    }
+    else if (fsmName==NULL) {
+      fsmName = argv[i];
+    }
+    else if (invarName==NULL) {
+      invarName = argv[i];
+    }
+    else {
+      printf("\nunknown argument/option: %s\n", argv[i]);
+    }
+  }
   printf("\n");
 
   if (argc<2) {
     printf("missing arguments - certify app needs at least two parameters\n");
-    printf("<model (aiger)> <invar (aiger)>\n"); 
+    printf("<model (aiger)> <invar (aiger)>\n");
+    return 0;
   }
 
-  char *fsmName = argv[0];
-  char *invarName = argv[1];
   appMgr = App_MgrInit("certify", App_TaskCertify_c);
   if (Fsm_MgrLoadAiger(&appMgr->fsmMgr, appMgr->ddiMgr, fsmName, NULL,
                        Pdtutil_VariableOrderDefault_c) == 1) {
@@ -102,8 +123,19 @@ int App_Certify (
 
   Ddi_Bddarray_t *invarArray = Ddi_AigarrayNetLoadAiger(appMgr->ddiMgr,
                            NULL, invarName);
+  if (simpInvarName != NULL) {
+    Ddi_Vararray_t *vars = Ddi_VararrayDup(Fsm_MgrReadVarI(appMgr->fsmMgr));
+    Ddi_VararrayAppend(vars,Fsm_MgrReadVarPS(appMgr->fsmMgr));
+    Ddi_Bddarray_t *extraInvarArray = Ddi_AigarrayNetLoadAigerMapVars(appMgr->ddiMgr,
+                                                          NULL, vars, simpInvarName);
+    Ddi_BddarrayAppend(invarArray,extraInvarArray);
+    Ddi_Free(extraInvarArray);
+    Ddi_Free(vars);
+  }
+
   Pdtutil_Assert(Ddi_BddarrayNum(invarArray)==1,"problem with invar");
-  Ddi_Bdd_t *myInvar = Ddi_BddarrayExtract(invarArray, 0);
+  Ddi_Bdd_t *myInvar = Ddi_BddMakePartConjFromArray(invarArray);
+  Ddi_BddSetAig(myInvar);
   Ddi_Free(invarArray);
   int chk, fp;
   fp = Trav_TravSatCheckInvar(appMgr->travMgr,appMgr->fsmMgr,

@@ -332,10 +332,6 @@ Ddi_AigarrayNetLoadAigerMapVars(
 
 
   /*------------------ Translate Array of Input Variables -------------------*/
-  if (mapVars == NULL) {
-    Pdtutil_Assert(Ddi_VararrayNum(mapVars)==ni,
-		   "wrong number of vars");
-  }
   
   /* GpC: force void input array when no input found */
   for (i=0; i<ni; i++) {
@@ -346,7 +342,7 @@ Ddi_AigarrayNetLoadAigerMapVars(
 
     Pdtutil_Assert(lit==2*i1,"Wrong variable id in AIGER manager");
 
-    if (mapVars == NULL) {
+    if (mapVars == NULL || name!=NULL) {
       if (name == NULL) {
 	Pdtutil_Assert(lit%2==0 && lit/2>0,"wrong aiger variable lit");
 	sprintf(buf, "i%d", lit/2-1);
@@ -359,6 +355,8 @@ Ddi_AigarrayNetLoadAigerMapVars(
       var = Ddi_VarFromName(dd,name);
     }
     else {
+      Pdtutil_Assert(Ddi_VararrayNum(mapVars)==ni,
+                     "wrong number of vars");
       var = Ddi_VararrayRead(mapVars,i);
     }
     
