@@ -53,6 +53,7 @@
 typedef struct App_Mgr_s App_Mgr_t;
 
 typedef enum {
+  App_TaskAiger_c,
   App_TaskCertify_c,
   App_TaskNone_c
 } App_TaskSelection_e;
@@ -86,7 +87,10 @@ EXTERN void
 App_MgrQuit(
   App_Mgr_t * appMgr
 );
-
+EXTERN int App_Aiger (
+  int argc,
+  char *argv[]
+);
 EXTERN int App_Certify (
   int argc,
   char *argv[]

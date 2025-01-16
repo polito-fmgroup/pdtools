@@ -84,6 +84,7 @@ Fsm_MgrLoadAiger(
   Ddi_Mgr_t * dd /* Main DD manager */ ,
   char *fileFsmName /* Input file name */ ,
   char *fileOrdName /* ORD File Name */ ,
+  Ddi_Vararray_t *mapVars,
   Pdtutil_VariableOrderFormat_e ordFileFormat
 )
 {
@@ -211,20 +212,27 @@ Fsm_MgrLoadAiger(
     Ddi_Var_t *var;
     char *s, *name = aiger_get_symbol(mgr, lit);
 
-    if (name == NULL) {
-      sprintf(buf, "i%d", lit);
-      name = buf;
-    }
-
     Pdtutil_Assert(lit == 2 * i1, "Wrong variable id in AIGER manager");
 
-    for (s = name; *s != '\0'; s++) {
-      if (*s == '#' || *s == ':' || *s == '(' || *s == ')')
-        *s = '_';
+    if (mapVars == NULL || name!=NULL) {
+      if (name == NULL) {
+	Pdtutil_Assert(lit%2==0 && lit/2>0,"wrong aiger variable lit");
+	sprintf(buf, "i%d", lit/2-1);
+	name = buf;
+      }
+      
+      for (s=name; *s!='\0'; s++) {
+	if (*s=='#' || *s==':' || *s=='(' || *s==')') *s='_';
+      }
+      var = Ddi_VarFindOrAdd(dd, name, useBddVars);
+      Ddi_VarAttachAuxid(var, i);
     }
-
-    var = Ddi_VarFindOrAdd(dd, name, useBddVars);
-    Ddi_VarAttachAuxid(var, i);
+    else {
+      Pdtutil_Assert(Ddi_VararrayNum(mapVars)==ni,
+                     "wrong number of vars");
+      var = Ddi_VararrayRead(mapVars,i);
+    }
+    
     //Ddi_VarAttachName(var, name);
     Ddi_VararrayWrite(fsmMgr->var.i, i, var);
 

@@ -2690,7 +2690,7 @@ FbvFsmMgrLoad(
       Pdtutil_Free(opt->mc.ord);
       opt->mc.ord = NULL;
     }
-    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord,
+    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord, NULL,
         Pdtutil_VariableOrderDefault_c) == 1) {
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(1);
@@ -7281,7 +7281,7 @@ invarVerif(
       Pdtutil_Free(opt->mc.ord);
       opt->mc.ord = NULL;
     }
-    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord,
+    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord, NULL,
         Pdtutil_VariableOrderDefault_c) == 1) {
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(1);
@@ -10060,7 +10060,7 @@ invarMixedVerif(
       Pdtutil_Free(opt->mc.ord);
       opt->mc.ord = NULL;
     }
-    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord,
+    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord, NULL,
         Pdtutil_VariableOrderDefault_c) == 1) {
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(1);
@@ -11697,7 +11697,7 @@ invarDecompVerif(
       Pdtutil_Free(opt->mc.ord);
       opt->mc.ord = NULL;
     }
-    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord,
+    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord, NULL,
         Pdtutil_VariableOrderDefault_c) == 1) {
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(1);

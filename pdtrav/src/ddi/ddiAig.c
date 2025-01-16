@@ -41619,7 +41619,7 @@ if (method==1)
     fsmMgr = Fsm_MgrInit (NULL, NULL);
     Fsm_MgrSetOption(fsmMgr,Pdt_FsmUseAig_c,inum,1);
 
-    Fsm_MgrLoadAiger (&fsmMgr, ddm, filename, NULL, (Pdtutil_VariableOrderFormat_e)0);
+    Fsm_MgrLoadAiger (&fsmMgr, ddm, filename, NULL, NULL, (Pdtutil_VariableOrderFormat_e)0);
     fsmFsm=Fsm_FsmMakeFromFsmMgr(fsmMgr);
     // Fsm_FsmMiniWriteAiger (fsmFsm,"out.aig");
     Ddi_Bddarray_t *en =

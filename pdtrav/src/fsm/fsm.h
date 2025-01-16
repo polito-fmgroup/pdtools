@@ -484,6 +484,7 @@ EXTERN int Fsm_MgrLoadAiger(
   Ddi_Mgr_t * dd,
   char *fileFsmName,
   char *fileOrdName,
+  Ddi_Vararray_t *mapVars,
   Pdtutil_VariableOrderFormat_e ordFileFormat
 );
 EXTERN int Fsm_AigsimCex(
