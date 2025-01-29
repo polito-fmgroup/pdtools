@@ -137,8 +137,8 @@ int App_Certify (
   Ddi_Bdd_t *myInvar = Ddi_BddMakePartConjFromArray(invarArray);
   Ddi_BddSetAig(myInvar);
   Ddi_Free(invarArray);
-  int chk, fp;
-  fp = Trav_TravSatCheckInvar(appMgr->travMgr,appMgr->fsmMgr,
+  int chk;
+  chk = Trav_TravSatCheckInvar(appMgr->travMgr,appMgr->fsmMgr,
                                   myInvar,&chk);
   Ddi_Free(myInvar);
 

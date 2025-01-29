@@ -88,14 +88,15 @@ main(
   char *argv[]
 )
 {
+  int res = EXIT_SUCCESS;
   if (argc<2) {
     printf("missing app name\n");
   }
   else {
     for (int i=0; appTable[i].appName!=NULL; i++) {
       if (strcmp(argv[1],appTable[i].appName)==0) {
-        appTable[i].appFunc(argc-2,argv+2);
-        return 0;
+        res = appTable[i].appFunc(argc-2,argv+2);
+        return res;
       }
     }
     printf("wrong app name\n");
