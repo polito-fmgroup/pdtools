@@ -133,7 +133,7 @@ int App_Certify (
     Ddi_Free(vars);
   }
 
-  Pdtutil_Assert(Ddi_BddarrayNum(invarArray)==1,"problem with invar");
+  Pdtutil_Assert(Ddi_BddarrayNum(invarArray)>=1,"problem with invar");
   Ddi_Bdd_t *myInvar = Ddi_BddMakePartConjFromArray(invarArray);
   Ddi_BddSetAig(myInvar);
   Ddi_Free(invarArray);

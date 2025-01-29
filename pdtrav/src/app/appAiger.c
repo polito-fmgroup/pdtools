@@ -75,11 +75,13 @@ int App_Aiger (
   char *argv[]
 ) {
   App_Mgr_t *appMgr;
-  
+  int complement = 0;
+
   char *aigInName = NULL;
   char *aigOutName = NULL;
   char *aigSymbName = NULL;
 
+  
   printf("aiger app:");
   for (int i=0; i<argc; i++) {
     printf(" %s", argv[i]);
@@ -90,6 +92,9 @@ int App_Aiger (
         return 0;
       }
       aigSymbName = argv[i];
+    }
+    else if (strcmp(argv[i],"-c")==0) {
+      complement = 1;
     }
     else if (aigInName==NULL) {
       aigInName = argv[i];
@@ -114,6 +119,7 @@ int App_Aiger (
   Ddi_Vararray_t *mapVars = NULL;
   if (aigSymbName != NULL) {
     Fsm_Mgr_t *fsmMgrSymb = Fsm_MgrInit("fsmMgrSymb", appMgr->ddiMgr);
+    Fsm_MgrSetUseAig(fsmMgrSymb, 1);
     if (Fsm_MgrLoadAiger(&fsmMgrSymb, appMgr->ddiMgr, aigSymbName, NULL, NULL,
 			 Pdtutil_VariableOrderDefault_c) == 1) {
       fprintf(stderr, "-- FSM Loading Error.\n");
@@ -121,18 +127,22 @@ int App_Aiger (
     }
     mapVars = Ddi_VararrayDup(Fsm_MgrReadVarI(fsmMgrSymb));
     Ddi_VararrayAppend(mapVars,Fsm_MgrReadVarPS(fsmMgrSymb));
+    //    mapVars = Ddi_VararrayDup(Fsm_MgrReadVarPS(fsmMgrSymb));
+    //    Ddi_VararrayAppend(mapVars,Fsm_MgrReadVarI(fsmMgrSymb));
     Fsm_MgrQuit(fsmMgrSymb);
   }
 
-  if (Fsm_MgrLoadAiger(&appMgr->fsmMgr, appMgr->ddiMgr, aigInName, NULL, mapVars,
-                       Pdtutil_VariableOrderDefault_c) == 1) {
-    fprintf(stderr, "-- FSM Loading Error.\n");
-    exit(EXIT_FAILURE);
+  Ddi_Bddarray_t *aigArray = Ddi_AigarrayNetLoadAigerMapVars(
+			      appMgr->ddiMgr,
+			      NULL, mapVars, aigInName);
+  if (complement) {
+    for (int i=0; i<Ddi_BddarrayNum(aigArray); i++)
+      Ddi_BddNotAcc(Ddi_BddarrayRead(aigArray,i));
   }
+  Ddi_AigarrayNetStoreAiger(aigArray, 0, aigOutName);
+
+  Ddi_Free(aigArray);
   Ddi_Free(mapVars);
-  Fsm_Fsm_t *fsmFsmStore = Fsm_FsmMakeFromFsmMgr(appMgr->fsmMgr);
-  Fsm_FsmMiniWriteAiger(fsmFsmStore, aigOutName);
-  Fsm_FsmFree(fsmFsmStore);
 
   App_MgrQuit(appMgr);
   

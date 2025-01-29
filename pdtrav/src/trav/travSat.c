@@ -9822,6 +9822,25 @@ Trav_TravSatCheckInvar(
     printf("Checking inductive invariant of size. %d\n",
            Ddi_BddSize(invar));
   }
+  if (Ddi_AigSatAnd(Fsm_FsmReadInit(fsmFsm),notInv,NULL)) {
+    printf("\nCheck Done for init disproved\n");
+  }
+  else {
+    printf("\nCheck Done for init proved\n");
+  }
+  {
+    Ddi_Vararray_t *piNext = Ddi_BddSuppVararray(notInv);
+    Ddi_VararrayDiffAcc(piNext,ps);
+    Ddi_Vararray_t *piNextNewVars = Ddi_VararrayMakeNewAigVars(piNext,
+                                    "PDT_NEWV_FOR_CHECK", "");
+    Ddi_BddSubstVarsAcc(notInv,piNext,piNextNewVars);
+    Ddi_Free(piNext);
+    Ddi_Free(piNextNewVars);
+  }
+  if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
+    printf("Checking inductive invariant of size. %d\n",
+           Ddi_BddSize(invar));
+  }
   Ddi_BddComposeAcc(notInv,ps,delta);
   long myStartTime = util_cpu_time();
   fp = !Ddi_AigSatAnd(invar,notInv,NULL);
