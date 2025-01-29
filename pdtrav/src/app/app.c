@@ -95,7 +95,7 @@ main(
   else {
     for (int i=0; appTable[i].appName!=NULL; i++) {
       if (strcmp(argv[1],appTable[i].appName)==0) {
-        res = appTable[i].appFunc(argc-2,argv+2);
+        res = !appTable[i].appFunc(argc-2,argv+2);
         return res;
       }
     }
