@@ -6120,6 +6120,8 @@ FbvParseArgs(
         opt->mc.aig = 1;
         opt->mc.pdr = 1;
         opt->verbosity = 4;
+	opt->pre.ternarySim = 0;
+        opt->pre.peripheralLatches = 1;
       } else if (strcmp(opt->mc.strategy, "ic3d") == 0) {
         opt->mc.aig = 1;
         opt->mc.pdr = 1;
