@@ -9796,17 +9796,34 @@ Trav_TravSatCheckInvar(
   Trav_Mgr_t * travMgr /* Traversal Manager */ ,
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t *invar,
-  int *checkTargetSatP
+  int *checkTargetSatP,
+  Pdtutil_OptList_t *certOpt
 )
 {
   Ddi_Mgr_t *ddm = Trav_MgrReadDdiMgrDefault(travMgr);
   Pdtutil_VerbLevel_e verbosity = Trav_MgrReadVerbosity(travMgr);
   int fp=0;
+  int tDecompK=0, framesK=0;
   Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
   if (Fsm_MgrReadIFoldedProp(fsmMgr)>=0)
     Fsm_FsmUnfoldProperty(fsmFsm, 1);
   if (Fsm_MgrReadIFoldedConstr(fsmMgr)>=0)
     Fsm_FsmUnfoldConstraint(fsmFsm);
+
+  Pdtutil_OptItem_t optItem;
+  while (!Pdtutil_OptListEmpty(certOpt)) {
+    optItem = Pdtutil_OptListExtractHead(certOpt);
+    switch (optItem.optTag.eTravOpt) {
+    case Pdt_TravCertFramesK_c:
+      framesK = optItem.optData.inum;
+      break;
+    case Pdt_TravCertTDecompK_c:
+      tDecompK = optItem.optData.inum;
+      break;
+    default:
+      Pdtutil_Warning(1, "Unknown certify option");
+    }
+  }
   
   Ddi_Bddarray_t *delta = Fsm_FsmReadDelta(fsmFsm); 
   Ddi_Bddarray_t *lambda = Fsm_FsmReadLambda(fsmFsm); 
@@ -9814,6 +9831,7 @@ Trav_TravSatCheckInvar(
 
   // check invariant (fix-point)
   
+  Ddi_Vararray_t *pi = Fsm_FsmReadPI(fsmFsm);
   Ddi_Vararray_t *ps = Fsm_FsmReadPS(fsmFsm);
   Ddi_Vararray_t *ns = Fsm_FsmReadPS(fsmFsm);
 
@@ -9842,6 +9860,25 @@ Trav_TravSatCheckInvar(
            Ddi_BddSize(invar));
   }
   Ddi_BddComposeAcc(notInv,ps,delta);
+  if (framesK > 0) {
+    Ddi_Bdd_t *newTarget = Ddi_BddDup(target);
+    for (int k=framesK-1; k>=0; k--) {
+      char tfSuffix[10];
+      sprintf(tfSuffix,"%02d", k);
+      Ddi_Vararray_t *piTf = Ddi_VararrayMakeNewAigVars(pi,
+                                    NULL, tfSuffix);
+      Ddi_BddSubstVarsAcc(notInv,pi,piTf);
+      Ddi_BddSubstVarsAcc(newTarget,pi,piTf);
+      if (k>0) {
+	Ddi_BddComposeAcc(notInv,ps,delta);
+	Ddi_BddComposeAcc(newTarget,ps,delta);
+	Ddi_BddOrAcc(newTarget,target);
+      }
+      Ddi_Free(piTf);
+    }
+    Ddi_DataCopy(target,newTarget);
+    Ddi_Free(newTarget);
+  }
   long myStartTime = util_cpu_time();
   fp = !Ddi_AigSatAnd(invar,notInv,NULL);
   Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {

@@ -79,6 +79,10 @@ int App_Certify (
   char *fsmName = NULL;
   char *invarName = NULL;
   char *simpInvarName = NULL;
+  int frameK = 1;
+  int tDecompK = 0;
+  
+  Pdtutil_OptList_t *certOpt = Pdtutil_OptListCreate(Pdt_OptTrav_c);
 
   printf("certify app:");
   for (int i=0; i<argc; i++) {
@@ -90,6 +94,26 @@ int App_Certify (
         return 0;
       }
       simpInvarName = argv[i];
+      Pdtutil_OptListIns(certOpt, eTravOpt, Pdt_TravCertSimpInvar_c, pchar,
+			 simpInvarName);
+    }
+    else if (strcmp(argv[i],"-f")==0) {
+      i++;
+      if (i>=argc) {
+        printf("\nmissing phase/frame k value (-f)\n");
+        return 0;
+      }
+      frameK = atoi(argv[i]);
+      Pdtutil_OptListIns(certOpt, eTravOpt, Pdt_TravCertFramesK_c, inum, frameK);
+    }
+    else if (strcmp(argv[i],"-t")==0) {
+      i++;
+      if (i>=argc) {
+        printf("\nmissing temporal decomp k value (-t)\n");
+        return 0;
+      }
+      tDecompK = atoi(argv[i]);
+      Pdtutil_OptListIns(certOpt, eTravOpt, Pdt_TravCertTDecompK_c, inum, tDecompK);
     }
     else if (fsmName==NULL) {
       fsmName = argv[i];
@@ -139,9 +163,10 @@ int App_Certify (
   Ddi_Free(invarArray);
   int chk;
   chk = Trav_TravSatCheckInvar(appMgr->travMgr,appMgr->fsmMgr,
-                                  myInvar,&chk);
+			       myInvar,&chk,certOpt);
   Ddi_Free(myInvar);
 
+  Pdtutil_OptListFree(certOpt);
   App_MgrQuit(appMgr);
   
   return chk;

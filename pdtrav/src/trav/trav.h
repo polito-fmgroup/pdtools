@@ -1129,7 +1129,8 @@ EXTERN int Trav_TravSatCheckInvar(
   Trav_Mgr_t * travMgr /* Traversal Manager */ ,
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t *invar,
-  int *checkTargetSatP
+  int *checkTargetSatP,
+  Pdtutil_OptList_t *certOpt
 );
 EXTERN int Trav_TravTrAbstrItp(
   Trav_Mgr_t * travMgr /* Traversal Manager */ ,

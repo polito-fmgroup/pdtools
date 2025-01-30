@@ -478,6 +478,11 @@ typedef enum {
   Pdt_TravStoreCnfPhase_c,
   Pdt_TravMaxCnfLength_c,
 
+  /* certify */
+  Pdt_TravCertFramesK_c,
+  Pdt_TravCertTDecompK_c,
+  Pdt_TravCertSimpInvar_c,
+
   Pdt_TravNone_c
 } Pdt_OptTagTrav_e;
 
