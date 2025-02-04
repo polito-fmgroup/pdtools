@@ -4626,6 +4626,7 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-writeInvar") == 0) {
       opt->trav.writeInvar = Pdtutil_StrDup(argv[2]);
+      opt->pre.peripheralLatches = 0;
       opt->trav.pdrReuseRings = 1;
       argv++;
       argc--;
@@ -8670,7 +8671,7 @@ invarVerif(
       Ddi_Free(rplus);
       int chk, fp;
       fp = Trav_TravSatCheckInvar(travMgrAig,fsmMgr,
-                                  myInvar,&chk);
+                                  myInvar,&chk,NULL);
       Ddi_Free(myInvar);
       if (fp && !chk) {
         Fsm_MgrSetConstraintBDD(fsmMgr, myInvar);
