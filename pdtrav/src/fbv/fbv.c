@@ -9001,15 +9001,35 @@ invarVerif(
     if (opt->trav.writeInvar != NULL) {
       Ddi_Bdd_t *r = Trav_MgrReadReached(travMgrAig);
       if (r!=NULL) {
-        if (opt->verbosity >= Pdtutil_VerbLevelUsrMax_c) {
-          printf("Writing invar to %s\n", opt->trav.writeInvar);
-        }
         Ddi_Bdd_t *rUnfolded = Ddi_BddDup(r);
         Ddi_Var_t *pVar = Fsm_MgrReadPdtSpecVar(fsmMgr);
         Ddi_Var_t *cVar = Fsm_MgrReadPdtConstrVar(fsmMgr);
         if (pVar!=NULL) Ddi_BddCofactorAcc(rUnfolded,pVar,1);
         if (cVar!=NULL) Ddi_BddCofactorAcc(rUnfolded,cVar,1);
-        Ddi_AigNetStoreAiger(rUnfolded,0,opt->trav.writeInvar);
+	if (Fsm_MgrReadLatchEqClassesBDD(fsmMgr) != NULL) {
+	  Ddi_Bdd_t *latchEqClasses = Ddi_BddMakeAig(
+	       Fsm_MgrReadLatchEqClassesBDD(fsmMgr));
+	  Ddi_BddAndAcc(rUnfolded,latchEqClasses);
+	  Ddi_Free(latchEqClasses);
+	}
+
+	char name[1000];
+	strcpy(name,opt->trav.writeInvar);
+	int tdK = Fsm_MgrReadInitStubSteps(fsmMgr);
+	if (tdK>0) {
+	  char *tdecomp = strstr(name,"-T#");
+	  if (tdecomp==NULL)
+	    tdecomp = strstr(name,"-t#");
+	  if (tdecomp!=NULL) {
+	    int skip = (tdecomp-name)+3;
+	    while (name[skip]=='#') skip++;
+	    sprintf(tdecomp+2,"%d%s",tdK,opt->trav.writeInvar+skip);
+	  }
+	}
+        if (opt->verbosity >= Pdtutil_VerbLevelUsrMax_c) {
+          printf("Writing invar to %s\n", name);
+        }
+        Ddi_AigNetStoreAiger(rUnfolded,0,name);
         Ddi_Free(rUnfolded);
       }
     }

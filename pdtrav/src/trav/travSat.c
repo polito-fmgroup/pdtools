@@ -9785,6 +9785,55 @@ Trav_TravSatStoreProofAiger(
   return 1;
 }
 
+static int
+tDecompCheck(
+  Ddi_Bddarray_t *delta,
+  Ddi_Bdd_t *init,
+  Ddi_Bdd_t *target,
+  Ddi_Vararray_t *pi,
+  Ddi_Vararray_t *ps,
+  int kTD
+)
+{
+  Ddi_Bdd_t *newTarget = Ddi_BddDup(target);
+  Ddi_Bddarray_t *unroll = Ddi_BddarrayDup(delta);
+  int ret;
+  for (int k=kTD-1; k>=0; k--) {
+    char tfSuffix[10];
+    sprintf(tfSuffix,"%02d", k);
+    Ddi_Vararray_t *piTf = Ddi_VararrayMakeNewAigVars(pi,
+      NULL, tfSuffix);
+    Ddi_BddarraySubstVarsAcc(unroll,pi,piTf);
+    Ddi_BddSubstVarsAcc(newTarget,pi,piTf);
+    if (k>0) {
+      Ddi_BddarrayComposeAcc(unroll,ps,delta);
+      Ddi_BddComposeAcc(newTarget,ps,delta);
+      Ddi_BddOrAcc(newTarget,target);
+    }
+    Ddi_Free(piTf);
+  }
+  Ddi_AigarrayConstrainCubeAcc(unroll, init);
+  Ddi_AigConstrainCubeAcc(newTarget, init);
+  Ddi_Vararray_t *suppPs = Ddi_BddarraySuppVararray(unroll);
+  Ddi_VararrayIntersectAcc(suppPs,ps);
+  if (Ddi_VararrayNum(suppPs)>0) {
+    Ddi_Vararray_t *isPsVars = Ddi_VararrayMakeNewAigVars(suppPs,
+       "PDT_STUB_PS","");
+    Ddi_BddarraySubstVarsAcc(unroll, suppPs, isPsVars);
+    Ddi_Free(isPsVars);
+  }
+  Ddi_Free(suppPs);
+  Ddi_Bdd_t *newInit = Ddi_BddRelMakeFromArray(unroll, ps);
+  Ddi_BddSetAig(newInit);
+  Ddi_DataCopy(init,newInit);
+  Ddi_Free(newInit);
+  ret = Ddi_AigSat(newTarget);
+  Ddi_Free(newTarget);
+  Ddi_Free(unroll);
+  return ret;
+}
+
+
 /**Function*******************************************************************
   Synopsis    []
   Description []
@@ -9840,12 +9889,18 @@ Trav_TravSatCheckInvar(
     printf("Checking inductive invariant of size. %d\n",
            Ddi_BddSize(invar));
   }
-  if (Ddi_AigSatAnd(Fsm_FsmReadInit(fsmFsm),notInv,NULL)) {
+  Ddi_Bdd_t *init = Ddi_BddDup(Fsm_FsmReadInit(fsmFsm));
+  int checkTDfail = 0;
+  if (tDecompK > 0) {
+    checkTDfail = tDecompCheck(delta,init,target,pi,ps,tDecompK);
+  }
+  if (checkTDfail || Ddi_AigSatAnd(init,notInv,NULL)) {
     printf("\nCheck Done for init disproved\n");
   }
   else {
     printf("\nCheck Done for init proved\n");
   }
+  Ddi_Free(init);
   {
     Ddi_Vararray_t *piNext = Ddi_BddSuppVararray(notInv);
     Ddi_VararrayDiffAcc(piNext,ps);
