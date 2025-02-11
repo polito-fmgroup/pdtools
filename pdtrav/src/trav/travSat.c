@@ -1052,6 +1052,17 @@ static int proofHandleInitStub(
   Ddi_Bdd_t *target,
   int iSteps
 );
+static Ddi_Bddarray_t *
+genItpSequence(
+  Ddi_Bddarray_t *delta,
+  Ddi_Bdd_t *init,
+  Ddi_Bdd_t *target,
+  Ddi_Bdd_t *fail,
+  int framesK,
+  Ddi_Vararray_t *pi,
+  Ddi_Vararray_t *ps,
+  Ddi_Vararray_t *ns
+);
 
 
 
@@ -9785,19 +9796,45 @@ Trav_TravSatStoreProofAiger(
   return 1;
 }
 
-static int
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Bdd_t *
 tDecompCheck(
   Ddi_Bddarray_t *delta,
   Ddi_Bdd_t *init,
   Ddi_Bdd_t *target,
+  Ddi_Bdd_t *invar,
+  Ddi_Bdd_t *notInv, 
+  int kTD,
   Ddi_Vararray_t *pi,
   Ddi_Vararray_t *ps,
-  int kTD
+  Ddi_Vararray_t *ns,
+  int *retP,
+  int genInvarOut
 )
 {
   Ddi_Bdd_t *newTarget = Ddi_BddDup(target);
   Ddi_Bddarray_t *unroll = Ddi_BddarrayDup(delta);
+  Ddi_Bdd_t *invarOut = NULL;
   int ret;
+
+  if (genInvarOut) {
+    Ddi_Bddarray_t *itpSeq =
+      genItpSequence(delta,init,notInv,target,kTD,pi,ps,ns);
+    if (itpSeq!=NULL) {
+      invarOut = Ddi_BddMakePartDisjFromArray(itpSeq);
+      Ddi_BddPartInsertLast(invarOut,invar);
+      Ddi_BddPartInsertLast(invarOut,init);
+      Ddi_BddSetAig(invarOut);
+      ddiAbcOptAcc(invarOut, -1.0);
+    }
+    Ddi_Free(itpSeq);
+  }
+
   for (int k=kTD-1; k>=0; k--) {
     char tfSuffix[10];
     sprintf(tfSuffix,"%02d", k);
@@ -9830,9 +9867,137 @@ tDecompCheck(
   ret = Ddi_AigSat(newTarget);
   Ddi_Free(newTarget);
   Ddi_Free(unroll);
-  return ret;
+  *retP = ret;
+  return invarOut;
 }
 
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Bddarray_t *
+genItpSequence(
+  Ddi_Bddarray_t *delta,
+  Ddi_Bdd_t *init,
+  Ddi_Bdd_t *target,
+  Ddi_Bdd_t *fail,
+  int framesK,
+  Ddi_Vararray_t *pi,
+  Ddi_Vararray_t *ps,
+  Ddi_Vararray_t *ns
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(delta);
+  Ddi_Bddarray_t *itpSeq = Ddi_BddarrayAlloc(ddm,framesK-1);
+  Ddi_Bddarray_t *coneArray = Ddi_BddarrayAlloc(ddm,framesK-1);
+  Ddi_Bdd_t *cone = Ddi_BddSubstVars(target,ps,ns);
+  
+  Ddi_Vararray_t *piTarget = Ddi_VararrayMakeNewAigVars(pi,
+                             "PDT_ITP_SEQ_TARGET", NULL);
+  Ddi_Bddarray_t *deltaNs = Ddi_BddarraySubstVars(delta,ps,ns);
+  Ddi_Bdd_t *tr = Ddi_BddRelMakeFromArray(delta, ns);
+
+  Ddi_BddSubstVarsAcc(cone,pi,piTarget);
+  Ddi_Free(piTarget);
+  Ddi_Bdd_t *fail0 = Ddi_BddDup(fail);
+  for (int k=framesK-1; k>0; k--) {
+    char tfSuffix[10];
+    sprintf(tfSuffix,"%02d", k);
+    Ddi_Vararray_t *piTf = Ddi_VararrayMakeNewAigVars(pi,
+                             NULL, tfSuffix);
+    Ddi_BddComposeAcc(cone,ns,deltaNs);
+    Ddi_BddOrAcc(cone,fail0);
+    Ddi_BddSubstVarsAcc(cone,pi,piTf);
+    Ddi_Free(piTf);
+    Ddi_BddarrayWrite(coneArray,k,cone);
+  }
+  Ddi_Free(fail0);
+  Ddi_Bdd_t *prev=Ddi_BddDup(init);
+  Ddi_Varset_t *nsVars = Ddi_VarsetMakeFromArray(ns);
+  int sat=0;
+  for (int k=1; k<framesK; k++) {
+    Ddi_Bdd_t *a = Ddi_BddDup(tr);
+    Ddi_BddPartInsertLast(a,prev);
+    //Ddi_BddSetAig(a);
+    Ddi_Bdd_t *b = Ddi_BddarrayRead(coneArray,k);
+    Ddi_Bdd_t *itp = Ddi_AigSatAndWithInterpolant(a, b, nsVars,
+           NULL, NULL, NULL, NULL, NULL, &sat, 0, 1, -1.0);
+    Ddi_Free(a);
+    if (sat) {
+      Ddi_Free(itpSeq);
+      break;
+    }
+    Ddi_Free(prev);
+    prev = Ddi_BddSubstVars(itp,ns,ps);
+    Ddi_BddarrayWrite(itpSeq,k-1,prev);
+    Ddi_Free(itp);
+  }
+  Ddi_Free(nsVars);
+  Ddi_Free(prev);
+  Ddi_Free(deltaNs);
+  Ddi_Free(tr);
+  Ddi_Free(cone);
+  Ddi_Free(coneArray);
+  return itpSeq;
+}
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Bdd_t *
+proofHandleFrames(
+  Ddi_Bddarray_t *delta,
+  Ddi_Bdd_t *target,
+  Ddi_Bdd_t *invar,
+  Ddi_Bdd_t *notInv, 
+  int framesK,
+  Ddi_Vararray_t *pi,
+  Ddi_Vararray_t *ps,
+  Ddi_Vararray_t *ns,
+  int genInvarOut
+)
+{
+  Ddi_Bdd_t *invarOut = NULL;
+  if (framesK <= 0)
+    return NULL;
+  
+  if (genInvarOut) {
+    Ddi_Bddarray_t *itpSeq =
+      genItpSequence(delta,invar,notInv,target,framesK,pi,ps,ns);
+    if (itpSeq!=NULL) {
+      invarOut = Ddi_BddMakePartDisjFromArray(itpSeq);
+      Ddi_BddPartInsertLast(invarOut,invar);
+      Ddi_BddSetAig(invarOut);
+      ddiAbcOptAcc(invarOut, -1.0);
+    }
+    Ddi_Free(itpSeq);
+  }
+
+  Ddi_Bdd_t *newTarget = Ddi_BddDup(target);
+  for (int k=framesK-1; k>=0; k--) {
+    char tfSuffix[10];
+    sprintf(tfSuffix,"%02d", k);
+    Ddi_Vararray_t *piTf = Ddi_VararrayMakeNewAigVars(pi,
+                             NULL, tfSuffix);
+    Ddi_BddSubstVarsAcc(notInv,pi,piTf);
+    Ddi_BddSubstVarsAcc(newTarget,pi,piTf);
+    if (k>0) {
+      Ddi_BddComposeAcc(notInv,ps,delta);
+      Ddi_BddComposeAcc(newTarget,ps,delta);
+      Ddi_BddOrAcc(newTarget,target);
+    }
+    Ddi_Free(piTf);
+  }
+  Ddi_DataCopy(target,newTarget);
+  Ddi_Free(newTarget);
+  return invarOut;
+}
 
 /**Function*******************************************************************
   Synopsis    []
@@ -9852,7 +10017,7 @@ Trav_TravSatCheckInvar(
   Ddi_Mgr_t *ddm = Trav_MgrReadDdiMgrDefault(travMgr);
   Pdtutil_VerbLevel_e verbosity = Trav_MgrReadVerbosity(travMgr);
   int fp=0;
-  int tDecompK=0, framesK=0;
+  int tDecompK=0, framesK=0, genInvarOut=0;
   Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
   if (Fsm_MgrReadIFoldedProp(fsmMgr)>=0)
     Fsm_FsmUnfoldProperty(fsmFsm, 1);
@@ -9869,6 +10034,9 @@ Trav_TravSatCheckInvar(
     case Pdt_TravCertTDecompK_c:
       tDecompK = optItem.optData.inum;
       break;
+    case Pdt_TravCertInvarOut_c:
+      genInvarOut = optItem.optData.inum;
+      break;
     default:
       Pdtutil_Warning(1, "Unknown certify option");
     }
@@ -9882,9 +10050,15 @@ Trav_TravSatCheckInvar(
   
   Ddi_Vararray_t *pi = Fsm_FsmReadPI(fsmFsm);
   Ddi_Vararray_t *ps = Fsm_FsmReadPS(fsmFsm);
-  Ddi_Vararray_t *ns = Fsm_FsmReadPS(fsmFsm);
+  Ddi_Vararray_t *ns = Fsm_FsmReadNS(fsmFsm);
 
   Ddi_Bdd_t *notInv = Ddi_BddNot(invar);
+  Ddi_Bdd_t *notInv0 = Ddi_BddNot(invar); 
+
+  Ddi_Bdd_t *invarOut =
+    proofHandleFrames(delta,target,invar,notInv,framesK,
+                      pi,ps,ns,genInvarOut);
+
   if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
     printf("Checking inductive invariant of size. %d\n",
            Ddi_BddSize(invar));
@@ -9892,9 +10066,16 @@ Trav_TravSatCheckInvar(
   Ddi_Bdd_t *init = Ddi_BddDup(Fsm_FsmReadInit(fsmFsm));
   int checkTDfail = 0;
   if (tDecompK > 0) {
-    checkTDfail = tDecompCheck(delta,init,target,pi,ps,tDecompK);
+    Ddi_Bdd_t *tdInvarOut = tDecompCheck(delta,init,target,invar,notInv,
+                    tDecompK,pi,ps,ns,&checkTDfail,genInvarOut);
+    if (tdInvarOut != NULL) {
+      if (invarOut==NULL)
+        invarOut = Ddi_BddMakeConstAig(ddm, 0);
+      Ddi_BddOrAcc(invarOut,tdInvarOut);
+      Ddi_Free(tdInvarOut);
+    }
   }
-  if (checkTDfail || Ddi_AigSatAnd(init,notInv,NULL)) {
+  if (checkTDfail || Ddi_AigSatAnd(init,notInv0,NULL)) {
     printf("\nCheck Done for init disproved\n");
   }
   else {
@@ -9915,25 +10096,6 @@ Trav_TravSatCheckInvar(
            Ddi_BddSize(invar));
   }
   Ddi_BddComposeAcc(notInv,ps,delta);
-  if (framesK > 0) {
-    Ddi_Bdd_t *newTarget = Ddi_BddDup(target);
-    for (int k=framesK-1; k>=0; k--) {
-      char tfSuffix[10];
-      sprintf(tfSuffix,"%02d", k);
-      Ddi_Vararray_t *piTf = Ddi_VararrayMakeNewAigVars(pi,
-                                    NULL, tfSuffix);
-      Ddi_BddSubstVarsAcc(notInv,pi,piTf);
-      Ddi_BddSubstVarsAcc(newTarget,pi,piTf);
-      if (k>0) {
-	Ddi_BddComposeAcc(notInv,ps,delta);
-	Ddi_BddComposeAcc(newTarget,ps,delta);
-	Ddi_BddOrAcc(newTarget,target);
-      }
-      Ddi_Free(piTf);
-    }
-    Ddi_DataCopy(target,newTarget);
-    Ddi_Free(newTarget);
-  }
   long myStartTime = util_cpu_time();
   fp = !Ddi_AigSatAnd(invar,notInv,NULL);
   Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
@@ -9941,6 +10103,7 @@ Trav_TravSatCheckInvar(
              fp ? "proved" : "disproved",
         util_print_time((util_cpu_time() - myStartTime)));
   }
+  Ddi_Free(notInv0);
   Ddi_Free(notInv);
   if (checkTargetSatP != NULL) {
     int chk;
@@ -9949,12 +10112,16 @@ Trav_TravSatCheckInvar(
       printf("Checking property of size. %d\n",
            Ddi_BddSize(target));
     }
-    chk = *checkTargetSatP = Ddi_AigSatAnd(invar,target,NULL);
+    chk = *checkTargetSatP = !Ddi_AigSatAnd(invar,target,NULL);
     Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
       printf("\nCheck Done property %s - time: %s\n",
-             !chk ? "proved" : "disproved",
+             chk ? "proved" : "disproved",
              util_print_time((util_cpu_time() - myStartTime)));
     }
+  }
+  if (invarOut!=NULL) {
+    Ddi_DataCopy(invar,invarOut);
+    Ddi_Free(invarOut);
   }
   Fsm_FsmFree(fsmFsm);
   Ddi_Free(target);

@@ -78,6 +78,7 @@ int App_Certify (
   
   char *fsmName = NULL;
   char *invarName = NULL;
+  char *invarStoreName = NULL;
   char *simpInvarName = NULL;
   int frameK = 1;
   int tDecompK = 0;
@@ -114,6 +115,15 @@ int App_Certify (
       }
       tDecompK = atoi(argv[i]);
       Pdtutil_OptListIns(certOpt, eTravOpt, Pdt_TravCertTDecompK_c, inum, tDecompK);
+    }
+    else if (strcmp(argv[i],"-i")==0) {
+      i++;
+      if (i>=argc) {
+        printf("\nmissing write invar file name\n");
+        return 0;
+      }
+      invarStoreName = argv[i];
+      Pdtutil_OptListIns(certOpt, eTravOpt, Pdt_TravCertInvarOut_c, inum, 1);
     }
     else if (fsmName==NULL) {
       fsmName = argv[i];
@@ -161,13 +171,18 @@ int App_Certify (
   Ddi_Bdd_t *myInvar = Ddi_BddMakePartConjFromArray(invarArray);
   Ddi_BddSetAig(myInvar);
   Ddi_Free(invarArray);
-  int chk;
-  chk = Trav_TravSatCheckInvar(appMgr->travMgr,appMgr->fsmMgr,
+  int chk, fp;
+  fp = Trav_TravSatCheckInvar(appMgr->travMgr,appMgr->fsmMgr,
 			       myInvar,&chk,certOpt);
+  if (chk&&fp&&(invarStoreName!=NULL)) {
+    printf("Writing invar to %s\n", invarStoreName);
+    Ddi_AigNetStoreAiger(myInvar,0,invarStoreName);
+  }
+  
   Ddi_Free(myInvar);
 
   Pdtutil_OptListFree(certOpt);
   App_MgrQuit(appMgr);
   
-  return chk;
+  return chk&&fp;
 }
