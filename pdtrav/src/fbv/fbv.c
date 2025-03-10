@@ -3918,6 +3918,33 @@ if (opt->ddi.itpCompact > -1)     //-1 is the default value
 /* Definition of static functions                                            */
 /*---------------------------------------------------------------------------*/
 
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Fbv_Globals_t *
+Fbv_GlobalsInit(
+)
+{
+  return new_settings();
+}
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+void
+Fbv_GlobalsQuit(
+  Fbv_Globals_t *opt
+)
+{
+  dispose_settings(opt);
+}
+
 /**Function*******************************************************************
   Synopsis    []
   Description []

@@ -288,7 +288,7 @@ Trav_MgrInit(
   travMgr->settings.bdd.countReached = 0;
   travMgr->settings.bdd.autoHint = 0;
   travMgr->settings.bdd.hintsStrategy = 0;
-  travMgr->settings.bdd.hintsTh = 1000;
+  travMgr->settings.bdd.hintsTh = 0;
   travMgr->settings.bdd.hints = NULL;
   travMgr->settings.bdd.auxPsSet = NULL;
   travMgr->settings.bdd.gfpApproxRange = 1;

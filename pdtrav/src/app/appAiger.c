@@ -76,10 +76,13 @@ int App_Aiger (
 ) {
   App_Mgr_t *appMgr;
   int complement = 0;
-
+  int symbMap = 0;
+  int constrAdd = 0;
+  
   char *aigInName = NULL;
   char *aigOutName = NULL;
-  char *aigSymbName = NULL;
+  char *fsmInName = NULL;
+  char *fsmOutName = NULL;
 
   
   printf("aiger app:");
@@ -87,20 +90,28 @@ int App_Aiger (
     printf(" %s", argv[i]);
     if (strcmp(argv[i],"-s")==0) {
       i++;
+      symbMap = 1;
+    }
+    if (strcmp(argv[i],"-c")==0) {
+      i++;
+      constrAdd = 1;
+    }
+    if (strcmp(argv[i],"-i")==0) {
+      i++;
       if (i>=argc) {
-        printf("\nmissing file name for aig synbols (-s)\n");
+        printf("\nmissing file name for combinational in (-i)\n");
         return 0;
       }
-      aigSymbName = argv[i];
-    }
-    else if (strcmp(argv[i],"-c")==0) {
-      complement = 1;
-    }
-    else if (aigInName==NULL) {
       aigInName = argv[i];
     }
-    else if (aigOutName==NULL) {
-      aigOutName = argv[i];
+    else if (strcmp(argv[i],"-n")==0) {
+      complement = 1;
+    }
+    else if (fsmInName==NULL) {
+      fsmInName = argv[i];
+    }
+    else if (fsmOutName==NULL) {
+      fsmOutName = argv[i];
     }
     else {
       printf("\nunknown argument/option: %s\n", argv[i]);
@@ -108,29 +119,23 @@ int App_Aiger (
   }
   printf("\n");
 
-  if (argc<2) {
-    printf("missing arguments - aiger app needs at least two parameters\n");
-    printf("<aiger in> [-s <symbol aiger>] <aiger out>\n");
-    return 0;
+  if (symbMap) {
+    aigOutName = fsmOutName;
+    fsmOutName = NULL;
   }
-
+  
   appMgr = App_MgrInit("aiger", App_TaskAiger_c);
 
   Ddi_Vararray_t *mapVars = NULL;
-  if (aigSymbName != NULL) {
-    Fsm_Mgr_t *fsmMgrSymb = Fsm_MgrInit("fsmMgrSymb", appMgr->ddiMgr);
-    Fsm_MgrSetUseAig(fsmMgrSymb, 1);
-    if (Fsm_MgrLoadAiger(&fsmMgrSymb, appMgr->ddiMgr, aigSymbName, NULL, NULL,
-			 Pdtutil_VariableOrderDefault_c) == 1) {
+  
+  if (Fsm_MgrLoadAiger(&appMgr->fsmMgr, appMgr->ddiMgr,
+                       fsmInName, NULL, NULL,
+                       Pdtutil_VariableOrderDefault_c) == 1) {
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(EXIT_FAILURE);
-    }
-    mapVars = Ddi_VararrayDup(Fsm_MgrReadVarI(fsmMgrSymb));
-    Ddi_VararrayAppend(mapVars,Fsm_MgrReadVarPS(fsmMgrSymb));
-    //    mapVars = Ddi_VararrayDup(Fsm_MgrReadVarPS(fsmMgrSymb));
-    //    Ddi_VararrayAppend(mapVars,Fsm_MgrReadVarI(fsmMgrSymb));
-    Fsm_MgrQuit(fsmMgrSymb);
   }
+  mapVars = Ddi_VararrayDup(Fsm_MgrReadVarI(appMgr->fsmMgr));
+  Ddi_VararrayAppend(mapVars,Fsm_MgrReadVarPS(appMgr->fsmMgr));
 
   Ddi_Bddarray_t *aigArray = Ddi_AigarrayNetLoadAigerMapVars(
 			      appMgr->ddiMgr,
@@ -139,7 +144,20 @@ int App_Aiger (
     for (int i=0; i<Ddi_BddarrayNum(aigArray); i++)
       Ddi_BddNotAcc(Ddi_BddarrayRead(aigArray,i));
   }
-  Ddi_AigarrayNetStoreAiger(aigArray, 0, aigOutName);
+  if (aigOutName)
+    Ddi_AigarrayNetStoreAiger(aigArray, 0, aigOutName);
+  else {
+    Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(appMgr->fsmMgr);
+    Ddi_Bdd_t *constr = Fsm_FsmReadConstraint(fsmFsm);
+    if (constr!=NULL)
+      Ddi_BddarrayInsertLast(aigArray,constr);
+    Ddi_Bdd_t *newC = Ddi_BddMakePartConjFromArray(aigArray);
+    Ddi_BddSetAig(newC);
+    Fsm_FsmWriteConstraint(fsmFsm,newC);
+    Ddi_Free(newC);
+    Fsm_FsmMiniWriteAiger(fsmFsm, fsmOutName);
+    Fsm_FsmFree(fsmFsm);
+  }
 
   Ddi_Free(aigArray);
   Ddi_Free(mapVars);

@@ -1,10 +1,10 @@
 /**CFile***********************************************************************
 
-  FileName    [appMgr.c]
+  FileName    [appGfp.c]
 
-  PackageName [mc]
+  PackageName [app]
 
-  Synopsis    [Functions to handle an APP Manager]
+  Synopsis    [Functions to handle GFP-based invar strengthening]
 
   Description []
 
@@ -65,87 +65,76 @@
 /*---------------------------------------------------------------------------*/
 
 /**Function********************************************************************
-
-  Synopsis    [Creates a MC Manager.]
-
-  Description []
-
-  SideEffects [none]
-
-  SeeAlso     [Ddi_MgrInit, Fsm_MgrInit, Trav_MgrInit]
-
+  Synopsis    [Main program of gfp app.]
+  Description [Main program of gfp app.]
+  SideEffects []
+  SeeAlso     []
 ******************************************************************************/
-
-App_Mgr_t *
-App_MgrInit(
-  char *appName /* Name of the APP */,
-  App_TaskSelection_e task
-)
-{
+int App_Gfp (
+  int argc,
+  char *argv[]
+) {
   App_Mgr_t *appMgr;
+  int iter=1;
 
-  appMgr = Pdtutil_Alloc(App_Mgr_t, 1);
-  Pdtutil_Assert(appMgr != NULL, "Out of memory.");
+  char *aigInName = NULL;
+  char *aigOutName = NULL;
+  char *fsmName = NULL;
 
-  /* app specific settings */
-  appMgr->settings.verbosity = Pdtutil_VerbLevelUsrMax_c;
-
-  Pdtutil_VerbosityMgr(appMgr,
-    Pdtutil_VerbLevelUsrMax_c, fprintf(stdout, "-- App Manager Init.\n")
-    );
-
-  appMgr->appName = Pdtutil_StrDup(appName);
-
-  appMgr->ddiMgr = Ddi_MgrInit("ddiMgr", NULL, 0, DDI_UNIQUE_SLOTS,
-      DDI_CACHE_SLOTS * 10, 0, -1, -1);
-  appMgr->fsmMgr = Fsm_MgrInit("fsmMgr", NULL);
-
-  Fsm_MgrSetDdManager(appMgr->fsmMgr, appMgr->ddiMgr);
-  Fsm_MgrSetUseAig(appMgr->fsmMgr, 1);
-
-  appMgr->travMgr = NULL;
-  appMgr->trMgr = NULL;
   
-
-  appMgr->task = task;
-
-  appMgr->auxPtr = NULL;
-
-  return appMgr;
-}
-
-/**Function********************************************************************
-
-  Synopsis     [Closes a Model Checking Manager.]
-
-  Description  [Closes a Model Checking Manager freeing all the
-    correlated fields.]
-
-  SideEffects  [none]
-
-  SeeAlso      [Ddi_BddiMgrInit]
-
-******************************************************************************/
-
-void
-App_MgrQuit(
-  App_Mgr_t * appMgr
-)
-{
-  if (appMgr == NULL) {
-    return;
+  printf("gfp app:");
+  for (int i=0; i<argc; i++) {
+    printf(" %s", argv[i]);
+    if (strcmp(argv[i],"-i")==0) {
+      i++;
+      if (i>=argc) {
+        printf("\nmissing integer num of gfp passes (-i)\n");
+        return 0;
+      }
+      iter = atoi(argv[i]);
+    }
+    else if (fsmName==NULL) {
+      fsmName = argv[i];
+    }
+    else if (aigInName==NULL) {
+      aigInName = argv[i];
+    }
+    else if (aigOutName==NULL) {
+      aigOutName = argv[i];
+    }
+    else {
+      printf("\nunknown argument/option: %s\n", argv[i]);
+    }
   }
+  printf("\n");
 
-  Pdtutil_VerbosityMgr(appMgr,
-    Pdtutil_VerbLevelUsrMax_c, fprintf(stdout, "-- App Manager Quit.\n")
-    );
+  appMgr = App_MgrInit("gfp", App_TaskGfp_c);
 
-  Pdtutil_Free(appMgr->appName);
-  if (appMgr->travMgr!=NULL)
-    Trav_MgrQuit(appMgr->travMgr);
-  Fsm_MgrQuit(appMgr->fsmMgr);
-  Ddi_MgrQuit(appMgr->ddiMgr);
+  if (Fsm_MgrLoadAiger(&appMgr->fsmMgr, appMgr->ddiMgr, fsmName,
+        NULL, NULL,Pdtutil_VariableOrderDefault_c) == 1) {
+    fprintf(stderr, "-- FSM Loading Error.\n");
+    exit(EXIT_FAILURE);
+  }
+  appMgr->travMgr = Trav_MgrInit(fsmName, appMgr->ddiMgr);
+  Fsm_MgrFold(appMgr->fsmMgr);
+                        
+  Ddi_Bddarray_t *
+    invarArray = Ddi_AigarrayNetLoadAiger(
+                   appMgr->ddiMgr, NULL, aigInName);
+  Ddi_Bdd_t *myInvar = Ddi_BddMakePartConjFromArray(invarArray);
+  Ddi_BddSetAig(myInvar);
+  Ddi_Free(invarArray);
+  Trav_MgrSetReached(appMgr->travMgr,myInvar);
+  Ddi_Free(myInvar);
+  Trav_TravSatItpGfp(appMgr->travMgr,appMgr->fsmMgr,iter,0);
+  Ddi_Bdd_t *invOut = Fsm_MgrReadReachedBDD(appMgr->fsmMgr);
+  Ddi_Var_t *cvarPs = Ddi_VarFromName(appMgr->ddiMgr,
+                                      "PDT_BDD_INVAR_VAR$PS");
+  Ddi_BddCofactorAcc(invOut,cvarPs,1);
 
-  Pdtutil_Free(appMgr);
+  Ddi_AigNetStoreAiger(invOut, 0, aigOutName);
+
+  App_MgrQuit(appMgr);
+  
+  return 1;
 }
-

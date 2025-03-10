@@ -798,6 +798,58 @@ Fsm_MgrAuxVarRemove(
   return;
 }
 
+
+/**Function********************************************************************
+
+  Synopsis    [Remove Auxiliary Variables from the FSM structure.]
+
+  Description [The same FSM is returned in any case.]
+
+  SideEffects [none]
+
+  SeeAlso     []
+
+******************************************************************************/
+
+void
+Fsm_MgrFold(
+  Fsm_Mgr_t * fsmMgr            /* FSM Manager */
+)
+{
+  Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
+  Fsm_FsmFoldProperty(fsmFsm,1,0,1);
+  Fsm_FsmFoldConstraint(fsmFsm, 1);
+  Fsm_FsmWriteToFsmMgr(fsmMgr,fsmFsm);
+
+  Fsm_FsmFree(fsmFsm);
+}
+
+/**Function********************************************************************
+
+  Synopsis    [Remove Auxiliary Variables from the FSM structure.]
+
+  Description [The same FSM is returned in any case.]
+
+  SideEffects [none]
+
+  SeeAlso     []
+
+******************************************************************************/
+
+void
+Fsm_MgrUnfold(
+  Fsm_Mgr_t * fsmMgr            /* FSM Manager */
+)
+{
+  Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
+  Fsm_FsmUnfoldProperty(fsmFsm, 1);
+  Fsm_FsmUnfoldConstraint(fsmFsm);
+  Fsm_FsmWriteToFsmMgr(fsmMgr,fsmFsm);
+
+  Fsm_FsmFree(fsmFsm);
+}
+
+
 /**Function********************************************************************
 
   Synopsis    [Remove Auxiliary Variables from the FSM structure.]

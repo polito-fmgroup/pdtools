@@ -513,6 +513,9 @@ EXTERN Fsm_Mgr_t *Fsm_MgrDupWithNewDdiMgrAligned(
 EXTERN void Fsm_MgrAuxVarRemove(
   Fsm_Mgr_t * fsmMgr
 );
+EXTERN void Fsm_MgrFold(
+  Fsm_Mgr_t * fsmMgr
+);
 EXTERN void Fsm_MgrCoiReduction(
   Fsm_Mgr_t * fsmMgr
 );

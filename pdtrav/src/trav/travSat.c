@@ -9768,7 +9768,7 @@ Trav_TravSatStoreProofAiger(
 
   Ddi_BddComposeAcc(rUnfolded,auxV,auxF);
   Ddi_Bdd_t *notR = Ddi_BddNot(rUnfolded);
-
+  
   //  Ddi_Vararray_t *psRemoved = Ddi_VararrayDiff(psRef,ps);
   proofHandlePhaseAbstr(fsmFsmRef, rUnfolded, Fsm_MgrReadPhaseAbstr(fsmMgr));
 

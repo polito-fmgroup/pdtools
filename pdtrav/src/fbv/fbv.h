@@ -628,6 +628,14 @@ EXTERN int Fbv_CheckFsmCex(
 EXTERN int Fbv_CheckFsmProp(
   Fsm_Mgr_t * fsmMgr
 );
+EXTERN Fbv_Globals_t *
+Fbv_GlobalsInit(
+);
+EXTERN void
+Fbv_GlobalsQuit(
+  Fbv_Globals_t *opt
+);
+
 
 /**AutomaticEnd***************************************************************/
 

@@ -2,7 +2,7 @@
 
   FileName    [appInt.h]
 
-  PackageName [Mc]
+  PackageName [App]
 
   Synopsis    [Internal header file]
 
@@ -81,6 +81,10 @@ struct App_Mgr_s {
   union {
     struct {
     } certify;
+    struct {
+    } aiger;
+    struct {
+    } gfp;
     struct {
     } none;
   } app;

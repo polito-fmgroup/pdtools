@@ -51,7 +51,8 @@ static struct {
 } appTable[] =
   {
    {"certify", App_Certify},
-   {"aiger", App_Aiger},
+   {"aiger", App_Aiger}, 
+   {"gfp", App_Gfp}, 
    {NULL,NULL}
   };
 
