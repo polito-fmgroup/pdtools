@@ -78,7 +78,9 @@ int App_Aiger (
   int complement = 0;
   int symbMap = 0;
   int constrAdd = 0;
-  
+  int latchPos = 0;  
+  int updateConstr = 0;  
+  int clearConstr = 0;  
   char *aigInName = NULL;
   char *aigOutName = NULL;
   char *fsmInName = NULL;
@@ -92,17 +94,22 @@ int App_Aiger (
       i++;
       symbMap = 1;
     }
-    if (strcmp(argv[i],"-c")==0) {
-      i++;
-      constrAdd = 1;
+    else if (strcmp(argv[i],"-c")==0 ||
+        strcmp(argv[i],"--clearconstr")==0) {
+      clearConstr = 1;
     }
-    if (strcmp(argv[i],"-i")==0) {
+    else if (strcmp(argv[i],"-l")==0 ||
+        strcmp(argv[i],"--latchpos")==0) {
+      latchPos = 1;
+    }
+    else if (strcmp(argv[i],"-i")==0) {
       i++;
       if (i>=argc) {
         printf("\nmissing file name for combinational in (-i)\n");
         return 0;
       }
       aigInName = argv[i];
+      updateConstr = 1;
     }
     else if (strcmp(argv[i],"-n")==0) {
       complement = 1;
@@ -137,24 +144,38 @@ int App_Aiger (
   mapVars = Ddi_VararrayDup(Fsm_MgrReadVarI(appMgr->fsmMgr));
   Ddi_VararrayAppend(mapVars,Fsm_MgrReadVarPS(appMgr->fsmMgr));
 
-  Ddi_Bddarray_t *aigArray = Ddi_AigarrayNetLoadAigerMapVars(
+  Ddi_Bddarray_t *aigArray = NULL;
+  if (aigInName!=NULL) {
+    aigArray = Ddi_AigarrayNetLoadAigerMapVars(
 			      appMgr->ddiMgr,
 			      NULL, mapVars, aigInName);
-  if (complement) {
-    for (int i=0; i<Ddi_BddarrayNum(aigArray); i++)
-      Ddi_BddNotAcc(Ddi_BddarrayRead(aigArray,i));
+    if (complement) {
+      for (int i=0; i<Ddi_BddarrayNum(aigArray); i++)
+        Ddi_BddNotAcc(Ddi_BddarrayRead(aigArray,i));
+    }
   }
   if (aigOutName)
     Ddi_AigarrayNetStoreAiger(aigArray, 0, aigOutName);
   else {
     Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(appMgr->fsmMgr);
-    Ddi_Bdd_t *constr = Fsm_FsmReadConstraint(fsmFsm);
-    if (constr!=NULL)
-      Ddi_BddarrayInsertLast(aigArray,constr);
-    Ddi_Bdd_t *newC = Ddi_BddMakePartConjFromArray(aigArray);
-    Ddi_BddSetAig(newC);
-    Fsm_FsmWriteConstraint(fsmFsm,newC);
-    Ddi_Free(newC);
+    if (updateConstr) {
+      Ddi_Bdd_t *constr = Fsm_FsmReadConstraint(fsmFsm);
+      if (constr!=NULL)
+        Ddi_BddarrayInsertLast(aigArray,constr);
+      Ddi_Bdd_t *newC = Ddi_BddMakePartConjFromArray(aigArray);
+      Ddi_BddSetAig(newC);
+      Fsm_FsmWriteConstraint(fsmFsm,newC);
+      Ddi_Free(newC);
+    }
+    if (clearConstr) {
+      Fsm_FsmWriteConstraint(fsmFsm,NULL);
+    }
+    if (latchPos) {
+      Ddi_Bddarray_t *newPos =
+        Ddi_BddarrayMakeLiteralsAig(Fsm_FsmReadPS(fsmFsm), 1);
+      Fsm_FsmWriteLambda(fsmFsm,newPos);
+      Ddi_Free(newPos);
+    }
     Fsm_FsmMiniWriteAiger(fsmFsm, fsmOutName);
     Fsm_FsmFree(fsmFsm);
   }

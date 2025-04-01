@@ -9803,6 +9803,85 @@ Trav_TravSatStoreProofAiger(
   SeeAlso     []
 ******************************************************************************/
 static Ddi_Bdd_t *
+retimeCheck(
+  Ddi_Bddarray_t *delta,
+  Ddi_Bdd_t *init,
+  Ddi_Bdd_t *invar,
+  Ddi_Bdd_t *notInv, 
+  Ddi_Vararray_t *pi,
+  Ddi_Vararray_t *ps,
+  Ddi_Vararray_t *ns,
+  char *retimeName
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(delta);
+  Ddi_Bdd_t *invarOut = NULL;
+  char fname[1000];
+  strcpy(fname,retimeName);
+  char *s = strstr(fname,".aig");
+  if (s==NULL) s = fname+strlen(fname);
+  sprintf(s,".aig");
+  Ddi_Bddarray_t *cutF = Ddi_AigarrayNetLoadAiger(ddm,NULL,fname);
+  sprintf(s,"_cutv.txt");
+  Ddi_Vararray_t *cutV = Ddi_VararrayLoad (ddm, fname, NULL);
+
+  if (Ddi_VararrayNum(cutV)!=Ddi_BddarrayNum(cutF)) {
+    printf("retime cut variabiles and functions mismatch\n");
+    Ddi_Free(cutF);
+    Ddi_Free(cutV);
+    return NULL;
+  }
+  Ddi_Vararray_t *suppInv = Ddi_BddSuppVararray(notInv);
+  Ddi_VararrayDiffAcc(suppInv,cutV);
+  int n = Ddi_VararrayNum(suppInv);
+  Ddi_Free(suppInv);
+  if (n!=0) {
+    printf("retime cut variabiles and invar supp mismatch\n");
+    Ddi_Free(cutF);
+    Ddi_Free(cutV);
+    return NULL;
+  }
+  
+  Ddi_Bdd_t *b = Ddi_BddCompose(notInv,cutV,cutF);
+  Ddi_Bddarray_t *cutF2 = Ddi_AigarrayInsertCuts (delta, cutF, cutV);
+  Ddi_Vararray_t *suppCut = Ddi_BddarraySuppVararray(cutF2);
+  Ddi_VararrayDiffAcc(suppCut,cutV);
+  n = Ddi_VararrayNum(suppCut);
+  Ddi_Free(suppCut);
+  if (0&&n!=0) {
+    printf("wrong retime cut\n");
+    Ddi_Free(cutF);
+    Ddi_Free(cutV);
+    return NULL;
+  }
+  Ddi_Bdd_t *a = Ddi_BddRelMakeFromArray(cutF2, ns);
+  Ddi_BddPartInsertLast(a,invar);
+  Ddi_BddSubstVarsAcc(b,ps,ns);
+  Ddi_Free(cutF2);
+  int sat=0;
+  Ddi_Varset_t *nsVars = Ddi_VarsetMakeFromArray(ns);
+  Ddi_Bdd_t *itp = Ddi_AigSatAndWithInterpolant(a, b, nsVars,
+           NULL, NULL, NULL, NULL, NULL, &sat, 0, 1, -1.0);
+  
+  if (!sat) {
+    invarOut = Ddi_BddSubstVars(itp,ns,ps);
+    Ddi_BddOrAcc(invarOut,init);
+  }
+  Ddi_Free(nsVars);
+  Ddi_Free(cutF);
+  Ddi_Free(cutV);
+  Ddi_Free(a);
+  Ddi_Free(b);
+  return invarOut;
+}
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Bdd_t *
 tDecompCheck(
   Ddi_Bddarray_t *delta,
   Ddi_Bdd_t *init,
@@ -10018,6 +10097,7 @@ Trav_TravSatCheckInvar(
   Pdtutil_VerbLevel_e verbosity = Trav_MgrReadVerbosity(travMgr);
   int fp=0;
   int tDecompK=0, framesK=0, genInvarOut=0;
+  char *retimeName=NULL;
   Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
   if (Fsm_MgrReadIFoldedProp(fsmMgr)>=0)
     Fsm_FsmUnfoldProperty(fsmFsm, 1);
@@ -10036,6 +10116,9 @@ Trav_TravSatCheckInvar(
       break;
     case Pdt_TravCertInvarOut_c:
       genInvarOut = optItem.optData.inum;
+      break;
+    case Pdt_TravCertRetimeName_c:
+      retimeName = optItem.optData.pchar;
       break;
     default:
       Pdtutil_Warning(1, "Unknown certify option");
@@ -10064,6 +10147,21 @@ Trav_TravSatCheckInvar(
            Ddi_BddSize(invar));
   }
   Ddi_Bdd_t *init = Ddi_BddDup(Fsm_FsmReadInit(fsmFsm));
+  if (retimeName != NULL) {
+    Ddi_Bdd_t *retimeInvarOut = retimeCheck(delta,init,invar,notInv,
+                    pi,ps,ns,retimeName);
+    if (retimeInvarOut != NULL) {
+      if (invarOut==NULL)
+        invarOut = Ddi_BddMakeConstAig(ddm, 0);
+      Ddi_BddOrAcc(invarOut,retimeInvarOut);
+      Ddi_Free(retimeInvarOut);
+      Ddi_DataCopy(invar,invarOut);
+      Ddi_Free(notInv);
+      Ddi_Free(notInv0);
+      notInv = Ddi_BddNot(invar);
+      notInv0 = Ddi_BddNot(invar); 
+    }
+  }
   int checkTDfail = 0;
   if (tDecompK > 0) {
     Ddi_Bdd_t *tdInvarOut = tDecompCheck(delta,init,target,invar,notInv,

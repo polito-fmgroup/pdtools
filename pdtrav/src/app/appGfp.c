@@ -85,7 +85,11 @@ int App_Gfp (
   printf("gfp app:");
   for (int i=0; i<argc; i++) {
     printf(" %s", argv[i]);
-    if (strcmp(argv[i],"-i")==0) {
+    if (strcmp(argv[i],"-h")==0) {
+      printf("usage\n");
+      printf("gfp [-i <num passes>] <model.aig> <inv-in.aig> inv-out.aig>\n");
+    }
+    else if (strcmp(argv[i],"-i")==0) {
       i++;
       if (i>=argc) {
         printf("\nmissing integer num of gfp passes (-i)\n");

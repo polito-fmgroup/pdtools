@@ -125,6 +125,14 @@ int App_Certify (
       invarStoreName = argv[i];
       Pdtutil_OptListIns(certOpt, eTravOpt, Pdt_TravCertInvarOut_c, inum, 1);
     }
+    else if (strcmp(argv[i],"-r")==0) {
+      i++;
+      if (i>=argc) {
+        printf("\nmissing retime file name\n");
+        return 0;
+      }
+      Pdtutil_OptListIns(certOpt, eTravOpt, Pdt_TravCertRetimeName_c, pchar, argv[i]);
+    }
     else if (fsmName==NULL) {
       fsmName = argv[i];
     }
@@ -160,8 +168,8 @@ int App_Certify (
   if (simpInvarName != NULL) {
     Ddi_Vararray_t *vars = Ddi_VararrayDup(Fsm_MgrReadVarI(appMgr->fsmMgr));
     Ddi_VararrayAppend(vars,Fsm_MgrReadVarPS(appMgr->fsmMgr));
-    Ddi_Bddarray_t *extraInvarArray = Ddi_AigarrayNetLoadAigerMapVars(appMgr->ddiMgr,
-                                                          NULL, vars, simpInvarName);
+    Ddi_Bddarray_t *extraInvarArray = Ddi_AigarrayNetLoadAigerMapVars(
+      appMgr->ddiMgr, NULL, vars, simpInvarName);
     Ddi_BddarrayAppend(invarArray,extraInvarArray);
     Ddi_Free(extraInvarArray);
     Ddi_Free(vars);

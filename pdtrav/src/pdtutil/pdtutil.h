@@ -483,7 +483,8 @@ typedef enum {
   Pdt_TravCertTDecompK_c,
   Pdt_TravCertInvarOut_c,
   Pdt_TravCertSimpInvar_c,
-
+  Pdt_TravCertRetimeName_c,
+  
   Pdt_TravNone_c
 } Pdt_OptTagTrav_e;
 

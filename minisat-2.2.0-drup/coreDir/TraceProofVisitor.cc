@@ -1161,7 +1161,7 @@ namespace Minisat
 #pragma GCC push_options
 #pragma GCC optimize ("00")
   
-  static int proofResolveStart(vec<Lit>& main,
+  static void proofResolveStart(vec<Lit>& main,
                                vec<lbool>& mark) {
     int s=main.size();
     int j=0;
@@ -1179,7 +1179,7 @@ namespace Minisat
     }
   }   
 
-  static int proofResolveClauses(vec<Lit>& main,
+  static void proofResolveClauses(vec<Lit>& main,
                                  vec<Lit>& other,
                                  Lit l,
                                  vec<lbool>& mark) {
