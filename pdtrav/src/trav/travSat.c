@@ -26532,6 +26532,7 @@ itpImgPartItpByDomainCubesFwdBwd (
   int doSingleItp=0;
   int doConstrSubset=1;
   int doSubsetStateA0A1=1;
+  int checkBwd0BeforeBwd1=1;
   float bwdTimeLimit = -1;
 
   if (doSubsetStateA0A1) {
@@ -26650,7 +26651,20 @@ itpImgPartItpByDomainCubesFwdBwd (
           else 
             cubeVarsDup = Ddi_VararrayCopy(ddmDup,ps);
         }
-        cubeDup = Ddi_AigSatMinisat22WithCexAndAbortIncremental(
+        int checkBwd1 = 1;
+        if (checkBwd0BeforeBwd1) {
+          cubeDup = Ddi_AigSatMinisat22WithCexAndAbortIncremental(ddiS,
+                myCheck0, cubeVarsDup, 0, 2*bwdTimeLimit, &cexUndef);
+          if (cubeDup!=NULL) {
+            Ddi_Free(cubeDup);
+          }
+          else {
+            doRefineBwd0 = 1;
+            checkBwd1=0;
+          }
+        }
+        if (checkBwd1) // check here
+          cubeDup = Ddi_AigSatMinisat22WithCexAndAbortIncremental(
                 ddiS,myCheck, cubeVarsDup, 0, -1, NULL);
       }
       if (cubeDup!=NULL) {
@@ -26674,7 +26688,7 @@ itpImgPartItpByDomainCubesFwdBwd (
           andWithLeftover = 1;
         }
       }
-      else {
+      else if (!doRefineBwd0) {
         cubeDup = Ddi_AigSatMinisat22WithCexAndAbortIncremental(ddiS,
                 myCheck0, cubeVarsDup, 0, 2*bwdTimeLimit, &cexUndef);
         if (cubeDup!=NULL) {
