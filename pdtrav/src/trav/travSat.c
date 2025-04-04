@@ -19931,7 +19931,7 @@ refineBwdRingForCone(
 #if 1
     //    invertAB=0;
     int doReverse = k<=1;
-    int maxIter = k<=1?4:1;
+    int maxIter = k<=1?16:1;
     int chkCone = 1;
     if (chkCone) {
     }
@@ -26530,8 +26530,8 @@ itpImgPartItpByDomainCubesFwdBwd (
   }
 
   int doSingleItp=0;
-  int doConstrSubset=1;
-  int doSubsetStateA0A1=1;
+  int doConstrSubset=0; // !
+  int doSubsetStateA0A1=0; // !
   int checkBwd0BeforeBwd1=1;
   float bwdTimeLimit = -1;
 
@@ -26608,7 +26608,7 @@ itpImgPartItpByDomainCubesFwdBwd (
       Ddi_Bdd_t *fwdConstrDup=NULL;
       static int cntCalls=0;
       cntCalls++;
-      if (doConstrSubset || doSubsetStateA0A1) {
+      if (1|| doConstrSubset || doSubsetStateA0A1) {
         useFwdConstrCube = 1;
       }
       Ddi_BddPartInsertLast(fwdConstr,bwd1);
@@ -26843,6 +26843,7 @@ itpImgPartItpByDomainCubesFwdBwd (
       sat_i = 0;
       if (enCoreFinal && !Ddi_BddIsOne(cube)) {
         Ddi_Bdd_t *aux = Ddi_BddDup(a_i);
+        //        Ddi_Bdd_t *aux = Ddi_BddMakeConstAig(ddm,1); 
         Ddi_BddSetPartConj(aux);
         Ddi_BddPartInsertLast(aux,b_i);
 	startTime = util_cpu_time();
@@ -27102,9 +27103,11 @@ itpImgPartItpByDomainCubesFwdBwd (
       Ddi_BddSetAig(cube);
       //Ddi_Bdd_t *a_0 = Ddi_BddDiff(leftover,cube);
       //      Ddi_BddNotAcc(a_0);
-      Ddi_Bdd_t *a_0 = Ddi_BddAnd(leftover,cube);
       Ddi_Bdd_t *itp_i0;
-      int doItp=!Ddi_BddIsCube(cube);
+      //      Ddi_Bdd_t *a_0 = Ddi_BddAnd(leftover,cube);
+      Ddi_Bdd_t *a_0 = Ddi_BddDup(cube);
+
+      int doItp=0 || !Ddi_BddIsCube(cube); // forced 
       if (doSubsetStateA0A1) {
         Ddi_BddSetPartConj(a_0);
         Ddi_BddPartInsertLast(a_0,myA0);
