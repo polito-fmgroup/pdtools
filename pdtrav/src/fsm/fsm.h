@@ -1080,6 +1080,8 @@ EXTERN Ddi_Bdd_t *Fsm_ReduceCegar(
 EXTERN int Fsm_RetimeMinreg(
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t * care,
+  Ddi_Bddarray_t *retimeCutF,
+  Ddi_Vararray_t *retimeCutV,
   int strategy
 );
 EXTERN void Fsm_RetimeInitStub2Init(

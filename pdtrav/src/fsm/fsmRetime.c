@@ -4902,6 +4902,8 @@ int
 Fsm_RetimeMinreg(
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t * care,
+  Ddi_Bddarray_t *retimeCutF,
+  Ddi_Vararray_t *retimeCutV,
   int strategy
 )
 {
@@ -5129,6 +5131,9 @@ Fsm_RetimeMinreg(
 
       Pdtutil_Assert(nSubst < nRem, "WRONG MIN_REG retiming");
 
+      Ddi_Bddarray_t *saveCutF = NULL;
+      Ddi_Vararray_t *saveCutV = NULL;
+
       auxReplace = Ddi_BddarrayAlloc(ddm, nSubst);
       Ddi_AigarrayComposeNoMultipleAcc(deltaStub, ps, newD);
 
@@ -5168,6 +5173,12 @@ Fsm_RetimeMinreg(
         fprintf(stdout, "MINREG retiming from %d to", Ddi_VararrayNum(ps))
         );
 
+      int saveCut = retimeCutF!=NULL && retimeCutV!=NULL; 
+      if (saveCut) {
+        saveCutF = Ddi_BddarrayAlloc(ddm, nSubst);
+        saveCutV = Ddi_VararrayAlloc(ddm, nSubst);
+      }
+
       for (j = n0 - 1, k = nRem; j >= 0; j--) {
         Ddi_Var_t *v_j = Ddi_VararrayRead(ps, j);
         int isPropOrConstr = strncmp(Ddi_VarName(v_j), "PDT_BDD_", 8) == 0;
@@ -5188,6 +5199,10 @@ Fsm_RetimeMinreg(
             Ddi_VararrayRemove(ns, j);
             Ddi_BddarrayRemove(delta, j);
             Ddi_BddarrayRemove(newStub0, j);
+            if (saveCut && j<Ddi_BddarrayNum(saveCutF)) {
+              Ddi_VararrayRemove(saveCutV, j);
+              Ddi_BddarrayRemove(saveCutF, j);
+            }
           } else {
             /* replaced latch */
             Ddi_Bdd_t *lit = Ddi_BddMakeLiteralAig(v_j, 1);
@@ -5195,12 +5210,29 @@ Fsm_RetimeMinreg(
             Ddi_BddarrayWrite(auxReplace, k, lit);
             Ddi_BddarrayWrite(delta, j, Ddi_BddarrayRead(deltaStub, k));
             Ddi_BddarrayWrite(newStub0, j, Ddi_BddarrayRead(newStub, k));
+            if (saveCut) {
+              Ddi_BddarrayWrite(saveCutF,j,Ddi_BddarrayRead(substF,k));
+              Ddi_VararrayWrite(saveCutV,j,v_j);
+            }
             Ddi_Free(lit);
           }
         } else {
           Ddi_BddarrayWrite(delta, j, Ddi_BddarrayRead(newD, j));
+          if (saveCut) {
+            Ddi_Bdd_t *lit = Ddi_BddMakeLiteralAig(v_j, 1);
+            Ddi_BddarrayWrite(saveCutF,j,lit);
+            Ddi_VararrayWrite(saveCutV,j,v_j);
+            Ddi_Free(lit);
+          }
         }
       }
+
+      if (saveCut) {
+        Ddi_DataCopy(retimeCutF,saveCutF);
+        Ddi_DataCopy(retimeCutV,saveCutV);
+      }
+      Ddi_Free(saveCutF);
+      Ddi_Free(saveCutV);
 
       Pdtutil_VerbosityLocal(Pdtutil_VerbLevelUsrMax_c,
         Pdtutil_VerbLevelUsrMax_c,

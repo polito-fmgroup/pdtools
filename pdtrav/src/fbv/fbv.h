@@ -151,6 +151,7 @@ typedef struct {
     int cegarStrategy;          // command line parameter
     int auxVarsUsed;            // INTERNAL FIELD
     char *manualAbstr;          // command line parameter -> used in fbv only!
+    char *writeRetimeCut;       // command line parameter
   } fsm;
 
   struct {

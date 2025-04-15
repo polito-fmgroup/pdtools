@@ -3235,7 +3235,7 @@ FbvFsmReductions(
           int size0 = Ddi_BddarraySize(Fsm_MgrReadDeltaBDD(fsmMgr));
 
           if (nl > 2) {
-            loopReduce |= Fsm_RetimeMinreg(fsmMgr, NULL, opt->pre.retime);
+            loopReduce |= Fsm_RetimeMinreg(fsmMgr, NULL, NULL, NULL, opt->pre.retime);
             if (Ddi_BddarraySize(Fsm_MgrReadDeltaBDD(fsmMgr)) > size0 * 1.05) {
               opt->pre.retime = 0;
             }
@@ -4655,6 +4655,12 @@ FbvParseArgs(
       opt->trav.writeInvar = Pdtutil_StrDup(argv[2]);
       opt->pre.peripheralLatches = 0;
       opt->trav.pdrReuseRings = 1;
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-writeRetimeCut") == 0) {
+      opt->fsm.writeRetimeCut = Pdtutil_StrDup(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -8520,8 +8526,30 @@ invarVerif(
       if (opt->pre.retime) {
 
         int size0 = Ddi_BddarraySize(Fsm_MgrReadDeltaBDD(fsmMgr));
-
-        loopReduce |= Fsm_RetimeMinreg(fsmMgr, care, opt->pre.retime);
+        char *writeRetime = opt->fsm.writeRetimeCut;
+        Ddi_Bddarray_t *cutF = NULL;
+        Ddi_Vararray_t *cutV = NULL;
+        if (writeRetime!=NULL) {
+          cutF = Ddi_BddarrayAlloc(ddiMgr, 0);
+          cutV = Ddi_VararrayAlloc(ddiMgr, 0);
+        }
+        int retimeDone = Fsm_RetimeMinreg(fsmMgr, care, cutF, cutV, opt->pre.retime);
+        if (retimeDone && writeRetime!=NULL) {
+          char fname[1000];
+          strcpy(fname,writeRetime);
+          char *s = strstr(fname,".aig");
+          if (s==NULL) s = fname+strlen(fname);
+          sprintf(s,".aig");
+          fprintf(stdout, "Writing retime cut to file %s.\n", fname);
+          Ddi_AigarrayNetStoreAiger(cutF, 0, fname);
+          sprintf(s,"_cutv.txt");
+          fprintf(stdout, "Writing retime cut vars to file %s.\n", fname);
+          Ddi_VararrayStore (cutV, fname, NULL);
+          opt->pre.retime = 0;
+        }
+        Ddi_Free(cutF);
+        Ddi_Free(cutV);
+        loopReduce |= retimeDone;
         if (Ddi_BddarraySize(Fsm_MgrReadDeltaBDD(fsmMgr)) > size0 * 1.05) {
           opt->pre.retime = 0;
         }
@@ -11002,7 +11030,7 @@ invarMixedVerif(
       if (opt->pre.retime) {
         int size0 = Ddi_BddarraySize(Fsm_MgrReadDeltaBDD(fsmMgr));
 
-        loopReduce |= Fsm_RetimeMinreg(fsmMgr, care, opt->pre.retime);
+        loopReduce |= Fsm_RetimeMinreg(fsmMgr, care, NULL, NULL, opt->pre.retime);
         if (Ddi_BddarraySize(Fsm_MgrReadDeltaBDD(fsmMgr)) > size0 * 1.05) {
           opt->pre.retime = 0;
         } else if (0 && size0 > 20000) {
@@ -22145,6 +22173,7 @@ FbvOpt2OptList(
   opt->trav.approxTrClustFile = NULL;
   opt->tr.manualTrDpartFile = NULL;
   opt->fsm.manualAbstr = NULL;
+  opt->fsm.writeRetimeCut = NULL;
   opt->trav.hintsFile = NULL;
   opt->trav.invarFile = NULL;
   opt->trav.writeInvar = NULL;
@@ -23240,6 +23269,7 @@ new_settings(
   opt->pre.thresholdCluster = 1;
   opt->tr.manualTrDpartFile = NULL;
   opt->fsm.manualAbstr = NULL;
+  opt->fsm.writeRetimeCut = NULL;
   opt->trav.hintsFile = NULL;
   opt->trav.invarFile = NULL;
   opt->trav.writeInvar = NULL;
@@ -23300,6 +23330,7 @@ FbvDupSettings(
   opt->trav.approxTrClustFile = Pdtutil_StrDup(opt0->trav.approxTrClustFile);
   opt->tr.manualTrDpartFile = Pdtutil_StrDup(opt0->tr.manualTrDpartFile);
   opt->fsm.manualAbstr = Pdtutil_StrDup(opt0->fsm.manualAbstr);
+  opt->fsm.writeRetimeCut = Pdtutil_StrDup(opt0->fsm.writeRetimeCut);
   opt->trav.hintsFile = Pdtutil_StrDup(opt0->trav.hintsFile);
   opt->trav.invarFile = Pdtutil_StrDup(opt0->trav.invarFile);
   opt->trav.writeInvar = Pdtutil_StrDup(opt0->trav.writeInvar);
@@ -23358,6 +23389,7 @@ dispose_settings(
   Pdtutil_Free(opt->trav.approxTrClustFile);
   Pdtutil_Free(opt->tr.manualTrDpartFile);
   Pdtutil_Free(opt->fsm.manualAbstr);
+  Pdtutil_Free(opt->fsm.writeRetimeCut);
   Pdtutil_Free(opt->trav.hintsFile);
   Pdtutil_Free(opt->trav.invarFile);
   Pdtutil_Free(opt->mc.invSpec);
