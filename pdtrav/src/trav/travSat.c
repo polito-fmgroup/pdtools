@@ -26853,7 +26853,7 @@ itpImgPartItpByDomainCubesFwdBwd (
             ddm->settings.aig.itpNnfAbstrAB = 1; // just B
             itp_i_j = Ddi_AigSat22AndWithInterpolant(NULL,a_i,b_i,NULL/*bAbstr*/,
                  nsVars, NULL,NULL,0,NULL/*bwdCare*/,NULL,
-                 &sat_i, 0, 1, 0, myTimeLimit);
+                                                     &sat_i, 0, 1, 0, myTimeLimit); // LIMIT !!!
             if (sat_i<0) {
               Ddi_Bdd_t *constrFull = itp_i_j;
               Ddi_Bdd_t *constrA1 = Ddi_BddPartFilter (constrFull,a1);
