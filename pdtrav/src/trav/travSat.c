@@ -10127,6 +10127,7 @@ Trav_TravSatCheckInvar(
   
   Ddi_Bddarray_t *delta = Fsm_FsmReadDelta(fsmFsm); 
   Ddi_Bddarray_t *lambda = Fsm_FsmReadLambda(fsmFsm); 
+  Ddi_Bdd_t *constr = Fsm_FsmReadConstraint(fsmFsm); 
   Ddi_Bdd_t *target = Ddi_BddNot(Ddi_BddarrayRead(lambda,0));
 
   // check invariant (fix-point)
@@ -10195,7 +10196,7 @@ Trav_TravSatCheckInvar(
   }
   Ddi_BddComposeAcc(notInv,ps,delta);
   long myStartTime = util_cpu_time();
-  fp = !Ddi_AigSatAnd(invar,notInv,NULL);
+  fp = !Ddi_AigSatAnd(invar,notInv,constr);
   Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
       printf("\nCheck Done invariant %s - time: %s\n",
              fp ? "proved" : "disproved",
@@ -10210,7 +10211,7 @@ Trav_TravSatCheckInvar(
       printf("Checking property of size. %d\n",
            Ddi_BddSize(target));
     }
-    chk = *checkTargetSatP = !Ddi_AigSatAnd(invar,target,NULL);
+    chk = *checkTargetSatP = !Ddi_AigSatAnd(invar,target,constr);
     Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
       printf("\nCheck Done property %s - time: %s\n",
              chk ? "proved" : "disproved",
@@ -17317,6 +17318,7 @@ itpStrengthenReachedGfp(
       Ddi_BddOrAcc(b,notReached);
       Ddi_MgrReadOption(ddm, Pdt_DdiItpAigCore_c, &saveItpAigCore);
       Ddi_MgrSetOption(ddm, Pdt_DdiItpAigCore_c, inum, size0/2);
+      //      ddm->settings.aig.enBddFoConOpt = 0;
       Ddi_Bdd_t *itp1 = Ddi_AigSatAndWithInterpolant(myFromAndTr, b,
         itpMgr->nsvars, NULL, NULL, NULL, NULL, NULL, &sat, 0, 1, -1.0);
       Ddi_MgrSetOption(ddm, Pdt_DdiItpAigCore_c, inum, saveItpAigCore);
