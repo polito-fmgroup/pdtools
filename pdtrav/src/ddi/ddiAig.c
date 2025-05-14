@@ -12614,7 +12614,7 @@ Ddi_NnfClustSimplify (
 )
 {
    Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
-   Ddi_Bdd_t *fNew, *fNnf;
+   Ddi_Bdd_t *fNew=NULL, *fNnf=NULL;
    Ddi_Bdd_t *constr = NULL;
    Ddi_Vararray_t *rV = NULL;
    Ddi_Vararray_t *aV = NULL;
@@ -12700,7 +12700,8 @@ Ddi_NnfClustSimplify (
      i++;
    } while (size1 < 0.95*size0);
 
-   Ddi_BddAigFromNnfAcc(fNew,rV);
+   fNew = fNnf;
+   Ddi_BddAigFromNnfAcc(fNnf,rV);
 
    Ddi_Free(constr);
    Ddi_Free(rV);

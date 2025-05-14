@@ -56,6 +56,7 @@ typedef enum {
   App_TaskAiger_c,
   App_TaskCertify_c,
   App_TaskGfp_c,
+  App_TaskIso_c,
   App_TaskNone_c
 } App_TaskSelection_e;
 
@@ -97,6 +98,10 @@ EXTERN int App_Certify (
   char *argv[]
 );
 EXTERN int App_Gfp (
+  int argc,
+  char *argv[]
+);
+EXTERN int App_Iso (
   int argc,
   char *argv[]
 );

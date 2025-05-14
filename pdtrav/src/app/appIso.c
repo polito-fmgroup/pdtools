@@ -1,10 +1,10 @@
 /**CFile***********************************************************************
 
-  FileName    [app.c]
+  FileName    [appIso.c]
 
-  PackageName [tr]
+  PackageName [app]
 
-  Synopsis    [Functions to handle pdtrav apps as single programs]
+  Synopsis    [Functions to handle latch mapping based on graph isomorphism]
 
   Description []
 
@@ -20,14 +20,13 @@
     used for the institutions' internal research and educational purposes,
     and that no monies are exchanged. No guarantee is expressed or implied
     by the distribution of this code.
-    Send bug-reports and/or questions to: gianpiero.cabodi@polito.it. ]
+    Send bug-reports and/or questions to: cabodi@polito.it. ]
 
   Revision    []
 
 ******************************************************************************/
 
 #include "appInt.h"
-#include "pdtutil.h"
 
 /*---------------------------------------------------------------------------*/
 /* Constant declarations                                                     */
@@ -45,18 +44,6 @@
 /* Variable declarations                                                     */
 /*---------------------------------------------------------------------------*/
 
-static struct {
-  char *appName;
-  AppMainFunc_t appFunc;
-} appTable[] =
-  {
-   {"aiger", App_Aiger}, 
-   {"certify", App_Certify},
-   {"gfp", App_Gfp}, 
-   {"iso", App_Iso}, 
-   {NULL,NULL}
-  };
-
 /*---------------------------------------------------------------------------*/
 /* Macro declarations                                                        */
 /*---------------------------------------------------------------------------*/
@@ -66,7 +53,6 @@ static struct {
 /*---------------------------------------------------------------------------*/
 /* Static function prototypes                                                */
 /*---------------------------------------------------------------------------*/
-
 
 /**AutomaticEnd***************************************************************/
 
@@ -79,37 +65,70 @@ static struct {
 /*---------------------------------------------------------------------------*/
 
 /**Function********************************************************************
-  Synopsis    [Main program of pdtrav apps.]
-  Description [Main program of pdtrav apps.]
+  Synopsis    [Main program of iso app.]
+  Description [Main program of iso app.]
   SideEffects []
   SeeAlso     []
 ******************************************************************************/
-int
-main(
+int App_Iso (
   int argc,
   char *argv[]
-)
-{
-  int res = EXIT_SUCCESS;
-  if (argc<2) {
-    printf("missing app name\n");
-  }
-  else {
-    for (int i=0; appTable[i].appName!=NULL; i++) {
-      if (strcmp(argv[1],appTable[i].appName)==0) {
-        res = !appTable[i].appFunc(argc-2,argv+2);
-        return res;
-      }
-    }
-    printf("wrong app name\n");
-  }
+) {
+  App_Mgr_t *appMgr;
+  int iter=1;
 
-  printf("Choose among:");
-  for (int i=0; appTable[i].appName!=NULL; i++) {
-    printf(" %s", appTable[i].appName);
+  char *fsm1Name = NULL;
+  char *fsm2Name = NULL;
+  char *mapName = NULL;
+  Fsm_Mgr_t *fsm2Mgr = NULL;
+  Ddi_Mgr_t *dd2Mgr = NULL;
+
+  printf("iso app:");
+  for (int i=0; i<argc; i++) {
+    printf(" %s", argv[i]);
+    if (strcmp(argv[i],"-h")==0) {
+      printf("usage\n");
+      printf("iso <model1.aig> <model2.aig> <map-out.aig>\n");
+    }
+    else if (fsm1Name==NULL) {
+      fsm1Name = argv[i];
+    }
+    else if (fsm2Name==NULL) {
+      fsm2Name = argv[i];
+    }
+    else if (mapName==NULL) {
+      mapName = argv[i];
+    }
+    else {
+      printf("\nunknown argument/option: %s\n", argv[i]);
+    }
   }
   printf("\n");
-  return EXIT_FAILURE;
+
+  appMgr = App_MgrInit("iso", App_TaskIso_c);
+
+  if (Fsm_MgrLoadAiger(&appMgr->fsmMgr, appMgr->ddiMgr, fsm1Name,
+        NULL, NULL,Pdtutil_VariableOrderDefault_c) == 1) {
+    fprintf(stderr, "-- FSM Loading Error.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  dd2Mgr = Ddi_MgrInit("ddi2Mgr", NULL, 0, DDI_UNIQUE_SLOTS,
+      DDI_CACHE_SLOTS * 10, 0, -1, -1);
+  fsm2Mgr = Fsm_MgrInit("fsm2Mgr", NULL);
+  Fsm_MgrSetUseAig(fsm2Mgr, 1);
+
+  if (Fsm_MgrLoadAiger(&fsm2Mgr, dd2Mgr, fsm2Name,
+        NULL, NULL,Pdtutil_VariableOrderDefault_c) == 1) {
+    fprintf(stderr, "-- FSM Loading Error.\n");
+    exit(EXIT_FAILURE);
+  }
+                        
+  Fsm_IsoMapLatches(appMgr->fsmMgr,fsm2Mgr,mapName);
+
+  App_MgrQuit(appMgr);
+  Fsm_MgrQuit(fsm2Mgr);
+  Ddi_MgrQuit(dd2Mgr);
+  
+  return 1;
 }
-
-

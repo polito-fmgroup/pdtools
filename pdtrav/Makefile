@@ -228,7 +228,8 @@ APPSRC = $(APP_DIR)/app.c \
 	$(APP_DIR)/appMgr.c \
 	$(APP_DIR)/appAiger.c \
 	$(APP_DIR)/appCertify.c \
-	$(APP_DIR)/appGfp.c
+	$(APP_DIR)/appGfp.c \
+	$(APP_DIR)/appIso.c
 
 APPHDR = $(APP_DIR)/app.h  $(APP_DIR)/appInt.h
 

@@ -183,7 +183,7 @@ int App_Certify (
   fp = Trav_TravSatCheckInvar(appMgr->travMgr,appMgr->fsmMgr,
 			       myInvar,&chk,certOpt);
   if (chk&&fp&&(invarStoreName!=NULL)) {
-    printf("Writing invar to %s\n", invarStoreName);
+    printf("Writing invar of size %d to %s\n", Ddi_BddSize(myInvar), invarStoreName);
     Ddi_AigNetStoreAiger(myInvar,0,invarStoreName);
   }
   

@@ -5682,6 +5682,109 @@ Fsm_FsmStructReduction(
   return (neq + nconst);
 }
 
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects [None]
+  SeeAlso     []
+******************************************************************************/
+void
+Fsm_IsoMapLatches(
+  Fsm_Mgr_t * fsm1Mgr,
+  Fsm_Mgr_t * fsm2Mgr,
+  char *mapName
+)
+{
+  Ddi_Mgr_t *ddm1 = Fsm_MgrReadDdManager(fsm1Mgr);
+  Ddi_Mgr_t *ddm2 = Fsm_MgrReadDdManager(fsm2Mgr);
+  Ddi_Vararray_t *pi1 = Fsm_MgrReadVarI(fsm1Mgr);
+  Ddi_Vararray_t *ps1 = Fsm_MgrReadVarPS(fsm1Mgr);
+  Ddi_Vararray_t *ns1 = Fsm_MgrReadVarNS(fsm1Mgr);
+  Ddi_Vararray_t *pi2 = Fsm_MgrReadVarI(fsm2Mgr);
+  Ddi_Vararray_t *ps2 = Fsm_MgrReadVarPS(fsm2Mgr);
+  Ddi_Vararray_t *ns2 = Fsm_MgrReadVarNS(fsm2Mgr);
+  Ddi_Bddarray_t *delta1 = Fsm_MgrReadDeltaBDD(fsm1Mgr);
+  Ddi_Bddarray_t *delta2 = Fsm_MgrReadDeltaBDD(fsm2Mgr);
+
+  int i1, i2, n1=Ddi_VararrayNum(ps1), n2=Ddi_VararrayNum(ps2);
+  int ni1=Ddi_VararrayNum(pi1), ni2=Ddi_VararrayNum(pi2);
+  int mapi1[ni1], mapi2[ni2], maps1[n1], maps2[n2];
+  for (i1=0; i1<n1; i1++) {
+    Ddi_BddSuppAttach(Ddi_BddarrayRead(delta1,i1));
+    maps1[i1] = -1;
+  }
+  for (i2=0; i2<n2; i2++) {
+    Ddi_BddSuppAttach(Ddi_BddarrayRead(delta2,i2));
+    maps2[i2] = -1;
+  }
+  for (i1=0; i1<ni1; i1++) {
+    mapi1[i1] = -1;
+  }
+  for (i2=0; i2<ni2; i2++) {
+    mapi2[i2] = -1;
+  }
+
+  Ddi_VararrayWriteMarkWithIndex (pi1,1);  
+  Ddi_VararrayWriteMarkWithIndex (ps1,ni1+1);  
+  Ddi_VararrayWriteMarkWithIndex (pi2,1);  
+  Ddi_VararrayWriteMarkWithIndex (ps2,ni2+1);  
+  for (i1=i2=0; i1<n1&&i2<n2;) {
+    int mapped=1;
+    Ddi_Bdd_t *d1 = Ddi_BddarrayRead(delta1,i1);
+    Ddi_Bdd_t *d2 = Ddi_BddarrayRead(delta2,i2);
+    Ddi_Varset_t *s1 = Ddi_BddSuppRead(d1);
+    Ddi_Varset_t *s2 = Ddi_BddSuppRead(d2);
+    if (Ddi_BddSize(d1)!=Ddi_BddSize(d2) ||
+        Ddi_VarsetNum(s1)!=Ddi_VarsetNum(s2)) {
+      mapped = 0;
+    }
+    else {
+      Ddi_Bdd_t *d2Dup = Ddi_BddCopyRemapVars(ddm1,d2,NULL,NULL);
+      if (!Ddi_BddEqual(d1,d2Dup) || i1!=i1) {
+        mapped = 0;
+      }
+      else {
+        maps1[i1]=i2;
+      }
+      Ddi_Free(d2Dup);
+    }
+    if (mapped) {
+      i1++; i2++;
+    }
+    else {
+      i1++; i2++;
+    }
+  }
+
+  for (i1=0; i1<n1; i1++)
+    Ddi_BddSuppDetach(Ddi_BddarrayRead(delta1,i1));
+  for (i2=0; i2<n2; i2++)
+    Ddi_BddSuppDetach(Ddi_BddarrayRead(delta2,i2));
+  Ddi_VararrayWriteMark (pi1,0);  
+  Ddi_VararrayWriteMark (ps1,0);  
+  Ddi_VararrayWriteMark (pi2,0);  
+  Ddi_VararrayWriteMark (ps2,0);  
+
+  FILE *fp = fopen(mapName, "w");
+  for (i1=0; i1<n1; i1++) {
+    if (maps1[i1]!=-1) {
+      Ddi_Var_t *v1 = Ddi_VararrayRead(ps1,i1);
+      Ddi_Var_t *v2 = Ddi_VararrayRead(ps2,maps1[i1]);
+      fprintf(fp,"%s %s\n", Ddi_VarName(v1), Ddi_VarName(v2));
+    }
+  }
+  for (i1=0; i1<ni1; i1++) {
+    if (mapi1[i1]!=-1) {
+      Ddi_Var_t *v1 = Ddi_VararrayRead(pi1,i1);
+      Ddi_Var_t *v2 = Ddi_VararrayRead(pi2,mapi1[i1]);
+      fprintf(fp,"%s %s\n", Ddi_VarName(v1), Ddi_VarName(v2));
+    }
+  }
+  fclose(fp);
+}
+
+
 /*---------------------------------------------------------------------------*/
 /* Definition of internal functions                                            */
 /*---------------------------------------------------------------------------*/

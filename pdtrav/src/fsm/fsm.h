@@ -1274,6 +1274,12 @@ Fsm_FsmReduceEnable(
   Fsm_Fsm_t * fsmFsm,
   Ddi_Bddarray_t *enArray
 );
+EXTERN void
+Fsm_IsoMapLatches(
+  Fsm_Mgr_t * fsm1Mgr,
+  Fsm_Mgr_t * fsm2Mgr,
+  char *mapName
+);
 
 // TEST PURPOSES :: June '13
 EXTERN void myLink(
