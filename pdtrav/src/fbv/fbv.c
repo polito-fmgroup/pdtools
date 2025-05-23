@@ -8359,6 +8359,13 @@ invarVerif(
       Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
       int iConstr = Ddi_BddarrayNum(delta)-2;
       Ddi_Bdd_t *deltaConstr = Ddi_BddarrayRead(delta,iConstr);
+      Ddi_Vararray_t *suppA = Ddi_BddarraySuppVararray(rplus);
+      Ddi_VararrayDiffAcc(suppA,ps);
+      Ddi_VararrayDiffAcc(suppA,pi);
+      if (Ddi_VararrayNum(suppA)>0) {
+        Ddi_VararrayAppend(pi,suppA);
+      }
+      Ddi_Free(suppA);
       if (useAsConstr) {
 	Ddi_BddAndAcc(myInvar, Ddi_BddarrayRead(rplus,0));
 	Ddi_BddAndAcc(deltaConstr, Ddi_BddarrayRead(rplus,0));

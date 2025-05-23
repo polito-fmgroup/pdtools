@@ -5707,7 +5707,7 @@ Fsm_IsoMapLatches(
   Ddi_Bddarray_t *delta1 = Fsm_MgrReadDeltaBDD(fsm1Mgr);
   Ddi_Bddarray_t *delta2 = Fsm_MgrReadDeltaBDD(fsm2Mgr);
 
-  int i1, i2, n1=Ddi_VararrayNum(ps1), n2=Ddi_VararrayNum(ps2);
+  int i1, i2, n1=Ddi_VararrayNum(ps1), n2=Ddi_VararrayNum(ps2), nmap=0;
   int ni1=Ddi_VararrayNum(pi1), ni2=Ddi_VararrayNum(pi2);
   int mapi1[ni1], mapi2[ni2], maps1[n1], maps2[n2];
   for (i1=0; i1<n1; i1++) {
@@ -5735,17 +5735,31 @@ Fsm_IsoMapLatches(
     Ddi_Bdd_t *d2 = Ddi_BddarrayRead(delta2,i2);
     Ddi_Varset_t *s1 = Ddi_BddSuppRead(d1);
     Ddi_Varset_t *s2 = Ddi_BddSuppRead(d2);
-    if (Ddi_BddSize(d1)!=Ddi_BddSize(d2) ||
-        Ddi_VarsetNum(s1)!=Ddi_VarsetNum(s2)) {
+    if (0 && (Ddi_BddSize(d1)!=Ddi_BddSize(d2)) ||
+              Ddi_VarsetNum(s1)!=Ddi_VarsetNum(s2)) {
       mapped = 0;
     }
     else {
       Ddi_Bdd_t *d2Dup = Ddi_BddCopyRemapVars(ddm1,d2,NULL,NULL);
-      if (!Ddi_BddEqual(d1,d2Dup) || i1!=i1) {
+      int eq = (Ddi_BddEqual(d1,d2Dup) || Ddi_BddEqualSat(d1,d2Dup)) && i1==i2;
+      if (!eq && i2<n2-1) {
+        Ddi_Bdd_t *d2next = Ddi_BddarrayRead(delta2,i2+1);
+        Ddi_Bdd_t *d2nextDup = Ddi_BddCopyRemapVars(ddm1,d2next,NULL,NULL);
+        eq = Ddi_BddEqualSat(d1,d2nextDup);
+        Ddi_Free(d2nextDup);
+        if (eq) i2++;
+      }
+      if (!eq && i1<n1-1) {
+        Ddi_Bdd_t *d1next = Ddi_BddarrayRead(delta1,i1+1);
+        eq = Ddi_BddEqualSat(d1next,d2Dup);
+        if (eq) i1++;
+      }
+      if (!eq) {
         mapped = 0;
       }
       else {
         maps1[i1]=i2;
+        nmap++;
       }
       Ddi_Free(d2Dup);
     }
@@ -5766,6 +5780,7 @@ Fsm_IsoMapLatches(
   Ddi_VararrayWriteMark (pi2,0);  
   Ddi_VararrayWriteMark (ps2,0);  
 
+  printf("Found %d mapped latches\n", nmap);
   FILE *fp = fopen(mapName, "w");
   for (i1=0; i1<n1; i1++) {
     if (maps1[i1]!=-1) {
