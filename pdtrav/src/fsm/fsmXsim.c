@@ -993,7 +993,10 @@ Fsm_XsimInit(
   piVars = fA == NULL ? Ddi_VarsetVoid(ddm) : Ddi_BddarraySupp(fA);
   if (invarspec != NULL) {
     Ddi_Varset_t *supp = Ddi_BddSupp(invarspec);
-
+    if (Ddi_VarsetIsArray(supp)) {
+      Ddi_VarsetSetArray(piVars);
+      Ddi_VarsetSetArray(psVars);
+    }
     Ddi_VarsetUnionAcc(piVars, supp);
     Ddi_Free(supp);
   }

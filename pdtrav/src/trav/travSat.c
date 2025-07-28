@@ -18746,6 +18746,10 @@ igrAbstrRef(
 	  Ddi_Var_t *v = Ddi_VararrayRead(itpMgr->abstrRefPsPiVars, i);
 	  char *name = Ddi_VarName(ctrl);
 	  
+          if (Ddi_VarIsAig(v)) {
+            Ddi_VarsetSetArray(refinedVars0);
+            Ddi_VarsetSetArray(refinedVars1);
+          }
 	  // printf("refined: %s\n", name);
 	  if (strstr(name, "abstrRefCtrl1_") != NULL) {
 	    Pdtutil_Assert(refinedVars1 != NULL, "NULL refined varset");
@@ -19127,7 +19131,11 @@ igrAbstrRefByItp(
 	  Ddi_Var_t *v = Ddi_VararrayRead(itpMgr->abstrRefPsPiVars, i);
 	  char *name = Ddi_VarName(ctrl);
 	  
-	  // printf("refined: %s\n", name);
+          if (Ddi_VarIsAig(v)) {
+            Ddi_VarsetSetArray(refinedVars0);
+            Ddi_VarsetSetArray(refinedVars1);
+          }
+          // printf("refined: %s\n", name);
 	  if (strstr(name, "abstrRefCtrl1_") != NULL) {
 	    Pdtutil_Assert(refinedVars1 != NULL, "NULL refined varset");
 	    Ddi_VarsetAddAcc(refinedVars1, v);
