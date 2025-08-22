@@ -98,6 +98,7 @@ App_MgrInit(
 
   appMgr->ddiMgr = Ddi_MgrInit("ddiMgr", NULL, 0, DDI_UNIQUE_SLOTS,
       DDI_CACHE_SLOTS * 10, 0, -1, -1);
+  Ddi_MgrSetOption(appMgr->ddiMgr, Pdt_DdiItpDrup_c, inum, 3);
   appMgr->fsmMgr = Fsm_MgrInit("fsmMgr", NULL);
 
   Fsm_MgrSetDdManager(appMgr->fsmMgr, appMgr->ddiMgr);

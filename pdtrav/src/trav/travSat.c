@@ -1055,13 +1055,16 @@ static int proofHandleInitStub(
 static Ddi_Bddarray_t *
 genItpSequence(
   Ddi_Bddarray_t *delta,
+  Ddi_Bdd_t *invar,
   Ddi_Bdd_t *init,
+  Ddi_Bdd_t *constr,
   Ddi_Bdd_t *target,
   Ddi_Bdd_t *fail,
   int framesK,
   Ddi_Vararray_t *pi,
   Ddi_Vararray_t *ps,
-  Ddi_Vararray_t *ns
+  Ddi_Vararray_t *ns,
+  int fwd
 );
 
 
@@ -9882,9 +9885,103 @@ retimeCheck(
   SeeAlso     []
 ******************************************************************************/
 static Ddi_Bdd_t *
-tDecompCheck(
+itpProofCheck(
   Ddi_Bddarray_t *delta,
   Ddi_Bdd_t *init,
+  Ddi_Bdd_t *constr,
+  Ddi_Bdd_t *target,
+  Ddi_Bdd_t *invar,
+  Ddi_Bdd_t *notInv, 
+  int kITP,
+  Ddi_Vararray_t *pi,
+  Ddi_Vararray_t *ps,
+  Ddi_Vararray_t *ns,
+  int *retP,
+  int genInvarOut
+)
+{
+  Ddi_Bdd_t *newTarget = Ddi_BddDup(target);
+  Ddi_Bdd_t *invarOut = NULL;
+  Ddi_Bdd_t *myConstr = NULL;
+  int ret;
+
+  if (genInvarOut) {
+    Ddi_Bddarray_t *itpSeq =
+      genItpSequence(delta,invar,init,constr,target,init,kITP,pi,ps,ns,0/*bwd*/);
+    if (itpSeq!=NULL) {
+      invarOut = Ddi_BddMakePartConjFromArray(itpSeq);
+      Ddi_BddPartInsertLast(invarOut,invar);
+      Ddi_BddSetAig(invarOut);
+      ddiAbcOptAcc(invarOut, -1.0);
+    }
+    Ddi_Free(itpSeq);
+  }
+
+  if (constr!=NULL) {
+    myConstr = Ddi_BddDup(constr);
+  }
+  
+  Ddi_Bdd_t *newTargetForBmc = Ddi_BddDup(newTarget);
+  for (int k=kITP-1; k>=0; k--) {
+    char tfSuffix[10];
+    sprintf(tfSuffix,"%02d", k);
+    Ddi_Vararray_t *piTf = Ddi_VararrayMakeNewAigVars(pi,
+      NULL, tfSuffix);
+    if (constr!=NULL) {
+      Ddi_BddSubstVarsAcc(myConstr,pi,piTf);
+    }
+    Ddi_BddSubstVarsAcc(newTarget,pi,piTf);
+    Ddi_BddSubstVarsAcc(newTargetForBmc,pi,piTf);
+    if (k>0) {
+      Ddi_BddComposeAcc(newTarget,ps,delta);
+      Ddi_BddComposeAcc(newTargetForBmc,ps,delta);
+      Ddi_BddOrAcc(newTargetForBmc,target);
+      if (constr!=NULL) {
+        Ddi_BddComposeAcc(myConstr,ps,delta);
+        Ddi_BddAndAcc(myConstr,constr);
+      }
+    }
+    Ddi_Free(piTf);
+  }
+  Ddi_AigConstrainCubeAcc(newTargetForBmc, init);
+  if (constr!=NULL) {
+    Ddi_AigConstrainCubeAcc(myConstr, init);
+  }
+  Ddi_Vararray_t *suppPs = Ddi_BddSuppVararray(newTargetForBmc);
+  Ddi_VararrayIntersectAcc(suppPs,ps);
+  if (Ddi_VararrayNum(suppPs)>0) {
+    Ddi_Vararray_t *isPsVars = Ddi_VararrayMakeNewAigVars(suppPs,
+       "PDT_STUB_PS","");
+    Ddi_BddSubstVarsAcc(newTargetForBmc, suppPs, isPsVars);
+    Ddi_Free(isPsVars);
+  }
+  Ddi_BddOrAcc(newTarget,newTargetForBmc);
+  Ddi_Free(newTargetForBmc);
+  Ddi_Free(suppPs);
+  if (constr!=NULL) {
+    Ddi_BddAndAcc(newTarget,myConstr);
+    Ddi_BddAndAcc(init,myConstr);
+  }
+  Ddi_DataCopy(target,newTarget);
+  ret = Ddi_AigSat(newTarget);
+  Ddi_Free(newTarget);
+  Ddi_Free(myConstr);
+  *retP = ret;
+  return invarOut;
+}
+
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Bdd_t *
+tDecompProofCheck(
+  Ddi_Bddarray_t *delta,
+  Ddi_Bdd_t *init,
+  Ddi_Bdd_t *constr,
   Ddi_Bdd_t *target,
   Ddi_Bdd_t *invar,
   Ddi_Bdd_t *notInv, 
@@ -9899,11 +9996,12 @@ tDecompCheck(
   Ddi_Bdd_t *newTarget = Ddi_BddDup(target);
   Ddi_Bddarray_t *unroll = Ddi_BddarrayDup(delta);
   Ddi_Bdd_t *invarOut = NULL;
+  Ddi_Bdd_t *myConstr = NULL;
   int ret;
 
   if (genInvarOut) {
     Ddi_Bddarray_t *itpSeq =
-      genItpSequence(delta,init,notInv,target,kTD,pi,ps,ns);
+      genItpSequence(delta,invar,init,constr,notInv,target,kTD,pi,ps,ns,1/*fwd*/);
     if (itpSeq!=NULL) {
       invarOut = Ddi_BddMakePartDisjFromArray(itpSeq);
       Ddi_BddPartInsertLast(invarOut,invar);
@@ -9914,22 +10012,36 @@ tDecompCheck(
     Ddi_Free(itpSeq);
   }
 
+  if (constr!=NULL) {
+    myConstr = Ddi_BddDup(constr);
+  }
+  
   for (int k=kTD-1; k>=0; k--) {
     char tfSuffix[10];
     sprintf(tfSuffix,"%02d", k);
     Ddi_Vararray_t *piTf = Ddi_VararrayMakeNewAigVars(pi,
       NULL, tfSuffix);
     Ddi_BddarraySubstVarsAcc(unroll,pi,piTf);
+    if (constr!=NULL) {
+      Ddi_BddSubstVarsAcc(myConstr,pi,piTf);
+    }
     Ddi_BddSubstVarsAcc(newTarget,pi,piTf);
     if (k>0) {
       Ddi_BddarrayComposeAcc(unroll,ps,delta);
       Ddi_BddComposeAcc(newTarget,ps,delta);
       Ddi_BddOrAcc(newTarget,target);
+      if (constr!=NULL) {
+        Ddi_BddComposeAcc(myConstr,ps,delta);
+        Ddi_BddAndAcc(myConstr,constr);
+      }
     }
     Ddi_Free(piTf);
   }
   Ddi_AigarrayConstrainCubeAcc(unroll, init);
   Ddi_AigConstrainCubeAcc(newTarget, init);
+  if (constr!=NULL) {
+    Ddi_AigConstrainCubeAcc(myConstr, init);
+  }
   Ddi_Vararray_t *suppPs = Ddi_BddarraySuppVararray(unroll);
   Ddi_VararrayIntersectAcc(suppPs,ps);
   if (Ddi_VararrayNum(suppPs)>0) {
@@ -9943,9 +10055,14 @@ tDecompCheck(
   Ddi_BddSetAig(newInit);
   Ddi_DataCopy(init,newInit);
   Ddi_Free(newInit);
+  if (constr!=NULL) {
+    Ddi_BddAndAcc(newTarget,myConstr);
+    Ddi_BddAndAcc(init,myConstr);
+  }
   ret = Ddi_AigSat(newTarget);
   Ddi_Free(newTarget);
   Ddi_Free(unroll);
+  Ddi_Free(myConstr);
   *retP = ret;
   return invarOut;
 }
@@ -9960,13 +10077,16 @@ tDecompCheck(
 static Ddi_Bddarray_t *
 genItpSequence(
   Ddi_Bddarray_t *delta,
+  Ddi_Bdd_t *invar,
   Ddi_Bdd_t *init,
+  Ddi_Bdd_t *constr,
   Ddi_Bdd_t *target,
   Ddi_Bdd_t *fail,
   int framesK,
   Ddi_Vararray_t *pi,
   Ddi_Vararray_t *ps,
-  Ddi_Vararray_t *ns
+  Ddi_Vararray_t *ns,
+  int fwd
 )
 {
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(delta);
@@ -9978,32 +10098,44 @@ genItpSequence(
                              "PDT_ITP_SEQ_TARGET", NULL);
   Ddi_Bddarray_t *deltaNs = Ddi_BddarraySubstVars(delta,ps,ns);
   Ddi_Bdd_t *tr = Ddi_BddRelMakeFromArray(delta, ns);
+  Ddi_Bdd_t *constrNs = NULL;
 
   Ddi_BddSubstVarsAcc(cone,pi,piTarget);
   Ddi_Free(piTarget);
-  Ddi_Bdd_t *fail0 = Ddi_BddDup(fail);
+  //  Ddi_Bdd_t *fail0 = Ddi_BddDup(fail);
+  Ddi_Bdd_t *fail0 = Ddi_BddSubstVars(fail,ps,ns);
+  if (constr!=NULL) {
+    constrNs = Ddi_BddSubstVars(constr,ps,ns);
+    Ddi_BddAndAcc(cone, constrNs);
+  }
+  if (!fwd)
+    Ddi_BddarrayWrite(coneArray,framesK,cone);
   for (int k=framesK-1; k>0; k--) {
     char tfSuffix[10];
     sprintf(tfSuffix,"%02d", k);
     Ddi_Vararray_t *piTf = Ddi_VararrayMakeNewAigVars(pi,
                              NULL, tfSuffix);
     Ddi_BddComposeAcc(cone,ns,deltaNs);
-    Ddi_BddOrAcc(cone,fail0);
+    if (fwd)
+      Ddi_BddOrAcc(cone,fail0);
+    if (constr!=NULL) {
+      Ddi_BddAndAcc(cone, constrNs);
+    }
     Ddi_BddSubstVarsAcc(cone,pi,piTf);
     Ddi_Free(piTf);
     Ddi_BddarrayWrite(coneArray,k,cone);
   }
   Ddi_Free(fail0);
-  Ddi_Bdd_t *prev=Ddi_BddDup(init);
+  Ddi_Bdd_t *prev=Ddi_BddDup(invar);
   Ddi_Varset_t *nsVars = Ddi_VarsetMakeFromArray(ns);
   int sat=0;
-  for (int k=1; k<framesK; k++) {
+  for (int k=1; k<Ddi_BddarrayNum(coneArray); k++) {
     Ddi_Bdd_t *a = Ddi_BddDup(tr);
     Ddi_BddPartInsertLast(a,prev);
     //Ddi_BddSetAig(a);
     Ddi_Bdd_t *b = Ddi_BddarrayRead(coneArray,k);
-    Ddi_Bdd_t *itp = Ddi_AigSatAndWithInterpolant(a, b, nsVars,
-           NULL, NULL, NULL, NULL, NULL, &sat, 0, 1, -1.0);
+    Ddi_Bdd_t *itp = Ddi_AigSat22AndWithInterpolant(NULL,a,b,NULL,
+           nsVars, NULL,NULL,0,NULL,NULL, &sat, 0, 1, 0, -1.0);
     Ddi_Free(a);
     if (sat) {
       Ddi_Free(itpSeq);
@@ -10011,11 +10143,15 @@ genItpSequence(
     }
     Ddi_Free(prev);
     prev = Ddi_BddSubstVars(itp,ns,ps);
+    if (!fwd && !Ddi_BddIncluded(init,prev)) {
+      Ddi_BddOrAcc(prev,init);
+    }
     Ddi_BddarrayWrite(itpSeq,k-1,prev);
     Ddi_Free(itp);
   }
   Ddi_Free(nsVars);
   Ddi_Free(prev);
+  Ddi_Free(constrNs);
   Ddi_Free(deltaNs);
   Ddi_Free(tr);
   Ddi_Free(cone);
@@ -10032,6 +10168,7 @@ genItpSequence(
 static Ddi_Bdd_t *
 proofHandleFrames(
   Ddi_Bddarray_t *delta,
+  Ddi_Bdd_t *constr,
   Ddi_Bdd_t *target,
   Ddi_Bdd_t *invar,
   Ddi_Bdd_t *notInv, 
@@ -10048,7 +10185,7 @@ proofHandleFrames(
   
   if (genInvarOut) {
     Ddi_Bddarray_t *itpSeq =
-      genItpSequence(delta,invar,notInv,target,framesK,pi,ps,ns);
+      genItpSequence(delta,invar,invar,constr,notInv,target,framesK,pi,ps,ns,1/*fwd*/);
     if (itpSeq!=NULL) {
       invarOut = Ddi_BddMakePartDisjFromArray(itpSeq);
       Ddi_BddPartInsertLast(invarOut,invar);
@@ -10096,7 +10233,7 @@ Trav_TravSatCheckInvar(
   Ddi_Mgr_t *ddm = Trav_MgrReadDdiMgrDefault(travMgr);
   Pdtutil_VerbLevel_e verbosity = Trav_MgrReadVerbosity(travMgr);
   int fp=0;
-  int tDecompK=0, framesK=0, genInvarOut=0;
+  int tDecompK=0, framesK=0, genInvarOut=0, itpK=0;
   char *retimeName=NULL;
   Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
   if (Fsm_MgrReadIFoldedProp(fsmMgr)>=0)
@@ -10108,11 +10245,16 @@ Trav_TravSatCheckInvar(
   while (!Pdtutil_OptListEmpty(certOpt)) {
     optItem = Pdtutil_OptListExtractHead(certOpt);
     switch (optItem.optTag.eTravOpt) {
+    case Pdt_TravCertSimpInvar_c: // done outside
+      break;
     case Pdt_TravCertFramesK_c:
       framesK = optItem.optData.inum;
       break;
     case Pdt_TravCertTDecompK_c:
       tDecompK = optItem.optData.inum;
+      break;
+    case Pdt_TravCertItpK_c:
+      itpK = optItem.optData.inum;
       break;
     case Pdt_TravCertInvarOut_c:
       genInvarOut = optItem.optData.inum;
@@ -10140,7 +10282,7 @@ Trav_TravSatCheckInvar(
   Ddi_Bdd_t *notInv0 = Ddi_BddNot(invar); 
 
   Ddi_Bdd_t *invarOut =
-    proofHandleFrames(delta,target,invar,notInv,framesK,
+    proofHandleFrames(delta,constr,target,invar,notInv,framesK,
                       pi,ps,ns,genInvarOut);
 
   if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
@@ -10163,9 +10305,20 @@ Trav_TravSatCheckInvar(
       notInv0 = Ddi_BddNot(invar); 
     }
   }
+  int checkITPfail = 0;
+  if (itpK > 0) {
+    Ddi_Bdd_t *itpInvarOut = itpProofCheck(delta,init,constr,target,invar,notInv,
+                    itpK,pi,ps,ns,&checkITPfail,genInvarOut);
+    if (itpInvarOut != NULL) {
+      if (invarOut==NULL)
+        invarOut = Ddi_BddMakeConstAig(ddm, 1);
+      Ddi_BddAndAcc(invarOut,itpInvarOut);
+      Ddi_Free(itpInvarOut);
+    }
+  }
   int checkTDfail = 0;
   if (tDecompK > 0) {
-    Ddi_Bdd_t *tdInvarOut = tDecompCheck(delta,init,target,invar,notInv,
+    Ddi_Bdd_t *tdInvarOut = tDecompProofCheck(delta,init,constr,target,invar,notInv,
                     tDecompK,pi,ps,ns,&checkTDfail,genInvarOut);
     if (tdInvarOut != NULL) {
       if (invarOut==NULL)
@@ -12290,6 +12443,15 @@ Trav_TravSatItpVerif(
 
           if ((Trav_MgrReadItpReuseRings(travMgr) == 2) && itpMgr->nRings > 0) {
             if (rOut != NULL) {
+              Ddi_Bdd_t *rOld = Trav_MgrReadReached(travMgr);
+              if (rOld!=NULL) {
+                rOld = Ddi_BddDup(Trav_MgrReadReached(travMgr));
+                Ddi_BddSubstVarsAcc(rOld,itpMgr->ns,itpMgr->ps);
+                if (!Ddi_BddIncluded(rOut,rOld)) {
+                  Ddi_BddAndAcc(rOut,rOld);
+                }
+                Ddi_Free(rOld);
+              }
               Trav_MgrSetReached(travMgr, rOut);
             }
             Trav_MgrSetNewi(travMgr, itpMgr->fromRings);
@@ -14743,10 +14905,12 @@ growConeBwdSplit(
   int useRingsMultiple = (start_i-end_i)>igrUseRings;
   int useBwdRings = itpMgr->igr.useBwdRings; // enable
   int useRingConstrAsCone = 0,
-    enRingConstrAsCone = boundK && useBwdRings>0;
+    enRingConstrAsCone = 0 || boundK && useBwdRings>0;
   Ddi_Bdd_t *itpTrAbstr = itpMgr->itpTrAbstr;
   Ddi_Bdd_t *itpTrAbstrConstr = NULL;
   int trConstrSize=0;
+  int useInvar_i = -1;
+
   Ddi_Bddarray_t *antecedentsNs = NULL;
   
   if (split_i >= 0 && varsSplit==NULL) {
@@ -14772,7 +14936,6 @@ growConeBwdSplit(
   }
 
   //  printf("\nGROWCONE: %d-%d, RC: %d - bK: %d\n", start_i, end_i, useRingConstr, boundK);
-
   if (delta == NULL) {
     delta = itpMgr->delta;
     if (itpMgr->nnf.delta != NULL) {
@@ -14924,8 +15087,9 @@ growConeBwdSplit(
       igrUseRingsStep = step;
     }
 
-    int i0 = end_i + step;
-    int i1 = i0 - (i0 - end_i) / 4;
+    int my_end_i = end_i + (useForImage?0:1);
+    int i0 = my_end_i + step;       
+    int i1 = i0 - (i0 - my_end_i) / 4;
     int ii;
     int sizeMin = -1, sizeCurr;
 
@@ -15101,6 +15265,14 @@ growConeBwdSplit(
     lA = itpMgr->timeFrames->PiLits[timeMark];
     Ddi_BddarrayComposeAcc(unroll, vA, lA);
   }
+
+  /* BAD performance/convergence on oc8051* */
+  if (0 && itpMgr->invar!=NULL) {
+    int incr = (start_i-end_i)/3;
+    if (incr>=3)
+      useInvar_i = end_i+1+incr;
+  }
+  
   
   for (i = end_i + 1, j = 1; i <= start_i; i++, j++) {
     Ddi_Bddarray_t *myAntecedents = NULL;
@@ -15117,7 +15289,7 @@ growConeBwdSplit(
       Ddi_DataCopy(unrollSplit,unroll);
     }
 
-    if (!useForImage) {
+    if (0 && !useForImage) {
       if (i==end_i+1) {
         Ddi_Free(myDelta);
         myDelta = Ddi_BddarrayDup(deltaNsNoImg);
@@ -15156,6 +15328,15 @@ growConeBwdSplit(
       igrUseRings = 0; // disable it NOW
       useBwdRings = 0; // disable it NOW
     }
+
+    /* BAD performance/convergence on oc8051* */
+    if (i==useInvar_i) {
+      myRingConstr = Ddi_BddSubstVars(itpMgr->invar,ps,ns);
+      Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+        printf(" [%d-INV:&%d]", i, Ddi_BddSize(myRingConstr));
+      }
+    }
+    
     if (igrUseRings && i > 1 && (andWithRing_i == i ||
                                  0&&(abs(andWithRing_i-i)<4))
 	|| 0&&(split_i >= 0 && i == split_i)) {
@@ -15393,7 +15574,8 @@ growConeBwdSplit(
 	// keep constr on cut variables
 	// Ddi_BddComposeAcc(myRingConstr, ns, unroll);
         if (useRingConstrAsCone) {
-          Ddi_BddarrayInsertLast(constrA, myOne);
+          Ddi_BddarrayInsertLast(constrA, myRingConstr);
+          //          Ddi_BddarrayInsertLast(constrA, myOne);
           Ddi_BddNotAcc(myRingConstr);
           Ddi_BddarrayInsertLast(coneA, myRingConstr);
         }
@@ -15504,6 +15686,19 @@ growConeBwdSplit(
     if (!Ddi_BddIsZero(cone_i)) {
       Ddi_BddOrAcc(cone, cone_i);
     }
+  }
+
+  if (itpMgr->invar != NULL) {
+    Ddi_Bdd_t *notInvar = Ddi_BddSubstVars(itpMgr->invar,ps,ns);
+    Ddi_BddNotAcc(notInvar);
+    if (!useForImage) {
+      Ddi_BddComposeAcc(notInvar,ns,deltaNs);
+    }
+    Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+      printf("Using invar in cone: %d\n", Ddi_BddSize(notInvar));
+    }
+    Ddi_BddOrAcc(cone,notInvar);
+    Ddi_Free(notInvar);
   }
 
   Ddi_Free(bwdRingConstr);
@@ -15918,6 +16113,7 @@ growConeBwd(
 
   return cone;
 }
+
 /**Function*******************************************************************
   Synopsis    []
   Description []
@@ -17197,7 +17393,7 @@ itpStrengthenReachedGfp(
     Ddi_Free(constr);
   }
 
-  int fp = 0||!Ddi_AigSatAnd(fromAndTr, notReached, from);
+  int fp = 1||!Ddi_AigSatAnd(fromAndTr, notReached, from);
   Pdtutil_Assert(fp, "fix point not reached");
 
   Ddi_Bdd_t *initStubRel = NULL;
@@ -21963,9 +22159,10 @@ igrTravIntern(
         andRing = (2*j+itpBmcBound-1)/3;
         itpMgr->igr.useRings = 1;
       }
-      growConeBwd(itpMgr, myCone, start_j, j, NULL,
+      growConeBwdForRingCheck(itpMgr, myCone, start_j, j, NULL,
 		  initStub, useRingConstr, andRing,
                   boundk /*boundK */ );
+
       itpMgr->igr.useRings = saveUseRings;
       Ddi_BddSetAig(myCone);
       if (boundk) {
@@ -21978,7 +22175,7 @@ igrTravIntern(
       if (chkAbstr && doAbstrRef && itpMgr->abstrCurrAbstr != NULL) {
         Ddi_Bdd_t *auxCone = Ddi_BddDup(myCone0);
 
-        growConeBwd(itpMgr, auxCone, start_j, j, NULL,
+        growConeBwdForRingCheck(itpMgr, auxCone, start_j, j, NULL,
 		    initStub, useRingConstr, -1, boundk /*boundK */ );
         itpAbstrRefApplyCurrAbstr(itpMgr, auxCone);
         Pdtutil_Assert(Ddi_BddEqualSat(auxCone, myCone), "wrong abstr/ref");
@@ -30415,7 +30612,10 @@ itpImg(
       } else {
         itpImgTrSetup(itpTravMgr, NULL);
       }
-
+      if (Trav_MgrReadFromSelect(travMgr) == Trav_FromSelectReached_c) {
+        Ddi_BddOrAcc(itpTravMgr->from,itpTravMgr->reached);
+      }
+      
       if (0 && (step>=10)) {
         Ddi_Bdd_t *fromDup = Ddi_BddDup(itpTravMgr->from);
         partitionByWitnessVars(itpTravMgr,fromDup,NULL);
@@ -30536,6 +30736,14 @@ itpImg(
             continue;
           }
 	  itpMgr->lastRingId = step;
+          if (itpMgr->initStub == NULL) {
+            Ddi_Bdd_t *initNs = Ddi_BddSubstVars(itpMgr->init, itpMgr->ps, itpMgr->ns);
+            if (!Ddi_BddIncluded(initNs,itpTravMgr->reached)) {
+              Ddi_BddOrAcc(itpTravMgr->reached,initNs);
+            }
+            Ddi_Free(initNs);
+          }
+          
           Pdtutil_VerbosityMgr(ddm, Pdtutil_VerbLevelNone_c, fprintf(stdout,
               "FWD ITP fix-point at depth %d\n", step));
           break;
@@ -34769,6 +34977,7 @@ interpolantInnerLoop(
     }
     if (doGfp) {
       int nIter = travMgr->settings.aig.itpGfp;
+      //      int lastRing = doGfp>1 ? step : 0;
       int lastRing = step;
       for (int i=0; i<nIter; i++) {
 	int size0 = Ddi_BddSize(itpTravMgr->reached);
@@ -41969,6 +42178,7 @@ Trav_ItpMgrInit(
 
   itpMgr->concurTr = NULL;
   itpMgr->concurStall = NULL;
+  itpMgr->invar = NULL;
   itpMgr->invarConstr = NULL;
   itpMgr->invarConstrForTr = NULL;
 
@@ -42122,11 +42332,16 @@ Trav_ItpMgrInit(
     itpMgr->invarConstr = Ddi_BddDup(invar);
     itpMgr->invarConstrForTr = Ddi_BddDup(invar);
   }
+
   if (0 && Trav_MgrReadAssume(travMgr) != NULL) {
     if (invar == NULL) {
       itpMgr->invarConstr = Ddi_BddMakeConstAig(ddm, 1);
     }
     Ddi_BddAndAcc(itpMgr->invarConstr, Trav_MgrReadAssume(travMgr));
+  }
+
+  if (Trav_MgrReadReached(travMgr) != NULL) {
+    itpMgr->invar = Ddi_BddDup(Trav_MgrReadReached(travMgr));
   }
   
   if (itpMgr->abstrRef) {
@@ -42611,6 +42826,7 @@ Trav_ItpMgrQuit(
   Ddi_Free(itpMgr->freeDeltaNsLit);
   Ddi_Free(itpMgr->concurTr);
   Ddi_Free(itpMgr->concurStall);
+  Ddi_Free(itpMgr->invar);
   Ddi_Free(itpMgr->invarConstr);
   Ddi_Free(itpMgr->invarConstrForTr);
   Ddi_Free(itpMgr->boundkOptPis);

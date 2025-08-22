@@ -5385,7 +5385,7 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-itpGfp") == 0) {
       opt->trav.itpGfp = atoi(argv[2]);
-      opt->trav.itpConstrLevel = 4;
+      //      opt->trav.itpConstrLevel = 4;
       argv++;
       argc--;
       argv++;
@@ -6819,7 +6819,7 @@ FbvWriteCex(
   Fsm_Mgr_t * fsmMgrOriginal
 )
 {
-  char buf[1000] = "";
+  char buf[10000] = "";
   int pi = Ddi_VararrayNum(Fsm_MgrReadVarI(fsmMgrOriginal));
   int ps = Ddi_VararrayNum(Fsm_MgrReadVarPS(fsmMgrOriginal));
   int i = 0;
@@ -8321,6 +8321,14 @@ invarVerif(
       Ddi_Bddarray_t *nsLits = Ddi_BddarrayMakeLiteralsAig(ns, 1);
       Ddi_BddarraySubstVarsAcc(rplus,Fsm_MgrReadVarNS(fsmMgr),
                           Fsm_MgrReadVarPS(fsmMgr));
+      Ddi_Bdd_t *eqConstr = Fsm_MgrReadLatchEqClassesBDD(fsmMgr);
+      if (eqConstr != NULL) {
+        Ddi_Vararray_t *vars = Ddi_BddReadEqVars(eqConstr);
+        Ddi_Bddarray_t *subst = Ddi_BddReadEqSubst(eqConstr);
+        
+        Ddi_BddarrayComposeAcc(rplus, vars, subst);
+      }
+
       if (ibmConstr) {
         Ddi_Var_t *v = Ddi_VarFromName(ddiMgr, "PDT_BDD_INVARSPEC_VAR$PS");
         Ddi_Var_t *v1 = Ddi_VarFromName(ddiMgr, "PDT_BDD_INVAR_VAR$PS");
@@ -8563,6 +8571,14 @@ invarVerif(
         //    exit (1);
       }
 
+      if (Fsm_MgrReadLatchEqClassesBDD(fsmMgr) != NULL) {
+        Ddi_Bdd_t *reached = Fsm_MgrReadReachedBDD(fsmMgr);
+        Ddi_Bdd_t *reachedTrav = Trav_MgrReadReached(travMgrAig);
+        if (reachedTrav!=NULL)
+          Trav_MgrSetReached(travMgrAig,reached);
+      }
+
+      
       if (1 && opt->mc.cegar == 0 && (loopReduceCnt < 2) && opt->mc.lemmas > 1) {
         // GpC: must fix invar resulting from lemmas
          int result = Trav_TravLemmaReduction(travMgrAig,
@@ -11695,8 +11711,8 @@ invarDecompVerif(
   int replaceReached = 1; // do not and reached at each k - replace it
   int useFullPropAsConstr=0&&(opt->pre.specDecompCore>0);
   int igrFpRing = -1;
-  int useRplusAsConstr = opt->trav.itpGfp>0;
-  int useRplusAsCareWithItp = opt->trav.itpGfp>0;
+  int useRplusAsConstr = opt->trav.itpGfp>1;
+  int useRplusAsCareWithItp = opt->trav.itpGfp>1;
   
   /**********************************************************************/
   /*                        Create DDI manager                          */
@@ -17464,9 +17480,12 @@ fsmConstReduction(
   }
   Ddi_BddSetAig(reached);
 
+  substV = Ddi_VararrayAlloc(ddiMgr, 0);
+  substF = Ddi_BddarrayAlloc(ddiMgr, 0);
   do {
     addStub = 0;
     n = Ddi_BddarrayNum(delta);
+
     for (i = n - 1; i >= 0; i--) {
       Ddi_Var_t *pv_i = Ddi_VararrayRead(ps, i);
       Ddi_Bdd_t *d_i = Ddi_BddarrayRead(delta, i);
@@ -17513,6 +17532,8 @@ fsmConstReduction(
 #else
           Ddi_BddCofactorAcc(d_i, pv_i, isOne);
 #endif
+          Ddi_VararrayInsertLast(substV, pv_i);
+          Ddi_BddarrayInsertLast(substF, lit);
           nconst++;
         }
         Ddi_Free(lit);
@@ -17540,7 +17561,7 @@ fsmConstReduction(
       Pdtutil_WresIncrInitStubSteps(1);
     }
   } while (addStub);
-
+  
   Ddi_Free(reached);
 
   n = Ddi_BddarrayNum(delta);
@@ -17550,14 +17571,16 @@ fsmConstReduction(
       fprintf(stdout, "Found %d Constants; ", nconst);
       fprintf(stdout, "Reduced Delta: Size=%d; #Partitions=%d.\n",
         Ddi_BddarraySize(delta), n));
+    Ddi_Bdd_t *eq = Ddi_BddMakeEq(substV,substF);
+    Fsm_MgrAddLatchEqClassesBDD(fsmMgr,eq);
+    Ddi_Free(eq);
+    Ddi_Bdd_t *r = Fsm_MgrReadReachedBDD(fsmMgr);
+    if (r!=NULL)
+      Ddi_BddComposeAcc(r, substV, substF);      
   }
 
-  sizeA = Pdtutil_Alloc(int,
-    n
-  );
-  enEq = Pdtutil_Alloc(int,
-    n
-  );
+  sizeA = Pdtutil_Alloc(int,n);
+  enEq = Pdtutil_Alloc(int,n);
 
   for (i = 0; i < n; i++) {
     Ddi_Bdd_t *d_i = Ddi_BddarrayRead(delta, i);
@@ -17576,6 +17599,8 @@ fsmConstReduction(
     }
   }
 
+  Ddi_Free(substV);
+  Ddi_Free(substF);
   substV = Ddi_VararrayAlloc(ddiMgr, 0);
   substF = Ddi_BddarrayAlloc(ddiMgr, 0);
 
@@ -17708,6 +17733,12 @@ fsmConstReduction(
     }
     Ddi_AigarrayComposeNoMultipleAcc(delta, substV, substF);
     Ddi_AigarrayComposeNoMultipleAcc(lambda, substV, substF);
+    Ddi_Bdd_t *eq = Ddi_BddMakeEq(substV,substF);
+    Fsm_MgrAddLatchEqClassesBDD(fsmMgr,eq);
+    Ddi_Free(eq);
+    Ddi_Bdd_t *r = Fsm_MgrReadReachedBDD(fsmMgr);
+    if (r!=NULL)
+      Ddi_BddComposeAcc(r, substV, substF);      
   }
 
   if (neq > 0) {

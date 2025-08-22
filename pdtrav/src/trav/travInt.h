@@ -665,6 +665,7 @@ struct TravItpMgr_s {
 
   Ddi_Bdd_t *concurTr;
   Ddi_Bdd_t *concurStall;
+  Ddi_Bdd_t *invar;
   Ddi_Bdd_t *invarConstr;
   Ddi_Bdd_t *invarConstrForTr;
 

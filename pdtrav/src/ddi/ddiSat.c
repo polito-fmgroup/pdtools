@@ -1104,7 +1104,7 @@ Ddi_PdrMake(
   }
   //  Ddi_BddCofactorAcc(Ddi_BddarrayRead(delta,nRoots-1),pv,1);
 
-  if (invar!=NULL) {
+  if (0 && invar!=NULL) {
     Ddi_BddAndAcc(target,invar);
   }
 
@@ -1270,7 +1270,7 @@ Ddi_PdrMake(
     Ddi_SatSolverQuit(s1);
   }
   pdrMgr->trClausesInit = Ddi_ClausesMakeRel(deltaInit,ns,NULL);
-  if (invar != NULL) {
+  if (1 && invar != NULL) {
     pdrMgr->invarClauses = Ddi_AigClauses(invar,0,NULL);
   }
   else {

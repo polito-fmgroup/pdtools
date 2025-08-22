@@ -193,25 +193,25 @@ struct Pdtutil_MapInt2Int_s {
 
 #define PdtutilArrayScalRead(obj, type, idx, val)  {                                         \
   Pdtutil_Assert((obj)->array_type == Pdtutil_ArrayType_Scal_c, "Array type is not scalar"); \
-  Pdtutil_Assert(idx < (obj)->size, "Array index out of bound");                              \
+  Pdtutil_Assert((int)(idx) < (int)(obj)->size, "Array index out of bound"); \
   val = ((type *) (obj)->data.array)[idx];                                                   \
 }
 
 #define PdtutilArrayPtrRead(obj, type, idx, val)  {                                            \
   Pdtutil_Assert((obj)->array_type == Pdtutil_ArrayType_Ptr_c, "Array type is not vectorial"); \
-  Pdtutil_Assert(idx < (obj)->size, "Array index out of bound");                                \
+  Pdtutil_Assert((int)(idx) < (int)(obj)->size, "Array index out of bound"); \
   val = ((type **) (obj)->data.parray)[idx];                                                   \
 }
 
 #define PdtutilArrayScalWrite(obj, type, idx, val)  {                                        \
   Pdtutil_Assert((obj)->array_type == Pdtutil_ArrayType_Scal_c, "Array type is not scalar"); \
-  Pdtutil_Assert(idx < (obj)->size, "Array index out of bound");                             \
+  Pdtutil_Assert((int)(idx) < (int)(obj)->size, "Array index out of bound"); \
   ((type *) (obj)->data.array)[idx] = val;                                                   \
 }
 
 #define PdtutilArrayPtrWrite(obj, type, idx, val)  {                                           \
   Pdtutil_Assert((obj)->array_type == Pdtutil_ArrayType_Ptr_c, "Array type is not vectorial"); \
-  Pdtutil_Assert(idx < (obj)->size, "Array index out of bound");                               \
+  Pdtutil_Assert((int)(idx) < (obj)->size, "Array index out of bound");      \
   ((type **) (obj)->data.parray)[idx] = val;                                                   \
 }
 

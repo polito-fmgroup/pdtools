@@ -481,6 +481,7 @@ typedef enum {
   /* certify */
   Pdt_TravCertFramesK_c,
   Pdt_TravCertTDecompK_c,
+  Pdt_TravCertItpK_c,
   Pdt_TravCertInvarOut_c,
   Pdt_TravCertSimpInvar_c,
   Pdt_TravCertRetimeName_c,
@@ -1516,7 +1517,7 @@ EXTERN int Pdtutil_StrGetNumSuffix(
 );
 EXTERN char *Pdtutil_StrSkipPrefix(
   char *str,
-  char *prefix
+  const char *prefix
 );
 
 /**AutomaticEnd***************************************************************/

@@ -253,6 +253,10 @@ Pdtutil_WresNum(
         lseek(fd, 0, SEEK_SET);
         nw = write(fd, &num, (size_t) nb);
         close(fd);
+	if (nw != nb) {
+	  fprintf(stdout, "Error writing file %s\n", wRes);
+	  return 1;
+	}
       }
     }
   }
@@ -3553,6 +3557,8 @@ Pdtutil_OptListExtractHead(
   Pdtutil_OptItem_t item;
 
   if (list->N == 0) {
+    item.optTag.eListOpt = Pdt_ListNone_c;
+    item.optData.pvoid = NULL;
     return item;
   }
 
@@ -3589,9 +3595,12 @@ Pdtutil_OptListExtractTail(
 
   Pdtutil_OptItem_t item;
 
-  if (list->N == 0)
+  if (list->N == 0) {
+    item.optTag.eListOpt = Pdt_ListNone_c;
+    item.optData.pvoid = NULL;
     return item;
-
+  }
+  
   item = list->tail->item;
 
   if (list->head == list->tail) {
@@ -3898,7 +3907,7 @@ Pdtutil_InfoArraySort(
 char *
 Pdtutil_StrSkipPrefix(
   char *str,
-  char *prefix
+  const char *prefix
 )
 {
   int n = strlen(prefix);

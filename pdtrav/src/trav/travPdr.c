@@ -468,9 +468,15 @@ Trav_PdrMgrInit(
   //  Ddi_Free(myInvar);
   // myInvar = Ddi_BddDup(invar);
   if (care != NULL && !Ddi_BddIsOne(care)) {
+    Ddi_Free(myInvar);
     myInvar = Ddi_BddDup(care);
   }
 #endif
+  if (Trav_MgrReadReached(travMgr) != NULL) {
+    Ddi_Free(myInvar);
+    myInvar = Ddi_BddDup(Trav_MgrReadReached(travMgr));
+  }
+
   Ddi_Free(myProp);
 
   //Allocate and initialize trav pdr manager

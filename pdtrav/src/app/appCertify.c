@@ -82,6 +82,7 @@ int App_Certify (
   char *simpInvarName = NULL;
   int frameK = 1;
   int tDecompK = 0;
+  int itpK = 0;
   
   Pdtutil_OptList_t *certOpt = Pdtutil_OptListCreate(Pdt_OptTrav_c);
 
@@ -117,6 +118,15 @@ int App_Certify (
       Pdtutil_OptListIns(certOpt, eTravOpt, Pdt_TravCertTDecompK_c, inum, tDecompK);
     }
     else if (strcmp(argv[i],"-i")==0) {
+      i++;
+      if (i>=argc) {
+        printf("\nmissing interpolation k value (-i)\n");
+        return 0;
+      }
+      itpK = atoi(argv[i]);
+      Pdtutil_OptListIns(certOpt, eTravOpt, Pdt_TravCertItpK_c, inum, itpK);
+    }
+    else if (strcmp(argv[i],"-w")==0) {
       i++;
       if (i>=argc) {
         printf("\nmissing write invar file name\n");

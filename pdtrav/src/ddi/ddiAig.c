@@ -83198,7 +83198,7 @@ Ddi_AigSat22AndWithInterpolant (
   int doIncrItp=0;
   int addReverseItp = 0;
   Ddi_Bdd_t *prevItp=NULL;
-  // Ddi_Bdd_t *itpPlus=NULL;
+  Ddi_Bdd_t *itpInvar=NULL;
   Solver Sdummy;
   int doDupSolver = 0;
   vec<Lit> assumps;

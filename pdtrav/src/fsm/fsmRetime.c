@@ -5442,6 +5442,7 @@ Fsm_FsmStructReduction(
   Ddi_Bdd_t *invarspec = Fsm_MgrReadInvarspecBDD(fsmMgr);
   Ddi_Bdd_t *invar = Fsm_MgrReadConstraintBDD(fsmMgr);
   Ddi_Bdd_t *init = Fsm_MgrReadInitBDD(fsmMgr);
+  Ddi_Bdd_t *reached = Fsm_MgrReadReachedBDD(fsmMgr);
   Ddi_Bddarray_t *substF;
   Ddi_Vararray_t *substV;
   int addStub, enAddStub = invar==NULL || Ddi_BddIsOne(invar);
@@ -5510,6 +5511,9 @@ Fsm_FsmStructReduction(
           }
           if (invar != NULL) {
             Ddi_AigConstrainCubeAcc(invar, lit);
+          }
+          if (reached != NULL) {
+            Ddi_AigConstrainCubeAcc(reached, lit);
           }
           nconst++;
         }
@@ -5658,6 +5662,9 @@ Fsm_FsmStructReduction(
       }
       if (invar != NULL) {
         Ddi_BddComposeAcc(invar, substV, substF);
+      }
+      if (reached != NULL) {
+        Ddi_BddComposeAcc(reached, substV, substF);
       }
     }
 
