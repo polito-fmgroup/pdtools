@@ -690,6 +690,15 @@ itpStrengthenReachedGfp(
   int useGen
 );
 static int
+itpWeakenReachedGfp(
+  Trav_ItpTravMgr_t * itpTravMgr,
+  int *lastRingP,
+  int enUpdateFromRings,
+  int enUpdateConstr,
+  int useInvarConstr,
+  int useGen
+);
+static int
 itpCheckRingsFwd(
   Trav_ItpMgr_t * itpMgr,
   int i0,
@@ -10126,7 +10135,7 @@ genItpSequence(
     Ddi_BddarrayWrite(coneArray,k,cone);
   }
   Ddi_Free(fail0);
-  Ddi_Bdd_t *prev=Ddi_BddDup(invar);
+  Ddi_Bdd_t *prev=Ddi_BddDup(fwd?init:invar);
   Ddi_Varset_t *nsVars = Ddi_VarsetMakeFromArray(ns);
   int sat=0;
   for (int k=1; k<Ddi_BddarrayNum(coneArray); k++) {
@@ -10391,6 +10400,7 @@ Trav_TravSatItpGfp(
   Trav_Mgr_t * travMgr /* Traversal Manager */ ,
   Fsm_Mgr_t * fsmMgr,
   int gfp,
+  int doStrengthen,
   int countR
 )
 {
@@ -10464,7 +10474,12 @@ Trav_TravSatItpGfp(
       useInvarConstr = 1;
       doReplaceConstr = 1;
     }
-    int ret = itpStrengthenReachedGfp(itpTravMgr, &lastRing,
+    int ret;
+    if (doStrengthen)
+      ret = itpStrengthenReachedGfp(itpTravMgr, &lastRing,
+                                      enStrong,i==(gfp-1),useInvarConstr,0);
+    else
+      ret = itpWeakenReachedGfp(itpTravMgr, &lastRing,
                                       enStrong,i==(gfp-1),useInvarConstr,0);
     if (!ret) break;
     if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
@@ -17753,6 +17768,328 @@ itpStrengthenReachedGfp(
   Ddi_Free(invarConstr);
   Ddi_Free(invarPs);
   Ddi_Free(invarNs);
+
+  Ddi_Free(fromAndTr);
+  Ddi_Free(deltaNs);
+  Ddi_Free(myOne);
+  Ddi_Free(myZero);
+
+  return ret;
+}
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static int
+itpWeakenReachedGfp(
+  Trav_ItpTravMgr_t * itpTravMgr,
+  int *lastRingP,
+  int enUpdateFromRings,
+  int enUpdateConstr,
+  int useInvarConstr,
+  int useGen
+)
+{
+  Trav_ItpMgr_t * itpMgr = itpTravMgr->itpMgr;
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(itpMgr->delta);
+  Ddi_Bddarray_t * delta = (itpMgr->deltaAbstr)?
+    itpMgr->delta0:itpMgr->delta;
+  Ddi_Vararray_t *ps = itpMgr->ps;
+  Ddi_Vararray_t *ns = itpMgr->ns;
+  Ddi_Vararray_t *vA = NULL;
+  Ddi_Bddarray_t *lA = NULL;
+  Ddi_Bdd_t *myZero = Ddi_BddMakeConstAig(ddm, 0);
+  Ddi_Bdd_t *myOne = Ddi_BddMakeConstAig(ddm, 1);
+  Ddi_Bdd_t *invarConstr=NULL;
+  Ddi_Bddarray_t *deltaNs = Ddi_BddarrayCompose(delta, ps, itpMgr->nsLit);
+  Pdtutil_VerbLevel_e verbosity = Ddi_MgrReadVerbosity(ddm);
+  Ddi_Bdd_t *invarPs=NULL, *invarNs=NULL, *invarspecPs=NULL, *invarspecNs=NULL;
+  Ddi_Bdd_t *reached = NULL;
+  int lastRing = *lastRingP;
+  int useItp = enUpdateFromRings;
+  int itpBoundK = 2;
+  int chk = 1;
+  int useRingConstr = 1;
+  int ret = 0;
+  int i, maxIter = 10;
+  int enDbg = 0;
+  int maxItp = 0;
+  static int nCalls = 0;
+  int constrWithTarget = enUpdateConstr, doExist = 0;
+  int igrBwdRefinement = itpMgr->travMgr->settings.aig.igrBwdRefine;
+
+  if (enUpdateConstr)
+    enUpdateFromRings = 0;
+  
+  nCalls++;
+  reached = itpTravMgr->reached;
+
+  int chkSupp=1;
+  if (chkSupp) {
+    Ddi_Vararray_t *s = Ddi_BddSuppVararray(itpTravMgr->reached);
+    Ddi_VararrayDiffAcc(s,ns);
+    Pdtutil_Assert(Ddi_VararrayNum(s)==0,"wrong supp");
+    Ddi_Free(s);
+  }
+  
+  Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+    printf("\nITP based GFP - reached size: %d\n", Ddi_BddSize(reached));
+  }
+
+  static int chk0 = 0;
+  Ddi_Bddarray_t *saveF = Ddi_BddarrayDup(itpMgr->fromRings);
+  Ddi_Bdd_t *saveR = Ddi_BddDup(itpTravMgr->reached);
+  if (chk0) {
+    int myChkRings = itpCheckRingsFwd(itpMgr,-1,-1,0);
+    printf("RING CHECK: %d\n", myChkRings);
+    Pdtutil_Assert(myChkRings,"problem with from rings");
+    if (1 || !constrWithTarget) {
+      int sat = checkRingIsFixPoint(itpMgr->ps,itpMgr->ns,
+				    delta,
+				    itpTravMgr->reached);
+      Pdtutil_Assert(!sat,"problem with fix point for reached");
+    }
+  }
+
+  int strengthenRings = lastRing > 1;
+  if (strengthenRings) {
+    for (int i=1; i<=lastRing; i++) {
+      Ddi_Bdd_t *f_i = Ddi_BddarrayRead(itpMgr->fromRings,i);
+      if (!Ddi_BddIncluded(f_i,itpTravMgr->careBwd)) {
+        Ddi_BddAndAcc(f_i,itpTravMgr->careBwd);
+      }
+      if (!Ddi_BddIncluded(f_i,itpTravMgr->reached)) {
+        Ddi_BddAndAcc(f_i,itpTravMgr->reached);
+      }
+    }
+  }
+  if (!Ddi_BddIncluded(itpTravMgr->reached,itpTravMgr->careBwd)) {
+    Ddi_BddAndAcc(itpTravMgr->reached,itpTravMgr->careBwd);
+  }
+
+
+  if (itpMgr->invarConstr==NULL) {
+    itpMgr->invarConstr = Ddi_BddMakeConstAig(ddm, 1);
+  }
+  if (itpMgr->invarConstr!=NULL && !Ddi_BddIsOne(itpMgr->invarConstr)) {
+    invarConstr = Ddi_BddSubstVars(itpMgr->invarConstr,
+				     itpMgr->ps,itpMgr->ns);
+  }
+ 
+  Ddi_Bdd_t *from = Ddi_BddSubstVars(reached, ns, ps);
+  Ddi_Bdd_t *notReached = Ddi_BddNot(reached);
+  Ddi_Bdd_t *itp=NULL, *fromAndTr;
+  Ddi_Bddarray_t *myDelta = Ddi_BddarrayDup(deltaNs);
+
+  if (useInvarConstr) {
+    Pdtutil_Assert(Ddi_BddIsZero(notReached), "wrong use of invarconstr");
+    Ddi_Free(notReached);
+    notReached = Ddi_BddNot(invarConstr);
+    Ddi_Vararray_t *suppA = Ddi_BddSuppVararray(notReached);
+    Ddi_VararrayDiffAcc(suppA,itpMgr->ns);
+    if (Ddi_VararrayNum(suppA)>0) {
+      Ddi_Vararray_t *vAux =
+        Ddi_VararrayMakeNewVars(suppA,
+                              "PDT_ITP_PI_INVARCONSTR_AUX_", NULL, 1);
+      Ddi_BddSubstVarsAcc(notReached,suppA,vAux);
+      Ddi_Free(vAux);
+    }
+    useItp=1;
+    Ddi_Free(suppA);
+  }
+
+  if (1) {
+    Ddi_Var_t *iv = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$PS");
+    Ddi_Var_t *ivNs = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$NS");
+    Ddi_Var_t *pvPs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$PS");
+    Ddi_Var_t *pvNs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$NS");
+    
+    if (iv != NULL) {
+      invarPs = Ddi_BddMakeLiteralAig(iv, 1);
+      invarNs = Ddi_BddMakeLiteralAig(ivNs, 1);
+      if (invarConstr==NULL) {
+	invarConstr = Ddi_BddMakeConstAig(ddm, 1);
+      }      
+      Ddi_BddAndAcc(invarConstr, invarPs);
+      Ddi_BddAndAcc(invarConstr, invarNs);
+    }
+    if (pvNs != NULL) {
+      invarspecPs = Ddi_BddMakeLiteralAig(pvPs, 1);
+      invarspecNs = Ddi_BddMakeLiteralAig(pvNs, 1);
+    }
+  }
+  
+  if (1 && invarspecNs!=NULL) {
+    Ddi_BddNotAcc(invarspecNs);
+    Ddi_BddOrAcc(notReached,invarspecNs);
+    Ddi_BddNotAcc(invarspecNs);
+    Ddi_BddAndAcc(from,invarspecPs);
+    //Ddi_AigarrayConstrainCubeAcc(myDelta,invarNs);
+  }
+  if (1 && invarNs!=NULL) {
+    Ddi_BddAndAcc(notReached,invarNs);
+    //Ddi_AigarrayConstrainCubeAcc(myDelta,invarNs);
+  }
+
+  Ddi_BddarraySubstVarsAcc(myDelta, ns, ps);
+  fromAndTr = Ddi_BddRelMakeFromArray(myDelta, ns);
+  if (invarNs!=NULL) {
+    Ddi_BddPartInsertLast(fromAndTr,invarNs);
+  }
+
+  if (itpMgr->invarConstr!=NULL && !Ddi_BddIsOne(itpMgr->invarConstr)) {
+    Ddi_BddAndAcc(from,itpMgr->invarConstr);
+    Ddi_Bdd_t *constrNs = Ddi_BddSubstVars(itpMgr->invarConstr, ps, ns);
+    if (!useInvarConstr)
+      Ddi_BddPartInsertLast(fromAndTr,constrNs);
+    Ddi_Free(constrNs);
+  }
+
+  if (itpTravMgr->careBwd!=NULL && !Ddi_BddIsOne(itpTravMgr->careBwd)) {
+    Ddi_Bdd_t *constr = Ddi_BddSubstVars(itpTravMgr->careBwd, ns, ps);
+    Ddi_BddPartInsertLast(fromAndTr,constr);
+    Ddi_Free(constr);
+  }
+
+  int fp = 1||!Ddi_AigSatAnd(fromAndTr, notReached, from);
+  Pdtutil_Assert(fp, "fix point not reached");
+
+  Ddi_Bdd_t *initStubRel = NULL;
+  Ddi_Bdd_t *initNs = NULL;
+  if (itpMgr->initStub!=NULL) {
+    initStubRel = Ddi_BddRelMakeFromArray(itpMgr->initStub, ns);
+  }
+  else {
+    initNs = Ddi_BddSubstVars(itpMgr->init, ps, ns);
+  }
+  int again = 1;
+  float growRatio = 1.0;
+  Ddi_Bdd_t *newReached = Ddi_BddNot(notReached);
+
+  Ddi_Vararray_t *tAux =
+      Ddi_VararrayMakeNewVars(itpMgr->pi,
+                              "PDT_ITP_PI_TARGET_AUX_", NULL, 1);
+  Ddi_Bdd_t *targetNs = Ddi_BddSubstVars(itpMgr->target,
+                                         itpMgr->ps,itpMgr->ns);
+  Ddi_Bdd_t *targetNsProj = NULL;
+  if (Ddi_BddSize(targetNs) < 10) {
+    constrWithTarget = 0;
+  }
+  constrWithTarget = 0;
+  if (doExist) {
+    targetNsProj = Ddi_BddExistProject(targetNs,itpMgr->nsvars);
+  }
+
+  Ddi_BddSubstVarsAcc(targetNs,itpMgr->pi,tAux);
+      
+  for (i=0; i<maxIter && again; i++) {
+    Ddi_Bdd_t *myFromAndTr = Ddi_BddDup(fromAndTr);
+    int size0 = Ddi_BddSize(from);
+    Ddi_BddPartInsertLast(myFromAndTr, notReached);
+
+    itp = Ddi_BddDup(from);
+    Pdtutil_VerbLevel_e verbosity = Ddi_MgrReadVerbosity(ddm);
+    Pdtutil_VerbLevel_e vNew = Pdtutil_VerbLevelUsrMed_c;
+    if (verbosity > Pdtutil_VerbLevelUsrMed_c)
+      Ddi_MgrSetVerbosity(ddm,vNew);
+
+    //      Ddi_BddSetAig(fromAndTr);
+    Ddi_AigOptByMonotoneCoreAcc(itp, myFromAndTr, NULL, 0, -1.0);
+    Ddi_MgrSetVerbosity(ddm,verbosity);
+
+    if (itp==NULL) {
+      again=0;
+    }
+    else {
+
+      Ddi_Free(newReached);
+      newReached = Ddi_BddSubstVars(itp,ps,ns);
+      int size1 = Ddi_BddSize(itp);
+      if (invarNs!=NULL) {
+	Ddi_Bdd_t *aux = Ddi_BddAnd(newReached,invarNs);
+	size1 = Ddi_BddSize(aux);
+	Ddi_Free(aux);
+      }
+      if (size1 >= growRatio * size0) {
+        again = 0;
+      }
+      else {
+        Ddi_Free(from);
+        Ddi_Free(notReached);
+        from = Ddi_BddDup(itp);
+        notReached = Ddi_BddNot(itp);
+        Ddi_BddSubstVarsAcc(notReached, ps, ns);
+	if (invarNs!=NULL) {
+	  Ddi_BddAndAcc(itp,invarNs);
+	}
+        if (chkSupp) {
+          Ddi_Vararray_t *s = Ddi_BddSuppVararray(notReached);
+          Ddi_VararrayDiffAcc(s,ns);
+          Pdtutil_Assert(Ddi_VararrayNum(s)==0,"wrong supp");
+          Ddi_Free(s);
+        }
+        
+        if (maxItp-->0)
+          useItp=1;
+      }
+    }
+    Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+      printf("\nGFP iteration [%d] - reached size: %d\n", i, Ddi_BddSize(from));
+    }
+    Ddi_Free(myFromAndTr);
+    Ddi_Free(itp);
+  }
+
+  Ddi_Free(tAux);
+  Ddi_Free(targetNs);
+  Ddi_Free(targetNsProj);
+  
+  if (!Ddi_BddIncluded(itpTravMgr->reached,newReached)
+      || (Ddi_BddSize(newReached)<Ddi_BddSize(itpTravMgr->reached))
+      ) {
+    Ddi_Free(itpTravMgr->reached);
+    itpTravMgr->reached = Ddi_BddDup(newReached);
+    //    Ddi_BddSubstVarsAcc(newReached,ns,ps);
+    //    Ddi_BddAndAcc(itpMgr->invarConstr,newReached);
+    ret = 1;
+  }
+  Ddi_Free(newReached);
+
+  if (chkSupp) {
+    Ddi_Vararray_t *s = Ddi_BddSuppVararray(itpTravMgr->reached);
+    Ddi_VararrayDiffAcc(s,ns);
+    Pdtutil_Assert(Ddi_VararrayNum(s)==0,"wrong supp");
+    Ddi_Free(s);
+  }
+
+  if (!Ddi_BddIncluded(itpTravMgr->reached,itpTravMgr->careBwd)) {
+    Ddi_BddAndAcc(itpTravMgr->reached,itpTravMgr->careBwd);
+  }
+  if (chk0) {
+    int sat = checkRingIsFixPoint(itpMgr->ps,itpMgr->ns,
+                                  delta,
+                                  itpTravMgr->reached);
+    Pdtutil_Assert(!sat,"problem with fox point for reached");
+    Pdtutil_Assert(Ddi_BddIncluded(itpTravMgr->reached,
+                                   itpTravMgr->careBwd),
+                   "problem with reached inclusion in care");
+  }
+  
+  Ddi_Free(saveR);
+  Ddi_Free(saveF);
+  Ddi_Free(initStubRel);
+  Ddi_Free(initNs);
+  Ddi_Free(notReached);
+  Ddi_Free(from);
+  Ddi_Free(myDelta);
+  Ddi_Free(invarConstr);
+  Ddi_Free(invarPs);
+  Ddi_Free(invarNs);
+  Ddi_Free(invarspecPs);
+  Ddi_Free(invarspecNs);
 
   Ddi_Free(fromAndTr);
   Ddi_Free(deltaNs);

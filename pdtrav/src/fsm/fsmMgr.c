@@ -817,7 +817,7 @@ Fsm_MgrFold(
 )
 {
   Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
-  Fsm_FsmFoldProperty(fsmFsm,1,0,1);
+  Fsm_FsmFoldProperty(fsmFsm,0,0,1);
   Fsm_FsmFoldConstraint(fsmFsm, 1);
   Fsm_FsmWriteToFsmMgr(fsmMgr,fsmFsm);
 

@@ -80,7 +80,7 @@ int App_Gfp (
   char *aigInName = NULL;
   char *aigOutName = NULL;
   char *fsmName = NULL;
-
+  int doStrengthen = 1; 
   
   printf("gfp app:");
   for (int i=0; i<argc; i++) {
@@ -96,6 +96,9 @@ int App_Gfp (
         return 0;
       }
       iter = atoi(argv[i]);
+    }
+    else if (strcmp(argv[i],"-w")==0) {
+      doStrengthen = 0;
     }
     else if (fsmName==NULL) {
       fsmName = argv[i];
@@ -120,6 +123,9 @@ int App_Gfp (
     exit(EXIT_FAILURE);
   }
   appMgr->travMgr = Trav_MgrInit(fsmName, appMgr->ddiMgr);
+  Ddi_Bdd_t *invarspec =
+    Ddi_BddNot(Ddi_BddarrayRead(Fsm_MgrReadLambdaBDD(appMgr->fsmMgr),0));
+  Fsm_MgrSetInvarspecBDD(appMgr->fsmMgr, invarspec);
   Fsm_MgrFold(appMgr->fsmMgr);
                         
   Ddi_Bddarray_t *
@@ -130,14 +136,18 @@ int App_Gfp (
   Ddi_Free(invarArray);
   Trav_MgrSetReached(appMgr->travMgr,myInvar);
   Ddi_Free(myInvar);
-  Trav_TravSatItpGfp(appMgr->travMgr,appMgr->fsmMgr,iter,0);
+  Trav_TravSatItpGfp(appMgr->travMgr,appMgr->fsmMgr,iter,doStrengthen,0);
   Ddi_Bdd_t *invOut = Fsm_MgrReadReachedBDD(appMgr->fsmMgr);
   Ddi_Var_t *cvarPs = Ddi_VarFromName(appMgr->ddiMgr,
                                       "PDT_BDD_INVAR_VAR$PS");
   Ddi_BddCofactorAcc(invOut,cvarPs,1);
+  Ddi_Var_t *pvarPs = Ddi_VarFromName(appMgr->ddiMgr,
+                                      "PDT_BDD_INVARSPEC_VAR$PS");
+  Ddi_BddCofactorAcc(invOut,pvarPs,1);
 
   Ddi_AigNetStoreAiger(invOut, 0, aigOutName);
 
+  Ddi_Free(invarspec);
   App_MgrQuit(appMgr);
   
   return 1;

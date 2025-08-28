@@ -3067,6 +3067,10 @@ FbvFsmReductions(
         Ddi_Free(initStub);
         opt->pre.forceInitStub--;
         Fsm_MgrIncrInitStubSteps(fsmMgr, 1);
+        Pdtutil_VerbosityLocal(Pdtutil_VerbLevelDevMin_c,
+                               Pdtutil_VerbLevelNone_c,
+                               fprintf(stdout, "Forced init stub step: %d.\n",
+                                       Fsm_MgrReadInitStubSteps(fsmMgr)));
         Pdtutil_WresIncrInitStubSteps(1);
       }
 
@@ -7714,6 +7718,10 @@ invarVerif(
     Ddi_Free(initStub);
     opt->pre.forceInitStub--;
     Fsm_MgrIncrInitStubSteps(fsmMgr, 1);
+        Pdtutil_VerbosityLocal(Pdtutil_VerbLevelDevMin_c,
+                               Pdtutil_VerbLevelNone_c,
+                               fprintf(stdout, "Forced init stub step: %d.\n",
+                                       Fsm_MgrReadInitStubSteps(fsmMgr)));
     Pdtutil_WresIncrInitStubSteps(1);
   }
 
@@ -8724,7 +8732,7 @@ invarVerif(
     }
 
     if (opt->mc.gfp > 0) {
-      Trav_TravSatItpGfp(travMgrAig,fsmMgr,opt->mc.gfp,
+      Trav_TravSatItpGfp(travMgrAig,fsmMgr,opt->mc.gfp,1/*doStrengthen*/,
                          opt->trav.countReached);
     }
     
@@ -13181,7 +13189,7 @@ invarDecompVerif(
                   Trav_MgrSetNewi(travMgrAig,fromRings);
                 }
                 Trav_TravSatItpGfp(travMgrAig,fsmMgr,opt->mc.gfp,
-                         opt->trav.countReached);
+                         1/*doStrengthen*/,opt->trav.countReached);
               }
               Ddi_Bdd_t *inWindow =
                 Trav_DeepestRingCex(travMgrAig, fsmMgr2,
