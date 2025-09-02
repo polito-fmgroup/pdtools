@@ -1145,6 +1145,7 @@ EXTERN int Trav_TravSatItpGfp(
   Trav_Mgr_t * travMgr,
   Fsm_Mgr_t * fsmMgr,
   int gfp,
+  int doStrengthen,
   int countR
 );
 EXTERN int Trav_TravSatItpVerif(

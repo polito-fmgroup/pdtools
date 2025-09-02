@@ -181,7 +181,7 @@ Fsm_MgrLoadAiger(
     fsmMgr->delta.bdd = NULL;
   }
 
-  if (nl > 550000) {
+  if (nl > 50000) {
     useBddVars = 0;
   }
 
