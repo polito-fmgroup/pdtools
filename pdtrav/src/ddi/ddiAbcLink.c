@@ -2897,6 +2897,42 @@ Abc_ScorrReduceFsm(
   return;
 }
 
+/**Function*************************************************************
+
+  Synopsis    [Perform scorr reduction]
+  Description [Perform scorr reduction of a PdTRAV FSM after passing it to the ABC Aig form]
+  SideEffects []
+  SeeAlso     []
+
+***********************************************************************/
+
+int
+Ddi_AbcTemporPrefixLength(
+  Ddi_Bddarray_t *delta,
+  Ddi_Bddarray_t *lambda,
+  Ddi_Vararray_t *ps,
+  Ddi_Vararray_t *pi
+)
+{
+  extern int Saig_ManPhasePrefixLength( Aig_Man_t * p, int fVerbose, int fVeryVerbose, Vec_Int_t ** pvTrans );
+  Ddi_Mgr_t *ddiMgr = Ddi_ReadMgr(delta);
+  int fVerbose = Ddi_MgrReadVerbosity(ddiMgr) >= Pdtutil_VerbLevelDevMin_c;
+
+  Ddi_AbcLock();
+
+  Aig_Man_t *pMan = DdiAbcFsmToAig (delta,lambda,pi,ps);
+
+  Aig_ManCheck(pMan);
+  Aig_ManSetRegNum(pMan, Ddi_VararrayNum(ps));
+
+  Vec_Int_t * vTransSigs = NULL;
+  int nFrames = Saig_ManPhasePrefixLength( pMan, fVerbose, 0, &vTransSigs );
+ 
+  Aig_ManStop( pMan );
+
+  return nFrames;
+}
+
 /*---------------------------------------------------------------------------*/
 /* Testing purposes                                                          */
 /* Last modified NOV '13                                                     */
@@ -3451,6 +3487,39 @@ static int Abc_Simplify (
     }
   }
   return Abc_GetStatus(pAbc);
+}
+
+static void Abc_TryTemp
+(
+  void *pAbc,
+  int maxTime
+)
+{
+  Abc_Trim(pAbc);
+  char cmd[1000], real_name[1000];
+  char *f_name = Abc_GetNtkName(pAbc);
+  strncpy(real_name, f_name, 1000);
+  sprintf(cmd, "write %s_best.aig", real_name);
+  Cmd_CommandExecute(pAbc, cmd);
+
+  int npi = Abc_GetNtkCiNum(pAbc);
+  int nands = Abc_GetNtkAndsNum(pAbc);
+  int nlatches = Abc_GetNtkLatchesNum(pAbc);
+
+  // In the original version there is a timer that limits the time spent doing this.
+  // For now, no timer is issued...
+  sprintf(cmd, "tempor -s; &get; &trim -o; &put; &get; &scorr; &put; &get; &trim -o; &put; tempor; &get; &trim -o; &put; &get; &scorr; &put; &get; &trim -o; &put");
+  Cmd_CommandExecute(pAbc, cmd);
+
+  float cost = Abc_RelCost(pAbc, npi, nlatches, nands);
+
+  if (cost < 0.01) {
+    Abc_PrintStatus(pAbc);
+    return;
+  } else {
+    sprintf(cmd, "read %s_best.aig", real_name);
+    Cmd_CommandExecute(pAbc, cmd);
+  }
 }
 
 static void Abc_TryTemp

@@ -1660,6 +1660,7 @@ EXTERN Ddi_Bdd_t *Ddi_AbcRaritySim(Ddi_Bddarray_t *delta, Ddi_Bddarray_t *lambda
 EXTERN Ddi_Bdd_t *Ddi_AbcCexFromAig(void *pCex, Ddi_Vararray_t *pi, Ddi_Vararray_t *is, void *pAig);
 EXTERN Ddi_Varsetarray_t * Ddi_AigEvalMultipleCoi (Ddi_Bddarray_t *delta, Ddi_Bddarray_t *outputs, Ddi_Vararray_t *ps,int optionCluster,char *clusterFile,int methodCluster,int thresholdCluster);
 EXTERN Ddi_Varsetarray_t * Ddi_AigEvalMultipleCoiWithScc (Ddi_Bddarray_t *delta, Ddi_Bddarray_t *outputs, Ddi_Vararray_t *ps,int optionCluster,char *clusterFile,int methodCluster,int thresholdCluster, int th_coi_diff,int th_coi_share, int doSort);
+EXTERN int Ddi_AbcTemporPrefixLength(Ddi_Bddarray_t *delta, Ddi_Bddarray_t *lambda, Ddi_Vararray_t *ps, Ddi_Vararray_t *pi);
 EXTERN Ddi_SccMgr_t *Ddi_FsmSccTarjan (Ddi_Bddarray_t *delta, Ddi_Bddarray_t *lambda, Ddi_Vararray_t *ps);
 EXTERN Ddi_SccMgr_t * Ddi_FsmSccTarjanCheckBridge (Ddi_Bddarray_t *delta, Ddi_Bddarray_t *lambda,  Ddi_Vararray_t *ps, bAigEdge_t node, int isGate );
 EXTERN void Ddi_FindSccBridgesNaive(Ddi_SccMgr_t *sccMgr, Ddi_Bddarray_t *delta, Ddi_Bddarray_t *lambda, Ddi_Vararray_t *ps);

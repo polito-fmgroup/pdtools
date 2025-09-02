@@ -3029,6 +3029,13 @@ FbvFsmReductions(
         }
       }
 
+      if (opt->pre.forceInitStub < 0) {
+        Ddi_Bddarray_t *lambda = Fsm_MgrReadLambdaBDD(fsmMgr);
+        Ddi_Vararray_t *pi = Fsm_MgrReadVarI(fsmMgr);
+        Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
+        Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
+        opt->pre.forceInitStub = Ddi_AbcTemporPrefixLength(delta, lambda, ps, pi);
+      }
       while (opt->pre.forceInitStub) {
         Ddi_Vararray_t *pi = Fsm_MgrReadVarI(fsmMgr);
         Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
@@ -4494,6 +4501,14 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-forceInitStub") == 0) {
       opt->pre.forceInitStub = atoi(argv[2]);
+      opt->pre.peripheralLatches = 0;
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-temporDecomp") == 0) {
+      opt->pre.forceInitStub = atoi(argv[2]);
+      opt->pre.peripheralLatches = 0;
       argv++;
       argc--;
       argv++;
@@ -7679,6 +7694,13 @@ invarVerif(
 
   opt->stats.setupTime = util_cpu_time();
 
+  if (opt->pre.forceInitStub < 0) {
+    Ddi_Bddarray_t *lambda = Fsm_MgrReadLambdaBDD(fsmMgr);
+    Ddi_Vararray_t *pi = Fsm_MgrReadVarI(fsmMgr);
+    Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
+    Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
+    opt->pre.forceInitStub = Ddi_AbcTemporPrefixLength(delta, lambda, ps, pi);
+  }
   while (opt->pre.forceInitStub) {
     Ddi_Vararray_t *pi = Fsm_MgrReadVarI(fsmMgr);
     Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
