@@ -9879,6 +9879,7 @@ retimeCheck(
     invarOut = Ddi_BddSubstVars(itp,ns,ps);
     Ddi_BddOrAcc(invarOut,init);
   }
+  Ddi_Free(itp);
   Ddi_Free(nsVars);
   Ddi_Free(cutF);
   Ddi_Free(cutV);
@@ -17294,12 +17295,11 @@ itpStrengthenReachedGfp(
   nCalls++;
   reached = itpTravMgr->reached;
 
-  int chkSupp=1;
-  if (chkSupp) {
-    Ddi_Vararray_t *s = Ddi_BddSuppVararray(itpTravMgr->reached);
-    Ddi_VararrayDiffAcc(s,ns);
-    Pdtutil_Assert(Ddi_VararrayNum(s)==0,"wrong supp");
-    Ddi_Free(s);
+  int chkSupp=0;
+  Ddi_Vararray_t *s_pi = Ddi_BddSuppVararray(itpTravMgr->reached);
+  Ddi_VararrayDiffAcc(s_pi,ns);
+  if (Ddi_VararrayNum(s_pi)>0 && chkSupp) {
+    Pdtutil_Assert(0,"wrong supp");
   }
   
   Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
@@ -17351,6 +17351,18 @@ itpStrengthenReachedGfp(
   Ddi_Bdd_t *itp=NULL, *fromAndTr;
   Ddi_Bddarray_t *myDelta = Ddi_BddarrayDup(deltaNs);
 
+  if (Ddi_VararrayNum(s_pi)>0) {
+    Ddi_Vararray_t *vAux =
+      Ddi_VararrayMakeNewVars(s_pi,
+                              "PDT_GFP_NS_AUX_", NULL, 1);
+      Ddi_BddSubstVarsAcc(notReached,s_pi,vAux);
+      Ddi_Free(vAux);
+
+      useItp=1;
+  }
+  Ddi_Free(s_pi);
+
+  
   if (useInvarConstr) {
     Pdtutil_Assert(Ddi_BddIsZero(notReached), "wrong use of invarconstr");
     Ddi_Free(notReached);
@@ -17569,15 +17581,11 @@ itpStrengthenReachedGfp(
 	size1 = Ddi_BddSize(aux);
 	Ddi_Free(aux);
       }
-      if (size1 >= growRatio * size0) {
-        if (useItp) {
-          useItp=0;
-        }
-        else {
-          again = 0;
-        }
+      if (size1 >= growRatio * size0 && !useItp) {
+        again = 0;
       }
       else {
+        useItp = 0;
         Ddi_Free(from);
         Ddi_Free(notReached);
         notReached = Ddi_BddNot(itp);

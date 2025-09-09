@@ -91,7 +91,6 @@ int App_Aiger (
   for (int i=0; i<argc; i++) {
     printf(" %s", argv[i]);
     if (strcmp(argv[i],"-s")==0) {
-      i++;
       symbMap = 1;
     }
     else if (strcmp(argv[i],"-c")==0 ||

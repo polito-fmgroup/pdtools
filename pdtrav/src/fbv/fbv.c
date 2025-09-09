@@ -7740,10 +7740,10 @@ invarVerif(
     Ddi_Free(initStub);
     opt->pre.forceInitStub--;
     Fsm_MgrIncrInitStubSteps(fsmMgr, 1);
-        Pdtutil_VerbosityLocal(Pdtutil_VerbLevelDevMin_c,
-                               Pdtutil_VerbLevelNone_c,
-                               fprintf(stdout, "Forced init stub step: %d.\n",
-                                       Fsm_MgrReadInitStubSteps(fsmMgr)));
+    Pdtutil_VerbosityLocal(Pdtutil_VerbLevelDevMin_c,
+                           Pdtutil_VerbLevelNone_c,
+                           fprintf(stdout, "Forced init stub step: %d.\n",
+                           Fsm_MgrReadInitStubSteps(fsmMgr)));
     Pdtutil_WresIncrInitStubSteps(1);
   }
 
@@ -22102,7 +22102,7 @@ FbvOpt2OptList(
   opt->trav.autoHint = 0;
   opt->mc.decompTimeLimit = 2000.0;
   opt->mc.abcOptFilename = NULL;
-  opt->pre.speculateEqProp = 1;
+  opt->pre.speculateEqProp = 0;
 
   /* fsm opt on FILE */
 
@@ -23211,7 +23211,7 @@ new_settings(
   opt->expt.expertLevel = 0;
   opt->mc.decompTimeLimit = 5000.0;
   opt->mc.abcOptFilename = NULL;
-  opt->pre.speculateEqProp = 1;
+  opt->pre.speculateEqProp = 0;
 
   /* fsm opt on FILE */
 
