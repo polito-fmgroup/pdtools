@@ -4537,7 +4537,7 @@ FbvParseArgs(
       argv++;
       argc--;
     } else if (strcmp(argv[1], "-twoPhaseForced") == 0) {
-      opt->pre.findClk = 1;
+      //      opt->pre.findClk = 1;
       opt->pre.twoPhaseForced = 1;
       argv++;
       argc--;

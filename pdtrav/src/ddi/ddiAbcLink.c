@@ -2929,6 +2929,7 @@ Ddi_AbcTemporPrefixLength(
   int nFrames = Saig_ManPhasePrefixLength( pMan, fVerbose, 0, &vTransSigs );
  
   Aig_ManStop( pMan );
+  Ddi_AbcUnlock ();
 
   return nFrames;
 }
