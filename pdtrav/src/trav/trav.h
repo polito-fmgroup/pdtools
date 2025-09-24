@@ -1111,16 +1111,41 @@ EXTERN int Trav_TravSatFwdDiameterVerif(
   int step,
   int bound
 );
+EXTERN int
+Trav_TravSatCheckProof(
+  Trav_Mgr_t * travMgr /* Traversal Manager */ ,
+  Fsm_Mgr_t * fsmMgr,
+  Fsm_Mgr_t * fsmMgrRef,
+  char *wFsm
+);
+EXTERN int
+Trav_TravSatStoreProofAiger(
+  Trav_Mgr_t * travMgr /* Traversal Manager */ ,
+  Fsm_Mgr_t * fsmMgr,
+  Fsm_Mgr_t * fsmMgrRef,
+  char *wFsm
+);
 EXTERN int Trav_TravSatCheckInvar(
   Trav_Mgr_t * travMgr /* Traversal Manager */ ,
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t *invar,
-  int *checkTargetSatP
+  int *checkTargetSatP,
+  Pdtutil_OptList_t *certOpt
+);
+EXTERN int Trav_TravTrAbstrItp(
+  Trav_Mgr_t * travMgr /* Traversal Manager */ ,
+  Fsm_Mgr_t * fsmMgr,
+  int nFrames,
+  int optLevel,
+  int firstFwdStep,
+  int maxFwdStep,
+  int bmcBound
 );
 EXTERN int Trav_TravSatItpGfp(
   Trav_Mgr_t * travMgr,
   Fsm_Mgr_t * fsmMgr,
   int gfp,
+  int doStrengthen,
   int countR
 );
 EXTERN int Trav_TravSatItpVerif(
@@ -1152,6 +1177,7 @@ EXTERN Ddi_Bdd_t *Trav_DeepestRingCex(
   int genCubes,
   Ddi_Varset_t *hintVars,
   int *fullTarget,
+  int doRunItp,
   int subsetByAntecedents
 );
 EXTERN int Trav_TravSatQbfVerif(

@@ -84,6 +84,7 @@ Fsm_MgrLoadAiger(
   Ddi_Mgr_t * dd /* Main DD manager */ ,
   char *fileFsmName /* Input file name */ ,
   char *fileOrdName /* ORD File Name */ ,
+  Ddi_Vararray_t *mapVars,
   Pdtutil_VariableOrderFormat_e ordFileFormat
 )
 {
@@ -101,7 +102,7 @@ Fsm_MgrLoadAiger(
   aiger *mgr;
   const char *error;
   Ddi_Bdd_t *litBdd;
-  char buf[100];
+  static char buf[100000];
   int sortDfs = 1;
   Ddi_Bdd_t *bddZero = NULL;
   aiger_symbol *targets;
@@ -180,7 +181,7 @@ Fsm_MgrLoadAiger(
     fsmMgr->delta.bdd = NULL;
   }
 
-  if (nl > 550000) {
+  if (nl > 50000) {
     useBddVars = 0;
   }
 
@@ -211,20 +212,27 @@ Fsm_MgrLoadAiger(
     Ddi_Var_t *var;
     char *s, *name = aiger_get_symbol(mgr, lit);
 
-    if (name == NULL) {
-      sprintf(buf, "i%d", lit);
-      name = buf;
-    }
-
     Pdtutil_Assert(lit == 2 * i1, "Wrong variable id in AIGER manager");
 
-    for (s = name; *s != '\0'; s++) {
-      if (*s == '#' || *s == ':' || *s == '(' || *s == ')')
-        *s = '_';
+    if (mapVars == NULL || name!=NULL) {
+      if (name == NULL) {
+	Pdtutil_Assert(lit%2==0 && lit/2>0,"wrong aiger variable lit");
+	sprintf(buf, "i%d", lit/2-1);
+	name = buf;
+      }
+      
+      for (s=name; *s!='\0'; s++) {
+	if (*s=='#' || *s==':' || *s=='(' || *s==')') *s='_';
+      }
+      var = Ddi_VarFindOrAdd(dd, name, useBddVars);
+      Ddi_VarAttachAuxid(var, i);
     }
-
-    var = Ddi_VarFindOrAdd(dd, name, useBddVars);
-    Ddi_VarAttachAuxid(var, i);
+    else {
+      Pdtutil_Assert(Ddi_VararrayNum(mapVars)==ni,
+                     "wrong number of vars");
+      var = Ddi_VararrayRead(mapVars,i);
+    }
+    
     //Ddi_VarAttachName(var, name);
     Ddi_VararrayWrite(fsmMgr->var.i, i, var);
 
@@ -435,6 +443,27 @@ Fsm_MgrLoadAiger(
     Ddi_BddPartInsertLast(fsmMgr->constraint.bdd, cBdd);
     //    fsmMgr->name.c[i] = Pdtutil_StrDup (name);
     Ddi_Free(cBdd);
+  }
+  int chkConstr = 1;
+  if (chkConstr) {
+    Ddi_Bdd_t *myChk = Ddi_BddMakeConstAig(dd, 1);
+    for (int i = 0; i<Ddi_BddPartNum(fsmMgr->constraint.bdd); i++) {
+      Ddi_Bdd_t *c_i = Ddi_BddPartRead(fsmMgr->constraint.bdd, i);
+      if (!Ddi_AigSatAnd(myChk,c_i,NULL)) {
+        printf("unconsistency found: %d\n", i);
+        //Ddi_BddPartRemove(fsmMgr->constraint.bdd,i); i--; continue;
+        for (int j = 0; j<i; j++) {
+          Ddi_Bdd_t *c_j = Ddi_BddPartRead(fsmMgr->constraint.bdd, j);
+          if (!Ddi_AigSatAnd(c_i,c_j,NULL)) {
+            printf("couple found: %d %d\n", j, i);
+            break;
+          }
+        }
+        break;
+      }
+      Ddi_BddAndAcc(myChk,c_i);
+    }
+    Ddi_Free(myChk);
   }
 
   Ddi_BddSetAig(fsmMgr->constraint.bdd);

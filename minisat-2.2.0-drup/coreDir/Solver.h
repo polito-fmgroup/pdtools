@@ -330,6 +330,111 @@ public:
  
   }
 
+  void getLearntsTopLits(vec<Lit>& topLits, int maxLits=20, int balanced=1, int doPrint=1) {
+    int cnt[10]={0}, cntFull[10]={0}, a=0, b=0, g=0;
+    vec<int> litPos;
+    vec<int> litNeg;
+    vec<int> clSizeNeg;
+    vec<int> clSizePos;
+    vec<int> cntTot;
+    vec<Lit> sorted;
+    int maxCnt=0, maxSize=0;
+    litPos.growTo(nVars(), 0);
+    litNeg.growTo(nVars(), 0);
+    clSizePos.growTo(nVars(), 0);
+    clSizeNeg.growTo(nVars(), 0);
+    sorted.growTo(2*nVars(), lit_Undef);
+    for(int i = 0; i<learnts.size(); i++){
+      Clause& cl = ca[learnts[i]];
+      if (cl.size() > maxSize) maxSize = cl.size();
+      for(int j=0; j<cl.size(); ++j) {
+        Var v = var(cl[j]);
+        if (sign(cl[j])) {
+          litNeg[v]++;
+          clSizeNeg[v] += cl.size();
+        }
+        else {
+          litPos[v]++;
+          clSizePos[v] += cl.size();
+        }
+      }
+    }
+    for(int v = 0; v<nVars(); v++){
+      if (litPos[v]>0) {
+        clSizePos[v] /= litPos[v];
+        if (litPos[v] > maxCnt) maxCnt = litPos[v];
+      }
+      if (litNeg[v]>0) {
+        clSizeNeg[v] /= litNeg[v];
+        if (litNeg[v] > maxCnt) maxCnt = litNeg[v];
+      }
+    }
+    cntTot.growTo(maxCnt+1, 0);
+    for(int v = 0; v<nVars(); v++){
+      cntTot[litPos[v]]++;
+      cntTot[litNeg[v]]++;
+    }
+    for(int i = 1; i<=maxCnt; i++){
+      cntTot[i] += cntTot[i-1];
+    }
+    for (int v=nVars()-1; v>=0; v--) {
+      Lit p = mkLit(v, 0);
+      int j=--cntTot[litPos[v]];
+      assert(j>=0 && j<2*nVars());
+      sorted[j] = p;
+      p = mkLit(v, 1);
+      j=--cntTot[litNeg[v]];
+      assert(j>=0 && j<2*nVars());
+      sorted[j] = p;
+    }
+    if (doPrint)
+      printf("learnts stats for literals in %d learnt clauses - max size %d\n",
+             learnts.size(), maxSize);
+    vec<int> countLits;
+    countLits.growTo(nVars(),0);
+    int cntTh = maxCnt/10;
+    for (int i=0; i<2*nVars(); i++) {
+      int j = 2*nVars()-i-1;
+      Lit p = sorted[j];
+      Var v = var(p);
+      countLits[v]++;
+      if (balanced) {
+        if (sign(p) && litPos[v]>litNeg[v]/4) countLits[v]++;
+        if (!sign(p) && litNeg[v]>litPos[v]/4) countLits[v]++;
+        if (litNeg[v] < cntTh) break;
+      }
+      else {
+        if (sign(p) && litPos[v]>10) countLits[v]++;
+        if (!sign(p) && litNeg[v]>10) countLits[v]++;
+        if (litPos[v] < cntTh) break;
+      }
+    }
+    topLits.clear();
+    int notActiveCnt=0;
+    for (int i=0; i<2*nVars() && topLits.size()<maxLits; i++) {
+      int j = 2*nVars()-i-1;
+      Lit p = sorted[j];
+      Var v = var(p);
+      int select = (countLits[v] > 0) && (balanced ^ countLits[v]<2); 
+      if (!select) {
+        if (doPrint)
+          printf("skipping var %d with two lits selected\n", v);
+        if (++notActiveCnt > 20) break;
+        continue;
+      }
+      notActiveCnt = 0;
+      countLits[v] = 0;
+      char s = sign(p)?'-':' ';
+      int cnt = sign(p)?litNeg[v]:litPos[v]; 
+      int sz = sign(p)?clSizeNeg[v]:clSizePos[v]; 
+      int cnt1 = sign(p)?litPos[v]:litNeg[v]; 
+      int sz1 = sign(p)?clSizePos[v]:clSizeNeg[v]; 
+      if (doPrint)
+        printf("lit: %c%d - count: %d - avg cl size: %d (compl: %d %d)\n", s, v, cnt, sz, cnt1, sz1);
+      topLits.push(p);  
+    }
+  }
+
   void printLearntsStats(vec<Var>& filterVars, vec<Var>& filter2Vars) {
     int useABvars = 0;
     int maxLits = 20;
@@ -382,6 +487,7 @@ public:
 	cnt[i]++;
       }
     }
+
     printf("learnts stats - a: %d, b: %d, g: %d\n", a, b, g);
     printf("split cnt: \n");
     for (int i=0; i<10; i++) printf("[%d] %d ", i*10, cnt[i]); printf("\n");

@@ -66,3 +66,7 @@ guardare se enStructAbstractionWithCone e' attivo e/o serve
 
 
 trArray serve per dynAbstr. Si puo' fare meglio ???
+
+
+
+METTERE A POSTO BLOCCO IN peripheral latches per variabily di folding

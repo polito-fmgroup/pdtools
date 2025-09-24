@@ -42,13 +42,13 @@ default: $(PROG)
 
 ifdef PDT32
 # StQ: 32-bit
-OPTFLAGS  := -O3 -DLIN -m32 -pthread -fPIC -DABC_NAMESPACE=xxx
+OPTFLAGS  := -O3 -DLIN -m32 -pthread -fPIE -DABC_NAMESPACE=xxx
 #OPTFLAGS  := -g -O -DLIN -m32
 else
 # StQ: 64 bit = Original Makefile Version
 #OPTFLAGS  := -g -O -DLIN
 #OPTFLAGS  := -g -O -DLIN64 -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4 -DABC_NAMESPACE=xxx
-OPTFLAGS  := -g -Wall -fPIC -DLIN64 -pthread -ffloat-store -mtune=native -malign-double -DHAVE_IEEE_754 -DBSD -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4 -DABC_NAMESPACE=xxx
+OPTFLAGS  := -g -Wall -fPIE -DLIN64 -pthread -ffloat-store -mtune=native -malign-double -DHAVE_IEEE_754 -DBSD -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4 -DABC_NAMESPACE=xxx
 endif
 
 arch_flags : arch_flags.c
@@ -59,7 +59,7 @@ OPTFLAGS  := -g -O3 #-DABC_NAMESPACE=xxx
 
 #CFLAGS   += -Wall -Wno-unused-function -Wno-unused-but-set-variable $(OPTFLAGS) $(patsubst %, -I%, $(MODULES)) 
 #CFLAGS   += -Wall -Wno-unused-function -Wno-unused-but-set-variable $(OPTFLAGS) $(ARCHFLAGS) -I$(PWD)/src
-CFLAGS   += -Wall -Wno-unused-function $(OPTFLAGS) $(ARCHFLAGS) -I$(ABC_DIR)/src
+CFLAGS   += -Wall -fPIE -Wno-unused-function $(OPTFLAGS) $(ARCHFLAGS) -I$(ABC_DIR)/src
 CXXFLAGS += $(CFLAGS) 
 
 LIBS := -ldl -lreadline -lpthread -lncurses

@@ -1680,7 +1680,7 @@ CRef Solver::propagate(bool coreOnly, int maxPart, bool coreFirst)
 
             //Exclude clause based on its partition
             if (maxPart > 0 && maxPart < c.part ().max ()) { *j++ = *i++; continue; }
-
+            
             // Make sure the false literal is data[1]:
             Lit      false_lit = ~p;
             if (c[0] == false_lit)

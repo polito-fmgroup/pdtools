@@ -2373,7 +2373,8 @@ Tr_TrCoiReductionWithAssume(
   if (n > 0) {
 
     nocoi = Ddi_VarsetMakeFromArray(ps);
-    Ddi_VarsetDiffAcc(nocoi, Ddi_VarsetarrayRead(coiVars, n - 1));
+    for (int i=0; i<n; i++) 
+      Ddi_VarsetDiffAcc(nocoi, Ddi_VarsetarrayRead(coiVars, i));
     nocoiNS = Ddi_VarsetSwapVars(nocoi, ps, ns);
 
 #if 0
@@ -2462,6 +2463,10 @@ Tr_TrComputeCoiVars(
 
   int i, j, np;
 
+  return computeCoiVars(tr,p,maxIter);
+
+  // disabled for aux var handling
+  
   psv = Tr_MgrReadPS(trMgr);
   nsv = Tr_MgrReadNS(trMgr);
   ps = Ddi_VarsetMakeFromArray(psv);
@@ -3101,6 +3106,7 @@ computeCoiVars(
 
     Ddi_VarsetUnionAcc(cone, newvs);
     Ddi_VarsetarrayInsertLast(coirings, cone);
+    Ddi_VarsetarrayInsertLast(coirings, newvs);
     Ddi_VarsetSwapVarsAcc(newvs, psv, nsv);
     newnew = Ddi_VarsetVoid(ddm);
     do {

@@ -23,13 +23,13 @@ ifdef PDT32
 # StQ: 32-bit
 #COPTIMIZE = -O6 -m32 -g -malign-double -fPIC
 #COPTIMIZE = -O0 -m32 -g -pthread -fPIC
-COPTIMIZE = -O6 -m32 -g -pthread -fPIC
+COPTIMIZE = -O6 -m32 -g -pthread -fPIE
 else
 # StQ: 64-bit
-COPTIMIZE = -O6 -g -fPIC
-COPTIMIZE = -O6 -fPIC
+COPTIMIZE = -O6 -g -fPIE
+COPTIMIZE = -O6 -fPIE
 #CFLAGS = -g -Wall -fPIC -DLIN -pthread -ffloat-store -mtune=native -malign-double -DHAVE_IEEE_754 -DBSD -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8
-CFLAGS = -g -Wall -fPIC -DLIN64 -pthread -ffloat-store -mtune=native -malign-double -DHAVE_IEEE_754 -DBSD -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4 -std=c++14
+CFLAGS = -g -Wall -fPIE -DLIN64 -pthread -ffloat-store -mtune=native -malign-double -DHAVE_IEEE_754 -DBSD -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4 -std=c++14
 #COPTIMIZE =
 endif
 

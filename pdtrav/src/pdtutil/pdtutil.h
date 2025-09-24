@@ -317,8 +317,15 @@ typedef enum {
   Pdt_TravDynAbstrInitIter_c,
   Pdt_TravImplAbstr_c,
   Pdt_TravTernaryAbstr_c,
+  Pdt_TravStoreAbstrRefRefinedVars_c,
   Pdt_TravAbstrRef_c,
   Pdt_TravAbstrRefGla_c,
+  Pdt_TravAbstrRefItp_c,
+  Pdt_TravAbstrRefItpMaxIter_c,
+  Pdt_TravTrAbstrItp_c,
+  Pdt_TravTrAbstrItpMaxFwdStep_c,
+  Pdt_TravTrAbstrItpLoad_c,
+  Pdt_TravTrAbstrItpStore_c,
   Pdt_TravInputRegs_c,
   Pdt_TravSelfTuning_c,
   Pdt_TravLemmasTimeLimit_c,
@@ -360,6 +367,7 @@ typedef enum {
   Pdt_TravItpRpm_c,
   Pdt_TravItpTimeLimit_c,
   Pdt_TravItpPeakAig_c,
+  Pdt_TravItpStoreRings_c,
 
   /* igr */
   Pdt_TravIgrSide_c,
@@ -406,7 +414,10 @@ typedef enum {
   /* bmc */
   Pdt_TravBmcTimeLimit_c,
   Pdt_TravBmcMemLimit_c,
-
+  Pdt_TravBmcItpRingsPeriod_c,
+  Pdt_TravBmcTrAbstrPeriod_c,
+  Pdt_TravBmcTrAbstrInit_c,
+  
   /* bdd */
   Pdt_TravFromSelect_c,
   Pdt_TravUnderApproxMaxVars_c,
@@ -467,6 +478,14 @@ typedef enum {
   Pdt_TravStoreCnfPhase_c,
   Pdt_TravMaxCnfLength_c,
 
+  /* certify */
+  Pdt_TravCertFramesK_c,
+  Pdt_TravCertTDecompK_c,
+  Pdt_TravCertItpK_c,
+  Pdt_TravCertInvarOut_c,
+  Pdt_TravCertSimpInvar_c,
+  Pdt_TravCertRetimeName_c,
+  
   Pdt_TravNone_c
 } Pdt_OptTagTrav_e;
 
@@ -1492,9 +1511,13 @@ EXTERN int Pdtutil_StrRemoveNumSuffix(
   char *str,
   char separator
 );
+EXTERN int Pdtutil_StrGetNumSuffix(
+  char *str,
+  char separator
+);
 EXTERN char *Pdtutil_StrSkipPrefix(
   char *str,
-  char *prefix
+  const char *prefix
 );
 
 /**AutomaticEnd***************************************************************/

@@ -293,6 +293,7 @@ struct Ddi_SccMgr_t {
   int nSccWithLatch;            //Number of scc with latches
   int nLatches;                 //Number of latches
   int nNodes;                   //Number of nodes
+  int sccWithMaxLatches;        //largest scc
   Ddi_Bddarray_t *delta;        //Riferimento alla delta
   Ddi_Vararray_t *ps;           //Riferimento alle variabili di stato
   int *sccLatchCnt;             //Counters of latches per scc
@@ -402,7 +403,7 @@ typedef struct {
     int itpMem;
     int itpMap;
     char *itpStore;
-    int itpLoad;
+    char *itpLoad;
     int itpCompute;
     int partialItp;
     int itpCompact;    
@@ -1450,6 +1451,7 @@ EXTERN Ddi_Varset_t * DdiAigSupp(Ddi_Bdd_t *fAig);
 EXTERN Ddi_Varset_t *DdiAigArraySupp (Ddi_Bddarray_t *fAigA);
 EXTERN int DdiAigFanoutCount(Ddi_Bdd_t *fAig, Ddi_Var_t *v);
 EXTERN int DdiAigFlowCount(Ddi_Bdd_t *fAig, Ddi_Var_t *v);
+EXTERN int DdiAigVararraySortByFlow(Ddi_Vararray_t *vA, Ddi_Bdd_t *fAig);
 EXTERN int DdiAigVararraySortByFanout(Ddi_Vararray_t *vA, Ddi_Bdd_t *fAig);
 EXTERN Ddi_Aig_t * DdiAigNot(Ddi_Aig_t *a);
 EXTERN Ddi_Aig_t * DdiAigAnd(Ddi_Aig_t *a, Ddi_Aig_t *b);

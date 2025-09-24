@@ -52,6 +52,8 @@
 /* Variable declarations                                                     */
 /*---------------------------------------------------------------------------*/
 
+int fbvCustom = -1;
+
 /*---------------------------------------------------------------------------*/
 /* Macro declarations                                                        */
 /*---------------------------------------------------------------------------*/
@@ -113,6 +115,13 @@ static int
 retimePeriferalLatches(
   Fsm_Mgr_t * fsmMgr,
   int force
+);
+
+static int
+addCutLatches(
+  Fsm_Mgr_t * fsmMgr,
+  Ddi_Bddarray_t *cuts,
+  int retimePis
 );
 
 /**AutomaticEnd***************************************************************/
@@ -328,8 +337,8 @@ Fsm_CexNormalize(
     Ddi_Free(normCex);
   }
 
-  Pdtutil_Assert(Ddi_BddPartNum(cexOut) == nStubIter + (part - nStubIter) *
-    phaseAbstr ? 2 : 1, "wrong cex len");
+  Pdtutil_Assert((Ddi_BddPartNum(cexOut) == (nStubIter + (part - nStubIter) *
+                 phaseAbstr) ? 2 : 1), "wrong cex len");
   Ddi_Free(myCex);
 
   if (fsmMgr->retimedPis != NULL) {
@@ -380,6 +389,87 @@ Fsm_CexNormalize(
   return 0;
 }
 
+/**Function********************************************************************
+
+  Synopsis     []
+
+  Description  []
+
+  SideEffects  []
+
+  SeeAlso      []
+
+******************************************************************************/
+
+Fsm_Mgr_t *
+Fsm_RetimeGateCuts(
+  Fsm_Mgr_t * fsmMgr,
+  int mode
+)
+{
+  Fsm_Mgr_t *fsmMgrRetimed = Fsm_MgrDup(fsmMgr);
+  Ddi_Mgr_t *ddm = Fsm_MgrReadDdManager(fsmMgrRetimed);
+  Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgrRetimed);
+  Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgrRetimed);
+  int minimal = 0;
+  int propDecomp = 0;
+
+  if (mode>=100) {
+    mode -= 100;
+    propDecomp=1;
+  }
+  if (mode>=10) {
+    mode -= 10;
+    minimal=1;
+  }
+
+  Ddi_Bddarray_t *enables = Ddi_BddarrayAlloc(ddm,0);
+  if (propDecomp) {
+    int iProp = Ddi_BddarrayNum(delta)-1;
+    Ddi_Bdd_t *dProp = Ddi_BddarrayRead(delta,iProp);
+    Ddi_Var_t *pvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$PS");
+    Ddi_Var_t *cvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$PS");
+    Ddi_Bddarray_t *roots = Ddi_AigDisjDecompRoots (dProp, pvarPs, cvarPs,
+                                                    0/*Ddi_BddSize(dProp)/4*/);
+    Ddi_BddarrayAppend(enables,roots);
+    Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+      printf("Prop decomp found %d roots\n",
+             Ddi_BddarrayNum(roots));
+    }
+    Ddi_Free(roots);
+  }
+
+  if (mode>0) {
+    Ddi_Bddarray_t *ite = Ddi_BddarrayAlloc(ddm, 0);
+    Ddi_Bddarray_t *iteEnables = Ddi_FindIteFull(delta,ps,ite,-1);
+    //Ddi_BddarraySortBySizeAcc (iteEnables,0);//decreasing size keeèp fanout order
+    Ddi_BddarrayAppend(enables,iteEnables);
+    Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+      printf("ITE search found %d enables and %d non latch ITE\n",
+           Ddi_BddarrayNum(iteEnables), Ddi_BddarrayNum(ite));
+    }
+    Ddi_Free(iteEnables);
+    if (!minimal)
+      Ddi_BddarrayAppend(enables,ite);
+    Ddi_Free(ite);
+  }
+  if (mode > 1) {
+    Ddi_Bddarray_t *xors = Ddi_AigarrayFindXors(delta,NULL,minimal);
+    Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+      printf("XOR search found %d xors\n",
+           Ddi_BddarrayNum(xors));
+    }
+    if (mode > 2)
+      Ddi_DataCopy(enables,xors);
+    else
+      Ddi_BddarrayAppend(enables,xors);
+    Ddi_Free(xors);
+  }
+  int ne = addCutLatches(fsmMgrRetimed,enables,0);
+
+  Ddi_Free(enables);
+  return (fsmMgrRetimed);
+}
 
 
 /**Function********************************************************************
@@ -1594,12 +1684,14 @@ Fsm_ReduceTerminalScc(
   if (nstate > 30000 && !hasConstraints)
     return NULL;
 
+  int iScc = -1;
+  
   if (1) {
     Ddi_Var_t *pvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$PS");
     Ddi_Var_t *pvarNs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$NS");
     Ddi_Var_t *cvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$PS");
     Ddi_Var_t *cvarNs = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$NS");
-    int iProp, iConstr = -1, iScc = -1;
+    int iProp, iConstr = -1;
     Ddi_Bdd_t *deltaProp;
     Ddi_Bdd_t *eqTr = Ddi_BddMakePartConjVoid(ddm);
     Ddi_Bdd_t *one = Ddi_BddMakeConstAig(ddm, 1);
@@ -1651,7 +1743,11 @@ Fsm_ReduceTerminalScc(
         Ddi_Free(d_i_0);
         Ddi_Free(d_i_1);
       }
-
+#if 0      
+      if (strstr(Ddi_VarName(v_i),"constr_out_reg")!=NULL) {
+        printf("found\n");
+      }
+#endif
       if (i == iProp)
         continue;
       if (i == iConstr)
@@ -1785,6 +1881,8 @@ Fsm_ReduceTerminalScc(
           Ddi_Bdd_t *lit = Ddi_BddMakeLiteralAig(v_i, !j);
           Ddi_Bdd_t *invar = Ddi_BddDup(d_i);
 
+          iScc = i;
+          
           if (!useAig) {
             Ddi_BddSetMono(constDelta);
             Ddi_BddSetMono(lit);
@@ -1793,7 +1891,7 @@ Fsm_ReduceTerminalScc(
             Ddi_BddNotAcc(invar);
           Ddi_BddCofactorAcc(invar, v_i, !j);
           nRed++;
-          iScc = i;
+
 	  enSearch=0;
           Pdtutil_VerbosityLocal
             (Pdtutil_VerbLevelNone_c,
@@ -2059,6 +2157,17 @@ Fsm_ReduceTerminalScc(
 
   }
 
+  // tryal seems not to pay, but benchmarking should be done.
+  int andDelta = 0 && (iScc >= 0);
+  if (andDelta) {
+    int i;
+    for (i = 0; i < nstate-2; i++) {
+      Ddi_Bdd_t *d_i = Ddi_BddarrayRead(delta, i);
+      if (i!=iScc)
+        Ddi_BddAndAcc(d_i,sccConstr);
+    }
+  }
+  
   if (nRed > 0 && weakScc) {
     nRed = -nRed;
   }
@@ -2070,6 +2179,16 @@ Fsm_ReduceTerminalScc(
     *provedP = provedProperty;
   }
 
+  if (sccConstr != NULL) {
+    Ddi_Bdd_t *newCInv = Ddi_BddNot(sccConstr);
+    Ddi_Bdd_t *cInv0 = Fsm_MgrReadConstrInvarBDD(fsmMgr);
+    if (cInv0 != NULL) {
+      Ddi_BddOrAcc(newCInv,cInv0);
+    }
+    Fsm_MgrSetConstrInvarBDD(fsmMgr,newCInv);
+    Ddi_Free(newCInv);
+  }
+  
   return (sccConstr);
 }
 
@@ -2362,12 +2481,15 @@ Fsm_ReduceImpliedConstr(
 
             fsmMgr->stats.targetEnSteps++;
 
+            Ddi_Bdd_t *litConstr = Ddi_BddMakeLiteralAig(v_i, 0);
             for (k = 0; k < nstate; k++) {
               Ddi_Bdd_t *d_k = Ddi_BddarrayRead(delta, k);
 
               Ddi_BddCofactorAcc(d_k, v_i, !j);
+              if (0 && k!=i && k<nstate-2)
+                Ddi_BddAndAcc(d_k,litConstr);
             }
-
+            Ddi_Free(litConstr);
             if (!fsmMgr->stats.retimedConstr && (outInvar != NULL)) {
               // GPC
               // BUGGY @ HWMCC2014 on beemrshr2f1 and intels
@@ -2691,7 +2813,7 @@ Fsm_RetimeWithConstr(
   Ddi_Free(oldA);
   Ddi_Free(newA);
   
-  Ddi_AigArrayClearAuxIntIntern(bmgr,visitedNodes);
+  Ddi_AigArrayClearAuxInt(bmgr,visitedNodes);
   Pdtutil_Free(foCnt);
   bAigArrayFree(visitedNodes);
   
@@ -2862,7 +2984,6 @@ Fsm_ReduceCustom(
     }
     nstate = Ddi_VararrayNum(ps);
 
-    extern int fbvCustom;
     disjDecomp = fbvCustom > 0;
     if (disjDecomp) {
       int nRed = 0;
@@ -4781,6 +4902,8 @@ int
 Fsm_RetimeMinreg(
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t * care,
+  Ddi_Bddarray_t *retimeCutF,
+  Ddi_Vararray_t *retimeCutV,
   int strategy
 )
 {
@@ -5008,6 +5131,9 @@ Fsm_RetimeMinreg(
 
       Pdtutil_Assert(nSubst < nRem, "WRONG MIN_REG retiming");
 
+      Ddi_Bddarray_t *saveCutF = NULL;
+      Ddi_Vararray_t *saveCutV = NULL;
+
       auxReplace = Ddi_BddarrayAlloc(ddm, nSubst);
       Ddi_AigarrayComposeNoMultipleAcc(deltaStub, ps, newD);
 
@@ -5047,6 +5173,12 @@ Fsm_RetimeMinreg(
         fprintf(stdout, "MINREG retiming from %d to", Ddi_VararrayNum(ps))
         );
 
+      int saveCut = retimeCutF!=NULL && retimeCutV!=NULL; 
+      if (saveCut) {
+        saveCutF = Ddi_BddarrayAlloc(ddm, nSubst);
+        saveCutV = Ddi_VararrayAlloc(ddm, nSubst);
+      }
+
       for (j = n0 - 1, k = nRem; j >= 0; j--) {
         Ddi_Var_t *v_j = Ddi_VararrayRead(ps, j);
         int isPropOrConstr = strncmp(Ddi_VarName(v_j), "PDT_BDD_", 8) == 0;
@@ -5067,6 +5199,10 @@ Fsm_RetimeMinreg(
             Ddi_VararrayRemove(ns, j);
             Ddi_BddarrayRemove(delta, j);
             Ddi_BddarrayRemove(newStub0, j);
+            if (saveCut && j<Ddi_BddarrayNum(saveCutF)) {
+              Ddi_VararrayRemove(saveCutV, j);
+              Ddi_BddarrayRemove(saveCutF, j);
+            }
           } else {
             /* replaced latch */
             Ddi_Bdd_t *lit = Ddi_BddMakeLiteralAig(v_j, 1);
@@ -5074,12 +5210,29 @@ Fsm_RetimeMinreg(
             Ddi_BddarrayWrite(auxReplace, k, lit);
             Ddi_BddarrayWrite(delta, j, Ddi_BddarrayRead(deltaStub, k));
             Ddi_BddarrayWrite(newStub0, j, Ddi_BddarrayRead(newStub, k));
+            if (saveCut) {
+              Ddi_BddarrayWrite(saveCutF,j,Ddi_BddarrayRead(substF,k));
+              Ddi_VararrayWrite(saveCutV,j,v_j);
+            }
             Ddi_Free(lit);
           }
         } else {
           Ddi_BddarrayWrite(delta, j, Ddi_BddarrayRead(newD, j));
+          if (saveCut) {
+            Ddi_Bdd_t *lit = Ddi_BddMakeLiteralAig(v_j, 1);
+            Ddi_BddarrayWrite(saveCutF,j,lit);
+            Ddi_VararrayWrite(saveCutV,j,v_j);
+            Ddi_Free(lit);
+          }
         }
       }
+
+      if (saveCut) {
+        Ddi_DataCopy(retimeCutF,saveCutF);
+        Ddi_DataCopy(retimeCutV,saveCutV);
+      }
+      Ddi_Free(saveCutF);
+      Ddi_Free(saveCutV);
 
       Pdtutil_VerbosityLocal(Pdtutil_VerbLevelUsrMax_c,
         Pdtutil_VerbLevelUsrMax_c,
@@ -5289,6 +5442,7 @@ Fsm_FsmStructReduction(
   Ddi_Bdd_t *invarspec = Fsm_MgrReadInvarspecBDD(fsmMgr);
   Ddi_Bdd_t *invar = Fsm_MgrReadConstraintBDD(fsmMgr);
   Ddi_Bdd_t *init = Fsm_MgrReadInitBDD(fsmMgr);
+  Ddi_Bdd_t *reached = Fsm_MgrReadReachedBDD(fsmMgr);
   Ddi_Bddarray_t *substF;
   Ddi_Vararray_t *substV;
   int addStub, enAddStub = invar==NULL || Ddi_BddIsOne(invar);
@@ -5357,6 +5511,9 @@ Fsm_FsmStructReduction(
           }
           if (invar != NULL) {
             Ddi_AigConstrainCubeAcc(invar, lit);
+          }
+          if (reached != NULL) {
+            Ddi_AigConstrainCubeAcc(reached, lit);
           }
           nconst++;
         }
@@ -5506,6 +5663,9 @@ Fsm_FsmStructReduction(
       if (invar != NULL) {
         Ddi_BddComposeAcc(invar, substV, substF);
       }
+      if (reached != NULL) {
+        Ddi_BddComposeAcc(reached, substV, substF);
+      }
     }
 
     if (neq > 0) {
@@ -5513,6 +5673,10 @@ Fsm_FsmStructReduction(
         fprintf(stdout,
           "Found %d seq EQ - Reduced DELTA - size: %d - components: %d\n",
           neq, Ddi_BddarraySize(delta), n));
+
+      Ddi_Bdd_t *eq1 = Ddi_BddMakeEq(substV,substF);
+      Fsm_MgrAddLatchEqClassesBDD(fsmMgr,eq1);
+      Ddi_Free(eq1);
     }
 
     Ddi_Free(substV);
@@ -5526,6 +5690,258 @@ Fsm_FsmStructReduction(
 }
 
 
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects [None]
+  SeeAlso     []
+******************************************************************************/
+void
+Fsm_IsoMapLatches(
+  Fsm_Mgr_t * fsm1Mgr,
+  Fsm_Mgr_t * fsm2Mgr,
+  char *mapName
+)
+{
+  Ddi_Mgr_t *ddm1 = Fsm_MgrReadDdManager(fsm1Mgr);
+  Ddi_Mgr_t *ddm2 = Fsm_MgrReadDdManager(fsm2Mgr);
+  Ddi_Vararray_t *pi1 = Fsm_MgrReadVarI(fsm1Mgr);
+  Ddi_Vararray_t *ps1 = Fsm_MgrReadVarPS(fsm1Mgr);
+  Ddi_Vararray_t *ns1 = Fsm_MgrReadVarNS(fsm1Mgr);
+  Ddi_Vararray_t *pi2 = Fsm_MgrReadVarI(fsm2Mgr);
+  Ddi_Vararray_t *ps2 = Fsm_MgrReadVarPS(fsm2Mgr);
+  Ddi_Vararray_t *ns2 = Fsm_MgrReadVarNS(fsm2Mgr);
+  Ddi_Bddarray_t *delta1 = Fsm_MgrReadDeltaBDD(fsm1Mgr);
+  Ddi_Bddarray_t *delta2 = Fsm_MgrReadDeltaBDD(fsm2Mgr);
+
+  int i1, i2, n1=Ddi_VararrayNum(ps1), n2=Ddi_VararrayNum(ps2), nmap=0;
+  int ni1=Ddi_VararrayNum(pi1), ni2=Ddi_VararrayNum(pi2);
+  int mapi1[ni1], mapi2[ni2], maps1[n1], maps2[n2];
+  for (i1=0; i1<n1; i1++) {
+    Ddi_BddSuppAttach(Ddi_BddarrayRead(delta1,i1));
+    maps1[i1] = -1;
+  }
+  for (i2=0; i2<n2; i2++) {
+    Ddi_BddSuppAttach(Ddi_BddarrayRead(delta2,i2));
+    maps2[i2] = -1;
+  }
+  for (i1=0; i1<ni1; i1++) {
+    mapi1[i1] = -1;
+  }
+  for (i2=0; i2<ni2; i2++) {
+    mapi2[i2] = -1;
+  }
+
+  Ddi_VararrayWriteMarkWithIndex (pi1,1);  
+  Ddi_VararrayWriteMarkWithIndex (ps1,ni1+1);  
+  Ddi_VararrayWriteMarkWithIndex (pi2,1);  
+  Ddi_VararrayWriteMarkWithIndex (ps2,ni2+1);  
+  for (i1=i2=0; i1<n1&&i2<n2;) {
+    int mapped=1;
+    Ddi_Bdd_t *d1 = Ddi_BddarrayRead(delta1,i1);
+    Ddi_Bdd_t *d2 = Ddi_BddarrayRead(delta2,i2);
+    Ddi_Varset_t *s1 = Ddi_BddSuppRead(d1);
+    Ddi_Varset_t *s2 = Ddi_BddSuppRead(d2);
+    if (0 && (Ddi_BddSize(d1)!=Ddi_BddSize(d2)) ||
+              Ddi_VarsetNum(s1)!=Ddi_VarsetNum(s2)) {
+      mapped = 0;
+    }
+    else {
+      Ddi_Bdd_t *d2Dup = Ddi_BddCopyRemapVars(ddm1,d2,NULL,NULL);
+      int eq = (Ddi_BddEqual(d1,d2Dup) || Ddi_BddEqualSat(d1,d2Dup)) && i1==i2;
+      if (!eq && i2<n2-1) {
+        Ddi_Bdd_t *d2next = Ddi_BddarrayRead(delta2,i2+1);
+        Ddi_Bdd_t *d2nextDup = Ddi_BddCopyRemapVars(ddm1,d2next,NULL,NULL);
+        eq = Ddi_BddEqualSat(d1,d2nextDup);
+        Ddi_Free(d2nextDup);
+        if (eq) i2++;
+      }
+      if (!eq && i1<n1-1) {
+        Ddi_Bdd_t *d1next = Ddi_BddarrayRead(delta1,i1+1);
+        eq = Ddi_BddEqualSat(d1next,d2Dup);
+        if (eq) i1++;
+      }
+      if (!eq) {
+        mapped = 0;
+      }
+      else {
+        maps1[i1]=i2;
+        nmap++;
+      }
+      Ddi_Free(d2Dup);
+    }
+    if (mapped) {
+      i1++; i2++;
+    }
+    else {
+      i1++; i2++;
+    }
+  }
+
+  for (i1=0; i1<n1; i1++)
+    Ddi_BddSuppDetach(Ddi_BddarrayRead(delta1,i1));
+  for (i2=0; i2<n2; i2++)
+    Ddi_BddSuppDetach(Ddi_BddarrayRead(delta2,i2));
+  Ddi_VararrayWriteMark (pi1,0);  
+  Ddi_VararrayWriteMark (ps1,0);  
+  Ddi_VararrayWriteMark (pi2,0);  
+  Ddi_VararrayWriteMark (ps2,0);  
+
+  printf("Found %d mapped latches\n", nmap);
+  FILE *fp = fopen(mapName, "w");
+  for (i1=0; i1<n1; i1++) {
+    if (maps1[i1]!=-1) {
+      Ddi_Var_t *v1 = Ddi_VararrayRead(ps1,i1);
+      Ddi_Var_t *v2 = Ddi_VararrayRead(ps2,maps1[i1]);
+      fprintf(fp,"%s %s\n", Ddi_VarName(v1), Ddi_VarName(v2));
+    }
+  }
+  for (i1=0; i1<ni1; i1++) {
+    if (mapi1[i1]!=-1) {
+      Ddi_Var_t *v1 = Ddi_VararrayRead(pi1,i1);
+      Ddi_Var_t *v2 = Ddi_VararrayRead(pi2,mapi1[i1]);
+      fprintf(fp,"%s %s\n", Ddi_VarName(v1), Ddi_VarName(v2));
+    }
+  }
+  fclose(fp);
+}
+
+
+/*---------------------------------------------------------------------------*/
+/* Definition of internal functions                                            */
+/*---------------------------------------------------------------------------*/
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects [None]
+  SeeAlso     []
+******************************************************************************/
+void
+FsmCreateInitStub(
+  Fsm_Mgr_t * fsmMgr
+)
+{
+  Ddi_Mgr_t *ddm = Fsm_MgrReadDdManager(fsmMgr);
+  Ddi_Vararray_t *pi = Fsm_MgrReadVarI(fsmMgr);
+  Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
+  Ddi_Vararray_t *ns = Fsm_MgrReadVarNS(fsmMgr);
+  Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
+  Ddi_Bddarray_t *initStub = Fsm_MgrReadInitStubBDD(fsmMgr);
+  Ddi_Bdd_t *invarspec = Fsm_MgrReadInvarspecBDD(fsmMgr);
+  Ddi_Bdd_t *invar = Fsm_MgrReadConstraintBDD(fsmMgr);
+  Ddi_Bdd_t *init = Fsm_MgrReadInitBDD(fsmMgr);
+  int nstate = Ddi_VararrayNum(ps);
+  int genAigVars = Ddi_VarIsAig(Ddi_VararrayRead(ps,0));
+
+
+  if (initStub != NULL) return;
+  
+  initStub = Ddi_BddarrayDup(delta);
+  char suffix[5];
+  Ddi_Vararray_t *newPiVars;
+
+  if (invar!=NULL && !Ddi_BddIsOne(invar)) {
+    int iConstr = Ddi_BddarrayNum(delta)-2;
+    int iProp = Ddi_BddarrayNum(delta)-1;
+    Ddi_Var_t *v1 = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$PS");
+    if (Ddi_VararrayRead(ps,iConstr)==v1) {
+      Ddi_Bdd_t *dConstr = Ddi_BddarrayRead(initStub,iConstr);
+      Ddi_Bdd_t *dProp = Ddi_BddarrayRead(initStub,iProp);
+      Ddi_Bdd_t *outOfConstr = Ddi_BddNot(dConstr);
+      //	    Ddi_BddAndAcc(dConstr,invar);
+      Ddi_BddOrAcc(dProp,outOfConstr);
+      Ddi_Free(outOfConstr);
+    }
+  }
+  Pdtutil_Assert(fsmMgr->stats.initStubSteps==0,"invalid init stub steps");
+  sprintf(suffix, "%d", fsmMgr->stats.initStubSteps++);
+  newPiVars = genAigVars ?
+    Ddi_VararrayMakeNewAigVars(pi, "PDT_STUB_PI", suffix)
+    : Ddi_VararrayMakeNewVars(pi, "PDT_STUB_PI", suffix, 1);
+  Ddi_BddarraySubstVarsAcc(initStub, pi, newPiVars);
+  Ddi_AigarrayConstrainCubeAcc(initStub, init);
+  Ddi_Vararray_t *freePs = Ddi_BddarraySuppVararray(initStub);
+  Ddi_VararrayIntersectAcc(freePs,ps);
+  if (Ddi_VararrayNum(freePs)>0) {
+    /* add stub init state vars */
+    Ddi_Vararray_t *newPsVars;
+    newPsVars = genAigVars ?
+      Ddi_VararrayMakeNewAigVars(freePs,"PDT_STUB_PS","") :
+      Ddi_VararrayMakeNewVars(freePs,"PDT_STUB_PS", "", 1);
+    Ddi_BddarraySubstVarsAcc(initStub, freePs, newPsVars);
+    Ddi_Free(newPsVars);
+  }
+  Ddi_Free(freePs);
+ 
+  Ddi_Free(newPiVars);
+  Fsm_MgrSetInitStubBDD(fsmMgr, initStub);
+  Ddi_Free(initStub);
+
+}
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects [None]
+  SeeAlso     []
+******************************************************************************/
+void
+FsmMgrAddNewLatches(
+  Fsm_Mgr_t * fsmMgr,
+  Ddi_Vararray_t *newPs,
+  Ddi_Vararray_t *newNs,
+  Ddi_Bddarray_t *newDelta,
+  Ddi_Bddarray_t *initStubDelta
+)
+{
+  Ddi_Vararray_t *pi = Fsm_MgrReadVarI(fsmMgr);
+  Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
+  Ddi_Vararray_t *ns = Fsm_MgrReadVarNS(fsmMgr);
+  Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
+  Ddi_Bddarray_t *initStub = Fsm_MgrReadInitStubBDD(fsmMgr);
+  Ddi_Bdd_t *invarspec = Fsm_MgrReadInvarspecBDD(fsmMgr);
+  Ddi_Bdd_t *invar = Fsm_MgrReadConstraintBDD(fsmMgr);
+  Ddi_Bdd_t *init = Fsm_MgrReadInitBDD(fsmMgr);
+  int nstate = Ddi_VararrayNum(ps);
+  int nNew = Ddi_VararrayNum(newPs);
+  
+  Pdtutil_Assert(initStub!=NULL, "fsm without init stub not supported");
+
+  Ddi_Vararray_t *stubSupp = Ddi_BddarraySuppVararray(initStub);
+  int nsv = Ddi_VararrayNum(stubSupp);
+    
+  int genAigVars = Ddi_VarIsAig(Ddi_VararrayRead(ps,0));
+  Ddi_Bddarray_t *addedInitStub = NULL;
+  if (initStubDelta!=NULL) {
+    char suffix[5];
+    Ddi_Vararray_t *newPiVars=NULL;
+    Ddi_Vararray_t *stubDeltaSupp = Ddi_BddarraySuppVararray(initStubDelta);
+    Ddi_Vararray_t *stubPi = Ddi_VararrayIntersect(stubDeltaSupp,pi);
+    addedInitStub = Ddi_BddarrayDup(initStubDelta);
+    if (Ddi_VararrayNum(stubPi)>0) {
+      sprintf(suffix, "%d", fsmMgr->stats.initStubSteps-1);
+      newPiVars = genAigVars ?
+        Ddi_VararrayMakeNewAigVars(stubPi, "PDT_STUB_CUT_PI", suffix)
+        : Ddi_VararrayMakeNewVars(stubPi, "PDT_STUB_CUT_PI", suffix, 1);
+      Ddi_BddarraySubstVarsAcc(addedInitStub, stubPi, newPiVars);
+    }
+    Ddi_Free(stubPi);
+    Ddi_Free(newPiVars);
+    Ddi_Free(stubDeltaSupp);
+    Ddi_BddarrayComposeAcc(addedInitStub,ps,initStub);
+  }
+  int ii, i;
+  for (ii=nstate-2,i=0; i<nNew; ii++, i++) {
+    Ddi_VararrayInsert(ps,ii,Ddi_VararrayRead(newPs,i));
+    Ddi_VararrayInsert(ns,ii,Ddi_VararrayRead(newNs,i));
+    Ddi_BddarrayInsert(delta,ii,Ddi_BddarrayRead(newDelta,i));
+    Ddi_BddarrayInsert(initStub,ii,Ddi_BddarrayRead(addedInitStub,i));
+  }
+  Ddi_Free(stubSupp);
+  Ddi_Free(addedInitStub);
+
+}
 
 /*---------------------------------------------------------------------------*/
 /* Definition of static functions                                            */
@@ -5841,6 +6257,26 @@ retimePeriferalLatches(
         Ddi_Free(dProp);
       }
       Ddi_AigarrayComposeAcc(lambda, substVars, substFuncs);
+      int getLatchEqClasses = 1;
+      if (getLatchEqClasses) {
+        Ddi_Vararray_t *sV = Ddi_VararrayAlloc(ddm, 0); 
+        Ddi_Bddarray_t *sF = Ddi_BddarrayAlloc(ddm, 0); 
+        for (int i=0; i<Ddi_VararrayNum(substVars); i++) {
+          Ddi_Var_t *v_i = Ddi_VararrayRead(substVars,i);
+          Ddi_Bdd_t *f_i = Ddi_BddarrayRead(substFuncs,i);
+          if (Ddi_BddIsConstant(f_i)) {
+            Ddi_VararrayInsertLast(sV,v_i);
+            Ddi_BddarrayInsertLast(sF,f_i);
+          }
+        }
+        if (Ddi_VararrayNum(sV)>0) {
+          Ddi_Bdd_t *eq1 = Ddi_BddMakeEq(sV,sF);
+          Fsm_MgrAddLatchEqClassesBDD(fsmMgr,eq1);
+          Ddi_Free(eq1);
+        }
+        Ddi_Free(sV);
+        Ddi_Free(sF);
+      }      
     } else {
       for (i = 0; i < Ddi_BddarrayNum(delta); i++) {
         Ddi_BddComposeAcc(Ddi_BddarrayRead(delta, i), substVars, substFuncs);
@@ -5855,6 +6291,7 @@ retimePeriferalLatches(
     if (constraint != NULL) {
       Ddi_BddComposeAcc(constraint, substVars, substFuncs);
     }
+
   }
 
   Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {
@@ -5876,7 +6313,18 @@ retimePeriferalLatches(
     }
     printf("%d latched stalled adter init found\n", nStalled);
   }
-  
+
+
+  if (0 && initStub!=NULL && fsmMgr->stats.initStubSteps==1) {
+    int ns = Ddi_BddarrayNum(initStub);
+    for (int i=0; i<ns; i++) {
+      Ddi_Bdd_t *is_i = Ddi_BddarrayRead(initStub,i);
+      if (Ddi_BddSize(is_i) > 0) {
+        printf("init stub[%d] -> size: %d\n", i, Ddi_BddSize(is_i));
+      }
+    }
+  }  
+    
   Ddi_Free(ps0);
   Ddi_Free(initStub);
   Ddi_Free(substVars);
@@ -5906,7 +6354,8 @@ retimePeriferalLatches(
 static int
 addCutLatches(
   Fsm_Mgr_t * fsmMgr,
-  Ddi_Bddarray_t *cuts
+  Ddi_Bddarray_t *cuts0,
+  int retimePis
 )
 {
   Ddi_Mgr_t *ddm = Fsm_MgrReadDdManager(fsmMgr);
@@ -5921,330 +6370,167 @@ addCutLatches(
   Ddi_Bdd_t *initState = Fsm_MgrReadInitBDD(fsmMgr);
   Ddi_Bdd_t *invarspec = Fsm_MgrReadInvarspecBDD(fsmMgr);
   Ddi_Bdd_t *constraint = Fsm_MgrReadConstraintBDD(fsmMgr);
-  Ddi_Vararray_t *substVars = Ddi_VararrayAlloc(ddm, 0);
-  Ddi_Bddarray_t *substFuncs = Ddi_BddarrayAlloc(ddm, 0);
-  Ddi_Varset_t *piVars = Ddi_VarsetMakeFromArray(pi);
-  int nstate = Ddi_VararrayNum(ps);
-  int nVars = Ddi_MgrReadNumVars(ddm);
-  int nRed, nExclusiveInput;
-  Ddi_Bddarray_t *initStub = NULL;
+  int genAigVars = Ddi_VarIsAig(Ddi_VararrayRead(ps,0));
 
-  int i, n, useAig = 0, initSize, addInitStub = 0;
-  int again, okInit = 1;
+  // filter out cuts on variables or latch input
+  Ddi_Bddarray_t *cuts = Ddi_BddarrayAlloc(ddm, 0);
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  for (int i=0; i<Ddi_BddarrayNum(cuts0); i++) {
+    Ddi_Bdd_t *c_i = Ddi_BddarrayRead(cuts0,i);
+    bAigEdge_t baig_i = Ddi_BddToBaig(c_i);
+    bAig_AuxInt(bmgr, baig_i) = -1; 
+  }
+  for (int i=0; i<Ddi_BddarrayNum(delta); i++) {
+    Ddi_Bdd_t *d_i = Ddi_BddarrayRead(delta,i);
+    bAigEdge_t baig_i = Ddi_BddToBaig(d_i);
+    bAig_AuxInt(bmgr, baig_i) = i; // set
+  }
+  for (int i=0; i<Ddi_BddarrayNum(cuts0); i++) {
+    Ddi_Bdd_t *c_i = Ddi_BddarrayRead(cuts0,i);
+    bAigEdge_t baig_i = Ddi_BddToBaig(c_i);
+    int aux = bAig_AuxInt(bmgr, baig_i); 
+    if (aux < 0 && !bAig_isVarNode(bmgr,baig_i)) {
+      Ddi_BddarrayInsertLast(cuts,c_i);
+      bAig_AuxInt(bmgr, baig_i) = i; // set
+    }
+  }
+  for (int i=0; i<Ddi_BddarrayNum(delta); i++) {
+    Ddi_Bdd_t *d_i = Ddi_BddarrayRead(delta,i);
+    bAigEdge_t baig_i = Ddi_BddToBaig(d_i);
+    bAig_AuxInt(bmgr, baig_i) = -1; // reset
+  }
+  for (int i=0; i<Ddi_BddarrayNum(cuts0); i++) {
+    Ddi_Bdd_t *c_i = Ddi_BddarrayRead(cuts0,i);
+    bAigEdge_t baig_i = Ddi_BddToBaig(c_i);
+    bAig_AuxInt(bmgr, baig_i) = -1; 
+  }
+  // filter done
+  
+  int nc = Ddi_BddarrayNum(cuts);
+  Ddi_Vararray_t *cutPsVars = Ddi_VararrayAlloc(ddm, nc);
+  Ddi_Vararray_t *cutNsVars = Ddi_VararrayAlloc(ddm, nc);
 
-  Ddi_Bdd_t *one;
-  Ddi_Vararray_t **latchSupps = Pdtutil_Alloc(Ddi_Vararray_t *, nstate);
-  int *doRetime = Pdtutil_Alloc(int, nstate
-  );
-  int *suppCnt = Pdtutil_Alloc(int, nVars
-  );
-  int nOneSupp = 0, *oneSuppCnt = Pdtutil_Alloc(int, nVars
-  );
-  int makeAigVars = (nstate > 5500);
+  char name[100];
+  int chk=1;
+  int i;
+
+  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+    fprintf(dMgrO(ddm),
+            "retiming %d/%d gate cuts with redundant latches\n",
+            nc, Ddi_BddarrayNum(cuts0));
+  }
+
+  for (i=0; i<nc; i++) {
+    Ddi_Var_t *cutPs, *cutNs;
+    Ddi_Bdd_t *cutPsLit, *cutDelta;
+
+    sprintf(name,"retime_CUT_VAR_%d$PS", i);
+    cutPs = Ddi_VarFindOrAdd(ddm, name, !genAigVars);
+    Ddi_VararrayWrite(cutPsVars,i,cutPs);
+    sprintf(name,"retime_CUT_VAR_%d$NS", i);
+    cutNs = Ddi_VarFindOrAdd(ddm, name, !genAigVars);
+    Ddi_VararrayWrite(cutNsVars,i,cutNs);
+
+  }
+  // This is the delta part after cuts
+  Ddi_Bddarray_t *newD = Ddi_AigarrayInsertCuts (delta,
+                           cuts, cutPsVars);
+
+  // 
+
+  Fsm_MgrSetVarAuxVar(fsmMgr,cutPsVars);
+  Fsm_MgrSetAuxVarBDD(fsmMgr,cuts);
+
+  // replace deltas
+  // append ps/ns vars
+  // append new deltas
+  
+  Ddi_Vararray_t *piDelta = Ddi_BddarraySuppVararray(newD);
+  Ddi_Vararray_t *piRetimed = Ddi_BddarraySuppVararray(cuts);
+  Ddi_Vararray_t *piToLatch = retimePis ?
+    Ddi_VararrayIntersect(piRetimed,piDelta) :
+    Ddi_VararrayDup(piRetimed);
+  Ddi_VararrayDiffAcc(piToLatch,ps);
+  int nPiLatches = Ddi_VararrayNum(piToLatch);
+
+  Ddi_Bddarray_t *initStub = Fsm_MgrReadInitStubBDD(fsmMgr);
+
+  if (initStub==NULL) {
+    FsmCreateInitStub(fsmMgr);
+    initStub = Fsm_MgrReadInitStubBDD(fsmMgr);
+  }
+  
   Ddi_Vararray_t *ps0 = Ddi_VararrayDup(ps);
+  if (nPiLatches > 0) {
+    if (retimePis) {
+      Ddi_Vararray_t *newPsVars, *newNsVars;
+      newPsVars = genAigVars ?
+        Ddi_VararrayMakeNewAigVars(piToLatch, "PDT_RETIMED_PI_PS", "")
+        : Ddi_VararrayMakeNewVars(piToLatch, "PDT_RETIMED_PI_PS", "", 1);
+      newNsVars = genAigVars ?
+        Ddi_VararrayMakeNewAigVars(piToLatch, "PDT_RETIMED_PI_NS", "")
+        : Ddi_VararrayMakeNewVars(piToLatch, "PDT_RETIMED_PI_NS", "", 1);
+      Ddi_Bddarray_t *newLatchDelta =
+        Ddi_BddarrayMakeLiteralsAig(piToLatch, 1);
+      Ddi_Bddarray_t *newLatchStub =
+        Ddi_BddarrayMakeConstAig(ddm,nPiLatches,0);
+      Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+        printf("Retiming inserted %d latches on retimed PIs\n", nPiLatches);
+      }
+      
+      FsmMgrAddNewLatches(fsmMgr,newPsVars,newNsVars,
+                          newLatchDelta,newLatchStub);
+      Ddi_BddarraySubstVarsAcc(newD,piToLatch,newPsVars);
+      Ddi_Free(newLatchDelta);
+      Ddi_Free(newLatchStub);
+      Ddi_Free(newPsVars);
+      Ddi_Free(newNsVars);
+    }
+    else {
+      
+      Ddi_Bdd_t *myConstr = Ddi_BddRelMakeFromArray(cuts,cutPsVars);
+      int iConstr = Ddi_BddarrayNum(delta)-2;
+      Ddi_Bdd_t *constr0 = Ddi_BddarrayRead(delta,iConstr);
+      Ddi_BddSetAig(myConstr);
+      Ddi_BddAndAcc(constr0,myConstr);
+      Ddi_BddarrayWrite(newD,iConstr,constr0);
+      Ddi_Bdd_t *constrFsm = Fsm_MgrReadConstraintBDD(fsmMgr);
+      if (constrFsm!=NULL)
+        Ddi_BddAndAcc(myConstr,constrFsm);
+      Fsm_MgrSetConstraintBDD(fsmMgr,myConstr);
+      Ddi_Free(myConstr);
+
+      Ddi_Vararray_t *newPiVars;
+      newPiVars = genAigVars ?
+        Ddi_VararrayMakeNewAigVars(piToLatch, "PDT_RETIMED_PI_AUX", "")
+      : Ddi_VararrayMakeNewVars(piToLatch, "PDT_RETIMED_PI_AUX", "", 1);
+      Ddi_BddarraySubstVarsAcc(cuts,piToLatch,newPiVars);
+      Ddi_VararrayAppend(pi,newPiVars);
+
+      Ddi_Free(newPiVars);
+    }
+  }
+
+  // handle extra latches
+  Ddi_Bddarray_t *cutDelta = Ddi_BddarrayCompose(cuts,ps0,newD);
+  for (int i=Ddi_BddarrayNum(newD)-2; i<Ddi_BddarrayNum(delta)-2; i++) {
+    Ddi_Bdd_t *copy_i = Ddi_BddarrayRead(delta,i);
+    Ddi_BddarrayInsert(newD,i,copy_i);
+  }
+  Ddi_DataCopy(delta,newD); 
+  FsmMgrAddNewLatches(fsmMgr,cutPsVars,cutNsVars,cutDelta,cuts);
   
-  for (i = 0; i < nVars; i++) {
-    suppCnt[i] = 0;
-  }
-
-  initSize = Ddi_BddarraySize(delta);
-
-  /*-------------------------- Take Retiming Options ------------------------*/
-
-  Pdtutil_Assert(nstate == Ddi_BddarrayNum(delta), "Wrong num of latches");
-  Pdtutil_Assert(nstate == Ddi_VararrayNum(ps), "Wrong num of latches");
-  Pdtutil_Assert(nstate == Ddi_VararrayNum(ns), "Wrong num of latches");
-
-  useAig = Ddi_BddIsAig(Ddi_BddarrayRead(delta, 0));
-
-  initStub = Ddi_BddarrayDup(delta);
-  n = Ddi_BddarrayNum(initStub);
-  if (!Ddi_BddIsAig(Ddi_BddarrayRead(initStub, n - 1))) {
-    Ddi_BddSetAig(Ddi_BddarrayRead(initStub, n - 1));
-  }
-  if (Fsm_MgrReadInitStubBDD(fsmMgr) != NULL) {
-    Ddi_BddarrayComposeAcc(initStub, ps, Fsm_MgrReadInitStubBDD(fsmMgr));
-  } else if (useAig) {
-    Ddi_Bdd_t *initPart = Ddi_AigPartitionTop(initState, 0);
-
-    if (Ddi_BddIsCube(initPart)) {
-      Ddi_AigarrayConstrainCubeAcc(initStub, initState);
-    } else {
-      Ddi_Free(initStub);
-    }
-    Ddi_Free(initPart);
-  } else {
-    for (i = 0; i < Ddi_BddarrayNum(initStub); i++) {
-      Ddi_BddConstrainAcc(Ddi_BddarrayRead(initStub, i), initState);
-    }
-  }
-
-  for (i = nstate - 1; i >= 0; i--) {
-    Ddi_Varset_t *supp_i = Ddi_BddSupp(Ddi_BddarrayRead(delta, i)); /* @ */
-    Ddi_Vararray_t *vA = Ddi_VararrayMakeFromVarset(supp_i, 1);
-    int j;
-
-    for (j = 0; j < Ddi_VararrayNum(vA); j++) {
-      Ddi_Var_t *v = Ddi_VararrayRead(vA, j);
-      int varId = Ddi_VarIndex(v);
-
-      Pdtutil_Assert(varId < nVars, "Wrong var id");
-      suppCnt[varId]++;
-    }
-    Ddi_Free(vA);
-    Ddi_Free(supp_i);
-  }
-  for (i = 0; i < nVars; i++) {
-    oneSuppCnt[i] = suppCnt[i] == 1;
-    if (0 && (suppCnt[i] > 0)) {
-      printf("supp[%s] = %d\n",
-        Ddi_VarName(Ddi_VarFromIndex(ddm, i)), suppCnt[i]);
-    }
-  }
-
-  Ddi_VarsetSetArray(piVars);
-
-  Ddi_VararrayWriteMark (pi, 1);
-
-  for (i = nstate - 1; i >= 0; i--) {
-    Ddi_Bdd_t *d_i = Ddi_BddarrayRead(delta, i);
-    Ddi_Vararray_t *supp_i = Ddi_BddSuppVararray(d_i);  
-    int j, allPis=1;
-
-    latchSupps[i] = NULL;
-
-    for (j=0; j<Ddi_VararrayNum(supp_i);j++) {
-      if (Ddi_VarReadMark(Ddi_VararrayRead(supp_i,j))!=1) {
-	allPis = 0;
-	break;
-      }
-    }
-
-    doRetime[i] = 0;
-
-    if (allPis) {
-      int j;
-      Ddi_Vararray_t *vA = latchSupps[i] =
-        Ddi_VararrayDup(supp_i);
-      doRetime[i] = 2;
-      for (j = 0; j < Ddi_VararrayNum(vA); j++) {
-        Ddi_Var_t *v = Ddi_VararrayRead(vA, j);
-        int varId = Ddi_VarIndex(v);
-        Pdtutil_Assert(varId < nVars, "Wrong var id");
-        Pdtutil_Assert(suppCnt[varId] > 0, "Wrong supp cnt");
-        suppCnt[varId]--;
-      }
-    }
-    Ddi_Free(supp_i);
-  }
-
-  Ddi_VararrayWriteMark (pi, 0);
-
-  do {
-    again = 0;
-    for (i = nstate - 1; i >= 0; i--) {
-      if (doRetime[i]) {
-        int j, exclusiveSupp = 1, oneSupp = 1;
-        Ddi_Vararray_t *vA = latchSupps[i];
-
-        for (j = 0; j < Ddi_VararrayNum(vA); j++) {
-          int varId = Ddi_VarIndex(Ddi_VararrayRead(vA, j));
-
-          if (suppCnt[varId] > 0)
-            exclusiveSupp = 0;
-          if (!oneSuppCnt[varId])
-            oneSupp = 0;
-        }
-        if (!exclusiveSupp) {
-          doRetime[i] = 0;
-          again = 1;
-          for (j = 0; j < Ddi_VararrayNum(vA); j++) {
-            int varId = Ddi_VarIndex(Ddi_VararrayRead(vA, j));
-
-            suppCnt[varId]++;
-          }
-        } else {
-          if (oneSupp)
-            doRetime[i] = 1;
-        }
-      }
-    }
-  }
-  while (again);
-
-  for (i = 0; i < nstate; i++) {
-    Ddi_Free(latchSupps[i]);
-  }
-  Pdtutil_Free(latchSupps);
-
-  for (i = nstate - 1; i >= 0; i--) {
-    Ddi_Bddarray_t *fsmInitStub = Fsm_MgrReadInitStubBDD(fsmMgr);
-    Ddi_Bdd_t *d_i = Ddi_BddDup(Ddi_BddarrayRead(delta, i));
-    Ddi_Var_t *v_i = Ddi_VararrayRead(ps, i);
-    Ddi_Vararray_t *supp_i = Ddi_BddSuppVararray(d_i);  
-    int j, nSupp=Ddi_VararrayNum(supp_i);
-
-    if (nSupp == 0) {
-      int isOne;
-      Ddi_Bdd_t *initPhase;
-
-      Pdtutil_Assert(Ddi_BddIsConstant(d_i), "CONSTANT delta required");
-      isOne = Ddi_BddIsOne(d_i);
-      if (useAig) {
-        initPhase = Ddi_BddMakeLiteralAig(v_i, isOne);
-      } else {
-        initPhase = Ddi_BddMakeLiteral(v_i, isOne);
-      }
-
-      if (fsmInitStub == NULL) {
-        okInit = okInit && Ddi_BddIncluded(initState, initPhase);
-      } else {
-        if (isOne && !Ddi_BddIsOne(Ddi_BddarrayRead(fsmInitStub, i))) {
-          okInit = 0;
-        }
-        if (!isOne && !Ddi_BddIsZero(Ddi_BddarrayRead(fsmInitStub, i))) {
-          okInit = 0;
-        }
-        okInit = 0;
-      }
-
-      if (!okInit) {
-        addInitStub = 1;
-        Pdtutil_VerbosityMgrIf(fsmMgr, Pdtutil_VerbLevelDevMin_c) {
-          fprintf(stdout,
-            "Warning: %s has Constant Input with Different Init Value.\n",
-            Ddi_VarName(v_i));
-        }
-      }
-      Ddi_Free(initPhase);
-    }
-
-    if (doRetime[i]) {
-      /* exclusive support */
-      //      printf("perif latch [%d] %s\n", i, Ddi_VarName(Ddi_VararrayRead(ps,i)));
-      Ddi_BddarrayInsertLast(substFuncs, d_i);
-      Ddi_VararrayInsertLast(substVars, Ddi_VararrayRead(ps, i));
-      Ddi_BddarrayRemove(delta, i);
-      Ddi_VararrayRemove(ps, i);
-      Ddi_VararrayRemove(ns, i);
-      addInitStub = 1;
-      if (initStub != NULL) {
-        Ddi_BddarrayRemove(initStub, i);
-      }
-      if (fsmInitStub != NULL) {
-        Ddi_BddarrayRemove(fsmInitStub, i);
-      }
-      nOneSupp += doRetime[i] == 1;
-    }
-    Ddi_Free(d_i);
-    Ddi_Free(supp_i);
-
-  }
-
-  if ( /* nRed>0 && */ addInitStub) {
-    char suffix[4];
-    Ddi_Vararray_t *newPiVars;
-    Ddi_Bddarray_t *newPiLits;
-
-    sprintf(suffix, "%d", fsmMgr->stats.initStubSteps);
-    newPiVars = makeAigVars ?
-      Ddi_VararrayMakeNewAigVars(pi, "PDT_STUB_PI", suffix) :
-      Ddi_VararrayMakeNewVars(pi, "PDT_STUB_PI", suffix, 1);
-    newPiLits = Ddi_BddarrayMakeLiteralsAig(newPiVars, 1);
-    Ddi_BddarrayComposeAcc(initStub, pi, newPiLits);
-    Ddi_Free(newPiVars);
-    Ddi_Free(newPiLits);
-    if (fsmMgr->stats.initStubSteps==0) {
-      Ddi_Vararray_t *freePs = Ddi_BddarraySuppVararray(initStub);
-      Ddi_VararrayIntersectAcc(freePs,ps0);
-      if (Ddi_VararrayNum(freePs)>0) {
-        /* add stub init state vars */
-        Ddi_Vararray_t *newPsVars;
-        Ddi_Bddarray_t *newPsLits;
-        newPsVars = makeAigVars ?
-          Ddi_VararrayMakeNewAigVars(freePs,"PDT_STUB_PS","") :
-          Ddi_VararrayMakeNewVars(freePs,"PDT_STUB_PS", "", 1);
-        newPsLits = Ddi_BddarrayMakeLiteralsAig(newPsVars, 1);
-        Ddi_BddarrayComposeAcc(initStub, freePs, newPsLits);
-        Ddi_Free(newPsVars);
-        Ddi_Free(newPsLits);
-      }
-      Ddi_Free(freePs);
-    }
-    Fsm_MgrSetInitStubBDD(fsmMgr, initStub);
-    Pdtutil_WresIncrInitStubSteps(1);
-    fsmMgr->stats.initStubSteps++;
-  }
-
-  nRed = Ddi_VararrayNum(substVars);
-  Pdtutil_VerbosityMgrIf(fsmMgr, Pdtutil_VerbLevelDevMin_c) {
-    fprintf(stdout,
-      "Found %d Peripheral Latches (%d 1 s.) - %d Latches Remaining.\n", nRed,
-      nOneSupp, Ddi_VararrayNum(ps) - 1);
-  }
-
-  if (Ddi_VararrayNum(substVars) > 0) {
-    Fsm_MgrRetimePis(fsmMgr, substFuncs);
-    if (useAig) {
-      Ddi_Bdd_t *dProp = NULL;
-
-      n = Ddi_BddarrayNum(delta);
-      if (!Ddi_BddIsAig(Ddi_BddarrayRead(delta, n - 1))) {
-        dProp = Ddi_BddarrayExtract(delta, n - 1);
-        Ddi_BddComposeAcc(dProp, substVars, substFuncs);
-      }
-      Ddi_AigarrayComposeAcc(delta, substVars, substFuncs);
-      if (dProp != NULL) {
-        Ddi_BddarrayInsert(delta, n - 1, dProp);
-        Ddi_Free(dProp);
-      }
-      Ddi_AigarrayComposeAcc(lambda, substVars, substFuncs);
-    } else {
-      for (i = 0; i < Ddi_BddarrayNum(delta); i++) {
-        Ddi_BddComposeAcc(Ddi_BddarrayRead(delta, i), substVars, substFuncs);
-      }
-      for (i = 0; i < Ddi_BddarrayNum(lambda); i++) {
-        Ddi_BddComposeAcc(Ddi_BddarrayRead(lambda, i), substVars, substFuncs);
-      }
-    }
-    if (invarspec != NULL) {
-      Ddi_BddComposeAcc(invarspec, substVars, substFuncs);
-    }
-    if (constraint != NULL) {
-      Ddi_BddComposeAcc(constraint, substVars, substFuncs);
-    }
-  }
-
-  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {
-    fprintf(stdout, "  Peripheral Latch Reduction; Delta Size: %d -> %d.\n",
-      initSize, Ddi_BddarraySize(delta));
-  }
-
-  int checkStall = 0;
-  if (checkStall) {
-    int nStalled = 0;
-    for (int i=0; i<Ddi_BddarrayNum(delta); i++) {
-      Ddi_Bdd_t *d_i = Ddi_BddarrayRead(delta,i);
-      Ddi_Var_t *ps_i = Ddi_VararrayRead(ps,i);
-      if (Ddi_BddSize(d_i) == 1) {
-	if (Ddi_BddTopVar(d_i)==ps_i) {
-	  nStalled++;
-	}
-      }
-    }
-    printf("%d latched stalled adter init found\n", nStalled);
-  }
-  
+  Ddi_Free(cuts);
+  Ddi_Free(newD);
   Ddi_Free(ps0);
-  Ddi_Free(initStub);
-  Ddi_Free(substVars);
-  Ddi_Free(substFuncs);
-  Ddi_Free(piVars);
-  Pdtutil_Free(oneSuppCnt);
-  Pdtutil_Free(suppCnt);
-  Pdtutil_Free(doRetime);
-
-  return (nRed);
+  Ddi_Free(cutDelta);
+  Ddi_Free(piDelta);
+  Ddi_Free(piRetimed);
+  Ddi_Free(piToLatch);
+  Ddi_Free(cutPsVars);
+  Ddi_Free(cutNsVars);
+  
+  return (nc);
 }
 
 

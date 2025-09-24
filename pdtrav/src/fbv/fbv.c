@@ -93,9 +93,9 @@ typedef struct coi_scc_info {
 /* Variable declarations                                                     */
 /*---------------------------------------------------------------------------*/
 
-static int hwmccOut = 0;
+extern int fbvCustom;
 
-int fbvCustom = -1;
+static int hwmccOut = 0;
 
 static int bmcSerialTime = 0;
 static int bmcParallTime = 0;
@@ -178,6 +178,8 @@ static char *help[] = {
   "SAT based Bounded Model Checking (bound k)", NULL,
   "-hwmccSetup",
   "initialize setup for HWMCC competition", NULL,
+  "-task <arguments>",
+  "select a task (not model checking) with command string", NULL,
   "-strategy <s>",
   "select a given strategy/engine among (bdd|ic3|itp(0..6)|igr(0..6)",
   "for engines itp and igr",
@@ -230,9 +232,11 @@ static char *help[] = {
   "-lazyRate <gr. rate>",
   "set lazy rate", NULL,
   "-checkInv",
-  "Strengthen reached plus by SAT  based GFP", NULL,
+  "Check reached plus by SAT  based GFP", NULL,
   "-gfp",
   "Strengthen reached plus by SAT  based GFP", NULL,
+  "-certify <file>",
+  "certify proof read from <file>", NULL,
   "-qbf",
   "QBF based Model Checking", NULL,
   "-diameter <s>",
@@ -269,6 +273,8 @@ static char *help[] = {
   "enable portfolio engines (seconds)", NULL,
   "-itpPeakAig <num>",
   "Set itp/igr mc aig# limit (seconds)", NULL,
+  "-insertCutLatches <val>",
+  "Find cut points and insert redundant latches", NULL,
   "-decompTimeLimit <time>",
   "Set decomposed property time limit (seconds)", NULL,
   "-travSelfTuning <leve>",
@@ -290,10 +296,30 @@ static char *help[] = {
   "set aig redundancy removal level (default 0)", NULL,
   "-aigRedRemPeriod <n>",
   "set aig redundancy removal period (default 1)", NULL,
+  "-abstrRefLoad <filename>",
+  "load abstraction refinement vars (default NULL = disabled)", NULL,
+  "-abstrRefStore <filename>",
+  "store abstraction refinement vars (default NULL = disabled)", NULL,
   "-abstrRef <level>",
   "set aig abstraction refinement level (default 0 = disabled)", NULL,
   "-abstrRefGla <level>",
   "set GLA abstraction refinement level (default 0 = disabled)", NULL,
+  "-abstrRefItp <level>",
+  "set ITP abstraction refinement level (0..100: default 0 = disabled)", NULL,
+  "-abstrRefItpMaxIter <max>",
+  "set ITP abstraction refinement max iterations (default 4)", NULL,
+  "-trAbstrItp <nframes>",
+  "set ITP TR abstraction frames (default 0 = disabled)", NULL,
+  "-trAbstrItpOpt <level>",
+  "set ITP TR abstraction optimization level (default 0 = disabled)", NULL,
+  "-trAbstrItpFirstFwdStep <max>",
+  "set ITP TR abstraction first Fwd step (default 0)", NULL,
+  "-trAbstrItpMaxFwdStep <max>",
+  "set ITP TR abstraction max Fwd step (default 0 = just first fwd step)", NULL,
+  "-trAbstrItpLoad <filename>",
+  "load ITP TR abstraction from file (default NULL = disabled)", NULL,
+  "-trAbstrItpStore <filename>",
+  "store ITP TR abstraction to file (prefix) (default NULL = disabled)", NULL,
   "-dynAbstr <level>",
   "set aig dynamic abstraction level (default 0 = disabled)", NULL,
   "-dynAbstrInitIter <iter>",
@@ -319,7 +345,7 @@ static char *help[] = {
   "-itpStructOdcTh <th>",
   "set Odc opt th (default 1000)", NULL,
   "-itpStoreTh <th>",
-  "set interpolant partitioning th (default 100000)", NULL,
+  "set interpolant store th (default 100000)", NULL,
   "-itpActiveVars <n>",
   "set interpolant use most active vars (default 0 = disabled)", NULL,
   "-itpAppr <th>",
@@ -343,10 +369,15 @@ static char *help[] = {
   "-itpOpt <l>",
   "set interpolant optimization level (default 0 = disabled)", NULL,
   "-itpStore <name>",
-  "set name prefix for bench files storing interpolants (default NULL = disabled)",
+  "set name prefix for aiger files storing interpolants (default NULL = disabled)",
   NULL,
-  "-itpLoad <l>",
-  "load interpolant aig from file (default 0 = disabled)", NULL,
+  "-bmcItpRingsPeriod <p>",
+  "period for itp rings as a constraint (default 0 - disabled)", NULL,
+  "-itpLoad <name>",
+  "set file name for aiger file loading interpolant rings (default NULL = disabled)",
+  NULL,
+  "-itpStoreRings <fname>",
+  "set interpolant rings store file name (default NULL)", NULL,
   "-itpDrup <v>",
   "enable DRUP-based interpolation (default 0 = disabled)", NULL,
   "-itpCompute <l>",
@@ -427,7 +458,7 @@ static char *help[] = {
   "-pdrMaxBlock <val>",
   "set pdrMaxBlock value (default 0 = disabled)", NULL,
   "-igrGrowConeMaxK <val>",
-  "stop frow cone at bound (default 0)", NULL,
+  "stop from cone at bound (default 0)", NULL,
   "-igrGrowConeMax <val>",
   "max relative cone bound increase (default 0.5)", NULL,
   "-igrGrowCone <val>",
@@ -441,11 +472,11 @@ static char *help[] = {
   "-igrRewindMinK <val>",
   "en igr rewind if K bound > <val> (default -1: disabled)", NULL,
   "-igrUseRings <val>",
-  "level of constraining/anging of cone with fwd rings (default 0)", NULL,
+  "level of constraining/anding of cone with fwd rings (default 0)", NULL,
   "-igrUseRingsStep <val>",
   "max steplevel of constraining/anging of cone with fwd rings (default 0)", NULL,
   "-igrUseBwdRings <val>",
-  "level of constraining/anging of cone with bwd rings (default 0)", NULL,
+  "level of constraining/anding of cone with bwd rings (default 0)", NULL,
   "-igrAssumeSafeBound <val>",
   "assume already proved bounds while using bwd cone for interpolation (default 0)", NULL,
   "-igrConeSubsetBound <val>",
@@ -476,6 +507,10 @@ static char *help[] = {
   "target decomposition. (k: # of trav iter.)", NULL,
   "-bmcStep <s>",
   "step of SAT based BMC", NULL,
+  "-bmcTrAbstrPeriod <p>",
+  "period for tr abstraction as a constraint (default 0 - use tr bound)", NULL,
+  "-bmcTrAbstrInit <p>",
+  "initial step for tr abstraction as a constraint (default 0)", NULL,
   "-bmcLearnStep <s>",
   "step of BMC pre-loaded during SAT based BMC", NULL,
   "-bmcFirst <s>",
@@ -600,6 +635,11 @@ static char *help[] = {
   "-dead",
   "check deadlock. verified spec is:",
   "AG (EX 1 | invarspec)", NULL,
+
+  "-checkProof <val>",		/*  */
+  "enable/disable final proof checking (default 0: disabled)", NULL,
+  "-writeProof <fname>",
+  "enable/disable final proof storing (default 0: disabled)", NULL,
 
   "-sort_for_bck <sel>",
   "select TR sorting for preimage, allowed values for <sel> are:",
@@ -953,7 +993,7 @@ static Ddi_Varsetarray_t *computeFsmCoiVars(
   int maxIter,
   int verbosity
 );
-static Ddi_Varsetarray_t *computeFsmCoiVars1(
+static Ddi_Varsetarray_t *computeFsmCoiRings(
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t * p,
   Ddi_Varset_t * extraVars,
@@ -2033,7 +2073,7 @@ FbvSetDdiMgrOpt(
         opt->ddi.nnfClustSimplify);
       Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
       Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
-      Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, inum, opt->ddi.itpLoad);
+      Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, pchar, opt->ddi.itpLoad);
       Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
       Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
       Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
@@ -2267,7 +2307,7 @@ FbvSetHeuristicOpt(
 
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
-  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, inum, opt->ddi.itpLoad);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, pchar, opt->ddi.itpLoad);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
@@ -2645,12 +2685,12 @@ FbvFsmMgrLoad(
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(1);
     }
-  } else if (strstr(fsm, ".aig") != NULL) {
+  } else if (strstr(fsm, ".aig") != NULL || strstr(fsm, ".aag") != NULL) {
     if (strcmp(opt->mc.ord, "dfs") == 0) {
       Pdtutil_Free(opt->mc.ord);
       opt->mc.ord = NULL;
     }
-    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord,
+    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord, NULL,
         Pdtutil_VariableOrderDefault_c) == 1) {
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(1);
@@ -2989,6 +3029,13 @@ FbvFsmReductions(
         }
       }
 
+      if (opt->pre.forceInitStub < 0) {
+        Ddi_Bddarray_t *lambda = Fsm_MgrReadLambdaBDD(fsmMgr);
+        Ddi_Vararray_t *pi = Fsm_MgrReadVarI(fsmMgr);
+        Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
+        Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
+        opt->pre.forceInitStub = Ddi_AbcTemporPrefixLength(delta, lambda, ps, pi);
+      }
       while (opt->pre.forceInitStub) {
         Ddi_Vararray_t *pi = Fsm_MgrReadVarI(fsmMgr);
         Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
@@ -3027,6 +3074,10 @@ FbvFsmReductions(
         Ddi_Free(initStub);
         opt->pre.forceInitStub--;
         Fsm_MgrIncrInitStubSteps(fsmMgr, 1);
+        Pdtutil_VerbosityLocal(Pdtutil_VerbLevelDevMin_c,
+                               Pdtutil_VerbLevelNone_c,
+                               fprintf(stdout, "Forced init stub step: %d.\n",
+                                       Fsm_MgrReadInitStubSteps(fsmMgr)));
         Pdtutil_WresIncrInitStubSteps(1);
       }
 
@@ -3195,7 +3246,7 @@ FbvFsmReductions(
           int size0 = Ddi_BddarraySize(Fsm_MgrReadDeltaBDD(fsmMgr));
 
           if (nl > 2) {
-            loopReduce |= Fsm_RetimeMinreg(fsmMgr, NULL, opt->pre.retime);
+            loopReduce |= Fsm_RetimeMinreg(fsmMgr, NULL, NULL, NULL, opt->pre.retime);
             if (Ddi_BddarraySize(Fsm_MgrReadDeltaBDD(fsmMgr)) > size0 * 1.05) {
               opt->pre.retime = 0;
             }
@@ -3371,7 +3422,7 @@ main(
       while (*ext != '.' && ext >= opt->mc.wRes) {
         ext--;
       }
-      if (strcmp(ext, ".aig") != 0 && strcmp(ext, ".blif") != 0) {
+      if (strcmp(ext, ".aig") != 0 && strcmp(ext, ".aag") != 0 && strcmp(ext, ".blif") != 0) {
         printf("Error: invalid circuit file extension.\n");
         exit(1);
       }
@@ -3618,7 +3669,10 @@ if (opt->ddi.itpCompact > -1)     //-1 is the default value
    *  Custom behavior for combinational circuits
    */
 
-  if (opt->mc.custom<0) {
+  if (opt->mc.task != NULL) {
+    FbvTask(opt);
+  }
+  else if (opt->mc.custom<0) {
     fbvCustom = -opt->mc.custom;
   }
   else if (opt->mc.custom) {
@@ -3731,7 +3785,7 @@ if (opt->ddi.itpCompact > -1)     //-1 is the default value
    *  Custom compacting ITP behaviour: load an itp or compute a new itp starting from A and B (previously stored) //DV
    */
 
-  if (opt->ddi.itpCompute > 0 || opt->ddi.itpLoad > 0) {
+  if (opt->ddi.itpCompute > 0) {
 
     int method = 0;
     Ddi_Mgr_t *ddiMgr;
@@ -3768,7 +3822,7 @@ if (opt->ddi.itpCompact > -1)     //-1 is the default value
       opt->ddi.nnfClustSimplify);
     Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
     Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
-    Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, inum, opt->ddi.itpLoad);
+    Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, pchar, opt->ddi.itpLoad);
     Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
     Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
     Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
@@ -3776,14 +3830,9 @@ if (opt->ddi.itpCompact > -1)     //-1 is the default value
     Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpSimp_c, inum, opt->ddi.itpSimp);
 
 
-    if (opt->ddi.itpCompute > 0) {
-      method = opt->ddi.itpCompute;
-    } else {
-      Pdtutil_Assert(opt->ddi.itpLoad > 0, "Wrong value for option -itpLoad");
-      method = -(opt->ddi.itpLoad);
-    }
+    method = opt->ddi.itpCompute;
 
-    Ddi_AigSingleInterpolantCompaction(ddiMgr, fsmFileName, opt->ddi.itpStore,
+    Ddi_AigSingleInterpolantCompaction(ddiMgr, fsmFileName, opt->ddi.itpLoad,
       method);
 
     Ddi_MgrQuit(ddiMgr);
@@ -3879,6 +3928,33 @@ if (opt->ddi.itpCompact > -1)     //-1 is the default value
 /*---------------------------------------------------------------------------*/
 /* Definition of static functions                                            */
 /*---------------------------------------------------------------------------*/
+
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Fbv_Globals_t *
+Fbv_GlobalsInit(
+)
+{
+  return new_settings();
+}
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+void
+Fbv_GlobalsQuit(
+  Fbv_Globals_t *opt
+)
+{
+  dispose_settings(opt);
+}
 
 /**Function*******************************************************************
   Synopsis    []
@@ -4125,7 +4201,7 @@ FbvParseArgs(
       argv++;
       argc--;
     } else if (strcmp(argv[1], "-itpLoad") == 0) {
-      opt->ddi.itpLoad = atoi(argv[2]);
+      opt->ddi.itpLoad = Pdtutil_StrDup(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -4200,6 +4276,12 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-cut") == 0) {
       opt->fsm.cut = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-insertCutLatches") == 0) {
+      opt->fsm.insertCutLatches = atoi(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -4423,6 +4505,14 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-forceInitStub") == 0) {
       opt->pre.forceInitStub = atoi(argv[2]);
+      opt->pre.peripheralLatches = 0;
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-temporDecomp") == 0) {
+      opt->pre.forceInitStub = atoi(argv[2]);
+      opt->pre.peripheralLatches = 0;
       argv++;
       argc--;
       argv++;
@@ -4563,6 +4653,33 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-sort_for_bck") == 0) {
       opt->trav.sort_for_bck = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-checkProof") == 0) {
+      opt->trav.checkProof = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-writeProof") == 0) {
+      opt->trav.writeProof = Pdtutil_StrDup(argv[2]);
+      opt->trav.pdrReuseRings = 1;
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-writeInvar") == 0) {
+      opt->trav.writeInvar = Pdtutil_StrDup(argv[2]);
+      opt->pre.peripheralLatches = 0;
+      opt->trav.pdrReuseRings = 1;
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-writeRetimeCut") == 0) {
+      opt->fsm.writeRetimeCut = Pdtutil_StrDup(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -4761,6 +4878,14 @@ FbvParseArgs(
       argc--;
       argv++;
       argc--;
+    } else if (strcmp(argv[1], "-certify") == 0) {
+      opt->mc.checkInv = Pdtutil_StrDup(argv[2]);
+      opt->pre.peripheralLatches = 0;
+      opt->mc.exit_after_checkInv = 1;
+      argv++;
+      argc--;
+      argv++;
+      argc--;
     } else if (strcmp(argv[1], "-meta") == 0) {
       if (strcmp(argv[2], "sch") == 0) {
         argv++;
@@ -4863,6 +4988,18 @@ FbvParseArgs(
       argc--;
       argv++;
       argc--;
+    } else if (strcmp(argv[1], "-certify") == 0) {
+      opt->trav.rPlus = Pdtutil_StrDup(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-itpStoreRings") == 0) {
+      opt->trav.itpStoreRings = Pdtutil_StrDup(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
     } else if (strcmp(argv[1], "-rpRings") == 0) {
       opt->trav.rPlusRings = Pdtutil_StrDup(argv[2]);
       argv++;
@@ -4871,6 +5008,7 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-wr") == 0) {
       opt->trav.wR = Pdtutil_StrDup(argv[2]);
+      opt->trav.pdrReuseRings = 1;
       argv++;
       argc--;
       argv++;
@@ -4940,6 +5078,18 @@ FbvParseArgs(
       opt->mc.aig = 1;
       argv++;
       argc--;
+    } else if (strcmp(argv[1], "-abstrRefLoad") == 0) {
+      opt->trav.abstrRefLoad = Pdtutil_StrDup(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-abstrRefStore") == 0) {
+      opt->trav.abstrRefStore = Pdtutil_StrDup(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
     } else if (strcmp(argv[1], "-abstrRef") == 0) {
       opt->trav.abstrRef = atoi(argv[2]);
       if (opt->trav.abstrRefGla>0) {
@@ -4965,6 +5115,54 @@ FbvParseArgs(
       }
       if (opt->trav.itpConstrLevel > 1)
         opt->trav.itpConstrLevel = 1;
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-abstrRefItp") == 0) {
+      opt->trav.abstrRefItp = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-abstrRefItpMaxIter") == 0) {
+      opt->trav.abstrRefItpMaxIter = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-trAbstrItp") == 0) {
+      opt->trav.trAbstrItp = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-trAbstrItpOpt") == 0) {
+      opt->trav.trAbstrItpOpt = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-trAbstrItpFirstFwdStep") == 0) {
+      opt->trav.trAbstrItpFirstFwdStep = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-trAbstrItpMaxFwdStep") == 0) {
+      opt->trav.trAbstrItpMaxFwdStep = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-trAbstrItpLoad") == 0) {
+      opt->trav.trAbstrItpLoad = Pdtutil_StrDup(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-trAbstrItpStore") == 0) {
+      opt->trav.trAbstrItpStore = Pdtutil_StrDup(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -5020,6 +5218,24 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-bmcTe") == 0) {
       opt->trav.bmcTe = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-bmcItpRingsPeriod") == 0) {
+      opt->trav.bmcItpRingsPeriod = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-bmcTrAbstrPeriod") == 0) {
+      opt->trav.bmcTrAbstrPeriod = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-bmcTrAbstrInit") == 0) {
+      opt->trav.bmcTrAbstrInit = atoi(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -5188,7 +5404,7 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-itpGfp") == 0) {
       opt->trav.itpGfp = atoi(argv[2]);
-      opt->trav.itpConstrLevel = 4;
+      //      opt->trav.itpConstrLevel = 4;
       argv++;
       argc--;
       argv++;
@@ -5607,11 +5823,6 @@ FbvParseArgs(
       opt->mc.qbf = 1;
       argv++;
       argc--;
-    } else if (strcmp(argv[1], "-gfp") == 0) {
-      opt->mc.aig = 1;
-      opt->mc.gfp = 1;
-      argv++;
-      argc--;
     } else if (strcmp(argv[1], "-diameter") == 0) {
       opt->mc.aig = 1;
       opt->mc.diameter = atoi(argv[2]);
@@ -5848,6 +6059,9 @@ FbvParseArgs(
       opt->ddi.itpDrup = 1;
       argv++;
       argc--;
+    } else if (strcmp(argv[1], "-task") == 0) {
+      opt->mc.task = argv+2;
+      argc=0;
     } else if (strcmp(argv[1], "-strategy") == 0
       || strcmp(argv[1], "-engine") == 0) {
       int j;
@@ -5959,6 +6173,8 @@ FbvParseArgs(
         opt->mc.aig = 1;
         opt->mc.pdr = 1;
         opt->verbosity = 4;
+	opt->pre.ternarySim = 0;
+        opt->pre.peripheralLatches = 1;
       } else if (strcmp(opt->mc.strategy, "ic3d") == 0) {
         opt->mc.aig = 1;
         opt->mc.pdr = 1;
@@ -6622,7 +6838,7 @@ FbvWriteCex(
   Fsm_Mgr_t * fsmMgrOriginal
 )
 {
-  char buf[1000] = "";
+  char buf[10000] = "";
   int pi = Ddi_VararrayNum(Fsm_MgrReadVarI(fsmMgrOriginal));
   int ps = Ddi_VararrayNum(Fsm_MgrReadVarPS(fsmMgrOriginal));
   int i = 0;
@@ -6739,7 +6955,8 @@ void
 FbvWriteCexNormalized(
   char *fname,
   Fsm_Mgr_t * fsmMgr,
-  Fsm_Mgr_t * fsmMgrOriginal
+  Fsm_Mgr_t * fsmMgrOriginal,
+  int badId
 )
 {
   static char buf[1000] = "";
@@ -6812,7 +7029,7 @@ FbvWriteCexNormalized(
   FILE *cexOut = fopen(buf, "w");
 
   //printf("print header witness\n");
-  fprintf(cexOut, "1\nb0\n");
+  fprintf(cexOut, "1\nb%d\n", badId);
 
   for (i = 0; (i < ps) && (initStr[i] != '\0'); i++) {
     char c = initStr[i];
@@ -7070,7 +7287,7 @@ invarVerif(
     opt->ddi.nnfClustSimplify);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
-  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, inum, opt->ddi.itpLoad);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, pchar, opt->ddi.itpLoad);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
@@ -7114,17 +7331,17 @@ invarVerif(
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(1);
     }
-  } else if (strstr(fsm, ".aig") != NULL) {
+  } else if (strstr(fsm, ".aig") != NULL || strstr(fsm, ".aag") != NULL) {
     if (strcmp(opt->mc.ord, "dfs") == 0) {
       Pdtutil_Free(opt->mc.ord);
       opt->mc.ord = NULL;
     }
-    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord,
+    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord, NULL,
         Pdtutil_VariableOrderDefault_c) == 1) {
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(1);
     }
-    if (opt->pre.performAbcOpt) {
+    if (opt->pre.performAbcOpt==1) {
       int ret = Fsm_MgrAbcReduceMulti(fsmMgr, 0.99);
     }
   } else {
@@ -7244,7 +7461,7 @@ invarVerif(
   }
 
   //fsmMgrOriginal = Fsm_MgrDup(fsmMgr);
-  //fsmMgrOpt = Fsm_MgrAbcReduce(fsmMgr);
+  //fsmMgrOpt = Fsm_MgrAbcReduce(fsmMgr)
 
   if (nRun > 1) {
     opt->mc.method = opt->mc.saveMethod;
@@ -7428,7 +7645,7 @@ invarVerif(
 
     Fsm_FsmFoldProperty(fsmFsm, opt->mc.compl_invarspec,
       opt->trav.cntReachedOK, 1);
-    Fsm_FsmFoldConstraint(fsmFsm);
+    Fsm_FsmFoldConstraint(fsmFsm, 1 /*opt->mc.compl_invarspec*/);
     //    Fsm_FsmFoldInit(fsmFsm);
     Fsm_FsmWriteToFsmMgr(fsmMgr, fsmFsm);
     Fsm_FsmFree(fsmFsm);
@@ -7437,6 +7654,13 @@ invarVerif(
 
   fsmMgrOriginal = Fsm_MgrDup(fsmMgr);
 
+  if (opt->fsm.insertCutLatches > 0) {
+    Fsm_Mgr_t *fsmMgrNew = Fsm_RetimeGateCuts(fsmMgr, opt->fsm.insertCutLatches);
+    Fsm_MgrQuit(fsmMgr);
+    fsmMgr = fsmMgrNew;
+    invarspec = Fsm_MgrReadInvarspecBDD(fsmMgr);
+  }
+  
   invarspec = Ddi_BddDup(invarspec);
   pi = Fsm_MgrReadVarI(fsmMgr);
   ps = Fsm_MgrReadVarPS(fsmMgr);
@@ -7469,10 +7693,18 @@ invarVerif(
       Ddi_BddExistProjectAcc(care, psVars);
       Ddi_Free(psVars);
     }
+
   }
 
   opt->stats.setupTime = util_cpu_time();
 
+  if (opt->pre.forceInitStub < 0) {
+    Ddi_Bddarray_t *lambda = Fsm_MgrReadLambdaBDD(fsmMgr);
+    Ddi_Vararray_t *pi = Fsm_MgrReadVarI(fsmMgr);
+    Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
+    Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
+    opt->pre.forceInitStub = Ddi_AbcTemporPrefixLength(delta, lambda, ps, pi);
+  }
   while (opt->pre.forceInitStub) {
     Ddi_Vararray_t *pi = Fsm_MgrReadVarI(fsmMgr);
     Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
@@ -7508,6 +7740,10 @@ invarVerif(
     Ddi_Free(initStub);
     opt->pre.forceInitStub--;
     Fsm_MgrIncrInitStubSteps(fsmMgr, 1);
+    Pdtutil_VerbosityLocal(Pdtutil_VerbLevelDevMin_c,
+                           Pdtutil_VerbLevelNone_c,
+                           fprintf(stdout, "Forced init stub step: %d.\n",
+                           Fsm_MgrReadInitStubSteps(fsmMgr)));
     Pdtutil_WresIncrInitStubSteps(1);
   }
 
@@ -7619,6 +7855,19 @@ invarVerif(
     Ddi_Free(coi);
   }
 
+  if (0 && opt->pre.impliedConstr) { // check order of implied and terminalScc
+    Ddi_Bdd_t *myInvar = Fsm_ReduceImpliedConstr(fsmMgr,
+      opt->pre.specDecompIndex, invar, &opt->pre.impliedConstrNum);
+
+    if (myInvar != NULL) {
+      if (invar == NULL) {
+        invar = myInvar;
+      } else {
+        Ddi_BddAndAcc(invar, myInvar);
+        Ddi_Free(myInvar);
+      }
+    }
+  }
   if (opt->pre.terminalScc) {
     opt->stats.verificationOK = 0;
     Ddi_Bdd_t *myInvar =
@@ -8010,6 +8259,10 @@ invarVerif(
     Ddi_Free(twoPhaseDelta2);
   }
 
+  if (opt->pre.performAbcOpt == 2) {
+    int ret = Fsm_MgrAbcReduce(fsmMgr, 0.9);
+  }
+
   if (0 && forceDeltaConstraint)
   {
     Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
@@ -8028,6 +8281,41 @@ invarVerif(
 
   opt->stats.setupTime = util_cpu_time();
 
+  if (opt->trav.abstrRefLoad != NULL) {
+    Ddi_Vararray_t *refinedVars = NULL;
+    if (strcmp(opt->trav.abstrRefLoad,"cuts")==0) {
+      refinedVars = Ddi_VararrayAlloc(ddiMgr, 0);
+      for (int i=0; i<Ddi_VararrayNum(ps); i++) {
+        Ddi_Var_t *v = Ddi_VararrayRead(ps,i);
+        char *search = "retime_CUT";
+        if (strncmp(Ddi_VarName(v),search,strlen(search))==0)
+          Ddi_VararrayInsertLast(refinedVars,v);
+        else {
+          search = "PDT_BDD_INVAR";
+          if (strncmp(Ddi_VarName(v),search,strlen(search))==0)
+            Ddi_VararrayInsertLast(refinedVars,v);
+        }
+      }
+    }
+    else {
+      refinedVars = Ddi_VararrayLoad (ddiMgr, opt->trav.abstrRefLoad, NULL);
+    }
+    if (refinedVars!=NULL) {
+      Ddi_Varsetarray_t *abstrRefRefinedVars = Ddi_VarsetarrayAlloc(ddiMgr, 2);
+      Ddi_Varset_t *rv = Ddi_VarsetMakeFromArray(refinedVars);
+      Ddi_VarsetarrayWrite(abstrRefRefinedVars,0,rv);
+      Ddi_VarsetarrayWrite(abstrRefRefinedVars,1,NULL);
+      Pdtutil_VerbosityMgrIf(ddiMgr, Pdtutil_VerbLevelUsrMax_c) {
+        fprintf(dMgrO(ddiMgr),
+              "Abstr Ref: loaded %d refined vars\n", Ddi_VarsetNum(rv));
+      }
+      Trav_MgrSetAbstrRefRefinedVars(travMgrAig, abstrRefRefinedVars);
+      Ddi_Free(abstrRefRefinedVars);
+      Ddi_Free(rv);
+      Ddi_Free(refinedVars);
+    }
+  }
+  
   {
   char *constrFile = NULL;
   int useAsConstr = 0;
@@ -8063,6 +8351,14 @@ invarVerif(
       Ddi_Bddarray_t *nsLits = Ddi_BddarrayMakeLiteralsAig(ns, 1);
       Ddi_BddarraySubstVarsAcc(rplus,Fsm_MgrReadVarNS(fsmMgr),
                           Fsm_MgrReadVarPS(fsmMgr));
+      Ddi_Bdd_t *eqConstr = Fsm_MgrReadLatchEqClassesBDD(fsmMgr);
+      if (eqConstr != NULL) {
+        Ddi_Vararray_t *vars = Ddi_BddReadEqVars(eqConstr);
+        Ddi_Bddarray_t *subst = Ddi_BddReadEqSubst(eqConstr);
+        
+        Ddi_BddarrayComposeAcc(rplus, vars, subst);
+      }
+
       if (ibmConstr) {
         Ddi_Var_t *v = Ddi_VarFromName(ddiMgr, "PDT_BDD_INVARSPEC_VAR$PS");
         Ddi_Var_t *v1 = Ddi_VarFromName(ddiMgr, "PDT_BDD_INVAR_VAR$PS");
@@ -8101,6 +8397,13 @@ invarVerif(
       Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
       int iConstr = Ddi_BddarrayNum(delta)-2;
       Ddi_Bdd_t *deltaConstr = Ddi_BddarrayRead(delta,iConstr);
+      Ddi_Vararray_t *suppA = Ddi_BddarraySuppVararray(rplus);
+      Ddi_VararrayDiffAcc(suppA,ps);
+      Ddi_VararrayDiffAcc(suppA,pi);
+      if (Ddi_VararrayNum(suppA)>0) {
+        Ddi_VararrayAppend(pi,suppA);
+      }
+      Ddi_Free(suppA);
       if (useAsConstr) {
 	Ddi_BddAndAcc(myInvar, Ddi_BddarrayRead(rplus,0));
 	Ddi_BddAndAcc(deltaConstr, Ddi_BddarrayRead(rplus,0));
@@ -8208,7 +8511,10 @@ invarVerif(
 
         coi = computeFsmCoiVars(fsmMgr, invarspec, NULL, opt->tr.coiLimit, 1);
         if (opt->pre.wrCoi != NULL) {
-          writeCoiShells(opt->pre.wrCoi, coi, ps);
+          Ddi_Varsetarray_t *coiRings;
+          coiRings = computeFsmCoiRings(fsmMgr, invarspec, NULL, opt->tr.coiLimit, 1);
+          writeCoiShells(opt->pre.wrCoi, coiRings, ps);
+          Ddi_Free(coiRings);
         }
         nCoi = Ddi_VarsetarrayNum(coi);
         fsmCoiReduction(fsmMgr, Ddi_VarsetarrayRead(coi, nCoi - 1));
@@ -8265,14 +8571,44 @@ invarVerif(
       if (opt->pre.retime) {
 
         int size0 = Ddi_BddarraySize(Fsm_MgrReadDeltaBDD(fsmMgr));
-
-        loopReduce |= Fsm_RetimeMinreg(fsmMgr, care, opt->pre.retime);
+        char *writeRetime = opt->fsm.writeRetimeCut;
+        Ddi_Bddarray_t *cutF = NULL;
+        Ddi_Vararray_t *cutV = NULL;
+        if (writeRetime!=NULL) {
+          cutF = Ddi_BddarrayAlloc(ddiMgr, 0);
+          cutV = Ddi_VararrayAlloc(ddiMgr, 0);
+        }
+        int retimeDone = Fsm_RetimeMinreg(fsmMgr, care, cutF, cutV, opt->pre.retime);
+        if (retimeDone && writeRetime!=NULL) {
+          char fname[1000];
+          strcpy(fname,writeRetime);
+          char *s = strstr(fname,".aig");
+          if (s==NULL) s = fname+strlen(fname);
+          sprintf(s,".aig");
+          fprintf(stdout, "Writing retime cut to file %s.\n", fname);
+          Ddi_AigarrayNetStoreAiger(cutF, 0, fname);
+          sprintf(s,"_cutv.txt");
+          fprintf(stdout, "Writing retime cut vars to file %s.\n", fname);
+          Ddi_VararrayStore (cutV, fname, NULL);
+          opt->pre.retime = 0;
+        }
+        Ddi_Free(cutF);
+        Ddi_Free(cutV);
+        loopReduce |= retimeDone;
         if (Ddi_BddarraySize(Fsm_MgrReadDeltaBDD(fsmMgr)) > size0 * 1.05) {
           opt->pre.retime = 0;
         }
         //    exit (1);
       }
 
+      if (Fsm_MgrReadLatchEqClassesBDD(fsmMgr) != NULL) {
+        Ddi_Bdd_t *reached = Fsm_MgrReadReachedBDD(fsmMgr);
+        Ddi_Bdd_t *reachedTrav = Trav_MgrReadReached(travMgrAig);
+        if (reachedTrav!=NULL)
+          Trav_MgrSetReached(travMgrAig,reached);
+      }
+
+      
       if (1 && opt->mc.cegar == 0 && (loopReduceCnt < 2) && opt->mc.lemmas > 1) {
         // GpC: must fix invar resulting from lemmas
          int result = Trav_TravLemmaReduction(travMgrAig,
@@ -8371,7 +8707,7 @@ invarVerif(
   if (doXorDetection) {
     Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
     Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
-    Ddi_Bddarray_t *cuts = Ddi_AigarrayFindXors(delta,ps);
+    Ddi_Bddarray_t *cuts = Ddi_AigarrayFindXors(delta,ps,0);
     Ddi_Free(cuts);
   }
   if (doXorCuts) {
@@ -8418,8 +8754,21 @@ invarVerif(
     }
 
     if (opt->mc.gfp > 0) {
-      Trav_TravSatItpGfp(travMgrAig,fsmMgr,opt->mc.gfp,
+      Trav_TravSatItpGfp(travMgrAig,fsmMgr,opt->mc.gfp,1/*doStrengthen*/,
                          opt->trav.countReached);
+    }
+    
+    if (opt->trav.trAbstrItp > 0 &&
+        (opt->mc.bmc>0 || Trav_MgrReadNewi(travMgrAig) != NULL ||
+         opt->trav.trAbstrItpLoad != NULL || opt->trav.trAbstrItpOpt != 0)) {
+      Trav_TravTrAbstrItp(travMgrAig,fsmMgr,
+                          opt->trav.trAbstrItp,
+                          opt->trav.trAbstrItpOpt,
+                          opt->trav.trAbstrItpFirstFwdStep,
+                          opt->trav.trAbstrItpMaxFwdStep,
+                          opt->mc.bmc
+                          );
+      exit(0);
     }
     
     if (opt->mc.checkInv != NULL) {
@@ -8430,10 +8779,12 @@ invarVerif(
       Ddi_Free(rplus);
       int chk, fp;
       fp = Trav_TravSatCheckInvar(travMgrAig,fsmMgr,
-                                  myInvar,&chk);
+                                  myInvar,&chk,NULL);
+      Ddi_Free(myInvar);
       if (fp && !chk) {
         Fsm_MgrSetConstraintBDD(fsmMgr, myInvar);
       }
+      if (opt->mc.exit_after_checkInv) exit(0); 
     }
     
     if (opt->mc.wFsm != NULL) {
@@ -8472,6 +8823,9 @@ invarVerif(
         Fsm_FsmUnfoldProperty(fsmFsm, 1);
         Fsm_FsmUnfoldConstraint(fsmFsm);
       }
+      else {
+        Fsm_FsmWriteConstraint(fsmFsm,NULL);
+      }            
 
       if (opt->fsm.nnf) {
         Fsm_FsmNnfEncoding(fsmFsm);
@@ -8635,11 +8989,11 @@ invarVerif(
 	    ret2 = Fsm_CexNormalize(fsmMgrOriginal);
 	    Pdtutil_Assert(!ret2,"error extending cex");
             FbvWriteCexNormalized(opt->mc.wRes, fsmMgrOriginal,
-              fsmMgrOriginal);
+                                  fsmMgrOriginal,opt->mc.ilambda);
           } else {
-            FbvWriteCexNormalized(opt->mc.wRes, fsmMgr, fsmMgrOriginal);
+            FbvWriteCexNormalized(opt->mc.wRes, fsmMgr, fsmMgrOriginal,opt->mc.ilambda);
           }
-          fprintf(stdout, "\ncex written to: %s\n", opt->mc.wRes);
+          fprintf(stdout, "\ncex written to: %s.cex\n", opt->mc.wRes);
         }
 #if 0
         if ((Fsm_MgrReadCexBDD(fsmMgr) != NULL)) {
@@ -8649,12 +9003,12 @@ invarVerif(
 	  //     FbvWriteCex(opt->mc.wRes, fsmMgr, fsmMgrOriginal);
         }
 #else
-	{
+        if ((Fsm_MgrReadCexBDD(fsmMgr) != NULL)) {
 	  char fullCexName[1000];
 	  sprintf(fullCexName,"%s.cex",opt->mc.wRes);
 	  int invalidCex = Fsm_AigsimCex(opt->expName, fullCexName);
 
-	  if (!invalidCex) fprintf(stdout,"CEX NOT validated by aigsim !!!\n");
+	  if (invalidCex) fprintf(stdout,"CEX NOT validated by aigsim !!!\n");
 	  else 
 	  fprintf(stdout, "CEX validated by aigsim\n");
 	}
@@ -8735,6 +9089,58 @@ invarVerif(
       Ddi_Free(r);
     }
 
+    if (opt->trav.checkProof) {
+      char name[1000];
+      strcpy(name,fsm);
+      char *s = strstr(name,".aig");
+      if (s!=NULL) {
+        strcpy(s,"-with-proof-inv.aig");
+      }
+      else  {
+        strcat(name,"-with-proof-inv.aig");
+      }      
+      int ok = Trav_TravSatCheckProof(travMgrAig, fsmMgr, fsmMgrOriginal, name);
+    }
+    
+    if (opt->trav.writeProof!=NULL) {
+      int ok = Trav_TravSatStoreProofAiger(travMgrAig, fsmMgr, fsmMgrOriginal, opt->trav.writeProof);
+    }
+    
+    if (opt->trav.writeInvar != NULL) {
+      Ddi_Bdd_t *r = Trav_MgrReadReached(travMgrAig);
+      if (r!=NULL) {
+        Ddi_Bdd_t *rUnfolded = Ddi_BddDup(r);
+        Ddi_Var_t *pVar = Fsm_MgrReadPdtSpecVar(fsmMgr);
+        Ddi_Var_t *cVar = Fsm_MgrReadPdtConstrVar(fsmMgr);
+        if (pVar!=NULL) Ddi_BddCofactorAcc(rUnfolded,pVar,1);
+        if (cVar!=NULL) Ddi_BddCofactorAcc(rUnfolded,cVar,1);
+	if (Fsm_MgrReadLatchEqClassesBDD(fsmMgr) != NULL) {
+	  Ddi_Bdd_t *latchEqClasses = Ddi_BddMakeAig(
+	       Fsm_MgrReadLatchEqClassesBDD(fsmMgr));
+	  Ddi_BddAndAcc(rUnfolded,latchEqClasses);
+	  Ddi_Free(latchEqClasses);
+	}
+
+	char name[1000];
+	strcpy(name,opt->trav.writeInvar);
+	int tdK = Fsm_MgrReadInitStubSteps(fsmMgr);
+	if (tdK>0) {
+	  char *tdecomp = strstr(name,"-T#");
+	  if (tdecomp==NULL)
+	    tdecomp = strstr(name,"-t#");
+	  if (tdecomp!=NULL) {
+	    int skip = (tdecomp-name)+3;
+	    while (name[skip]=='#') skip++;
+	    sprintf(tdecomp+2,"%d%s",tdK,opt->trav.writeInvar+skip);
+	  }
+	}
+        if (opt->verbosity >= Pdtutil_VerbLevelUsrMax_c) {
+          printf("Writing invar to %s\n", name);
+        }
+        Ddi_AigNetStoreAiger(rUnfolded,0,name);
+        Ddi_Free(rUnfolded);
+      }
+    }
 
     if (opt->trav.wR != NULL) {
       Ddi_Bdd_t *r = Trav_MgrReadReached(travMgrAig);
@@ -9307,7 +9713,7 @@ invarVerif(
     if (opt->pre.wrCoi != NULL) {
       Ddi_Varsetarray_t *coi;
 
-      coi = computeCoiVars(tr, invarspec, opt->tr.coiLimit);
+      coi = Tr_TrComputeCoiVars(tr, invarspec, opt->tr.coiLimit);
       writeCoiShells(opt->pre.wrCoi, coi, ps);
       Ddi_Free(coi);
     }
@@ -9736,7 +10142,7 @@ invarMixedVerif(
     opt->ddi.nnfClustSimplify);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
-  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, inum, opt->ddi.itpLoad);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, pchar, opt->ddi.itpLoad);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
@@ -9785,7 +10191,7 @@ invarMixedVerif(
       Pdtutil_Free(opt->mc.ord);
       opt->mc.ord = NULL;
     }
-    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord,
+    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord, NULL,
         Pdtutil_VariableOrderDefault_c) == 1) {
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(1);
@@ -9980,7 +10386,7 @@ invarMixedVerif(
 
     Fsm_FsmFoldProperty(fsmFsm, opt->mc.compl_invarspec,
       opt->trav.cntReachedOK, 1);
-    Fsm_FsmFoldConstraint(fsmFsm);
+    Fsm_FsmFoldConstraint(fsmFsm, opt->mc.compl_invarspec);
     //    Fsm_FsmFoldInit(fsmFsm);
     Fsm_FsmWriteToFsmMgr(fsmMgr, fsmFsm);
     Fsm_FsmFree(fsmFsm);
@@ -10176,7 +10582,7 @@ invarMixedVerif(
     opt->ddi.nnfClustSimplify);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
-  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, inum, opt->ddi.itpLoad);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpLoad_c, pchar, opt->ddi.itpLoad);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
   Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
@@ -10677,7 +11083,7 @@ invarMixedVerif(
       if (opt->pre.retime) {
         int size0 = Ddi_BddarraySize(Fsm_MgrReadDeltaBDD(fsmMgr));
 
-        loopReduce |= Fsm_RetimeMinreg(fsmMgr, care, opt->pre.retime);
+        loopReduce |= Fsm_RetimeMinreg(fsmMgr, care, NULL, NULL, opt->pre.retime);
         if (Ddi_BddarraySize(Fsm_MgrReadDeltaBDD(fsmMgr)) > size0 * 1.05) {
           opt->pre.retime = 0;
         } else if (0 && size0 > 20000) {
@@ -11309,7 +11715,6 @@ invarDecompVerif(
   Ddi_Var_t *pvarPs, *pvarNs, *cvarPs, *cvarNs;
   int iProp = -1, iConstr = -1, nstate, size;
   Ddi_Bdd_t *deltaProp = NULL, *deltaConstr, *p, *pConj, *pDisj;
-  int useRplus = 1;
   int maxPart = opt->pre.specDecompMax;
   float coiRatio = 1.2;
   Ddi_Bdd_t *partInvarspec = NULL;
@@ -11336,6 +11741,8 @@ invarDecompVerif(
   int replaceReached = 1; // do not and reached at each k - replace it
   int useFullPropAsConstr=0&&(opt->pre.specDecompCore>0);
   int igrFpRing = -1;
+  int useRplusAsConstr = opt->trav.itpGfp>1;
+  int useRplusAsCareWithItp = opt->trav.itpGfp>1;
   
   /**********************************************************************/
   /*                        Create DDI manager                          */
@@ -11421,13 +11828,13 @@ invarDecompVerif(
       Pdtutil_Free(opt->mc.ord);
       opt->mc.ord = NULL;
     }
-    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord,
+    if (Fsm_MgrLoadAiger(&fsmMgr, ddiMgr, fsm, opt->mc.ord, NULL,
         Pdtutil_VariableOrderDefault_c) == 1) {
       fprintf(stderr, "-- FSM Loading Error.\n");
       exit(1);
     }
 
-    if (opt->pre.performAbcOpt) {
+    if (opt->pre.performAbcOpt == 1) {
       int ret = Fsm_MgrAbcReduceMulti(fsmMgr, 0.99);
     }
   } else {
@@ -11645,10 +12052,15 @@ invarDecompVerif(
 
     Fsm_FsmFoldProperty(fsmFsm, opt->mc.compl_invarspec,
       opt->trav.cntReachedOK, 1);
-    Fsm_FsmFoldConstraint(fsmFsm);
+    Fsm_FsmFoldConstraint(fsmFsm, opt->mc.compl_invarspec);
     //    Fsm_FsmFoldInit(fsmFsm);
     Fsm_FsmWriteToFsmMgr(fsmMgr, fsmFsm);
     Fsm_FsmFree(fsmFsm);
+    if (opt->fsm.insertCutLatches > 0) {
+      Fsm_Mgr_t *fsmMgrNew = Fsm_RetimeGateCuts(fsmMgr, opt->fsm.insertCutLatches);
+      Fsm_MgrQuit(fsmMgr);
+      fsmMgr = fsmMgrNew;
+    }
     invarspec = Ddi_BddDup(Fsm_MgrReadInvarspecBDD(fsmMgr));
     if (partInvarspec == NULL) {
       Fsm_MgrSetInvarspecBDD(fsmMgr, NULL);
@@ -12290,9 +12702,6 @@ invarDecompVerif(
 
   }
 
-  if (opt->pre.performAbcOpt > 1) {
-    int ret = Fsm_MgrAbcReduceMulti(fsmMgr, 0.99);
-  }
   //  lemmasSteps = 2;
   lemmasSteps = opt->mc.lemmas;
 
@@ -12301,6 +12710,12 @@ invarDecompVerif(
   }
 
   Ddi_Free(invar);
+
+  if (opt->pre.performAbcOpt == 2) {
+    //  int ret = Fsm_MgrAbcReduce(fsmMgr, 0.99);
+    // folding/unfolding to be fixed in ...Multi
+    int ret = Fsm_MgrAbcReduceMulti(fsmMgr, 0.99);
+  }
 
   opt->stats.setupTime = util_cpu_time();
 
@@ -12355,7 +12770,7 @@ invarDecompVerif(
 
     if (v_i == pvarPs) {
       iProp = i;
-    }
+    } 
     if (v_i == cvarPs) {
       iConstr = i;
     }
@@ -12486,10 +12901,10 @@ invarDecompVerif(
   bmcTimeLimit = opt->mc.decompTimeLimit;
 
   doRunBdd = !opt->mc.aig;
-  doRunItp = opt->mc.aig;
+  doRunItp = opt->mc.aig && (opt->mc.bmc < 0);
   doRunBmc = opt->mc.bmc >= 0;
   doRunPdr = opt->mc.pdr;
-
+  
   if (doRunPdr) {
     doRunItp = 0;
   }
@@ -12600,6 +13015,43 @@ invarDecompVerif(
     FbvSetTravMgrOpt(travMgrAig, opt);
     FbvSetTravMgrFsmData(travMgrAig, fsmMgr2);
     delta = Fsm_MgrReadDeltaBDD(fsmMgr2);
+
+    if (k==0 && (opt->trav.abstrRefLoad != NULL)) {
+      Ddi_Vararray_t *refinedVars = NULL;
+      if (strcmp(opt->trav.abstrRefLoad,"cuts")==0) {
+        refinedVars = Ddi_VararrayAlloc(ddiMgr, 0);
+        for (int i=0; i<Ddi_VararrayNum(ps); i++) {
+          Ddi_Var_t *v = Ddi_VararrayRead(ps,i);
+          char *search = "retime_CUT";
+          if (strncmp(Ddi_VarName(v),search,strlen(search))==0)
+            Ddi_VararrayInsertLast(refinedVars,v);
+          else {
+            search = "PDT_BDD_INVAR";
+            if (strncmp(Ddi_VarName(v),search,strlen(search))==0)
+              Ddi_VararrayInsertLast(refinedVars,v);
+          }
+        }
+      }
+      else {
+        refinedVars = Ddi_VararrayLoad (ddiMgr, opt->trav.abstrRefLoad, NULL);
+      }
+      if (refinedVars!=NULL) {
+        Ddi_Varsetarray_t *abstrRefRefinedVars = Ddi_VarsetarrayAlloc(ddiMgr, 2);
+        Ddi_Varset_t *rv = Ddi_VarsetMakeFromArray(refinedVars);
+        Ddi_VarsetarrayWrite(abstrRefRefinedVars,0,rv);
+        Ddi_VarsetarrayWrite(abstrRefRefinedVars,1,NULL);
+        Pdtutil_VerbosityMgrIf(ddiMgr, Pdtutil_VerbLevelUsrMax_c) {
+          fprintf(dMgrO(ddiMgr),
+                  "Abstr Ref: loaded %d refined vars\n", Ddi_VarsetNum(rv));
+        }
+        Trav_MgrSetAbstrRefRefinedVars(travMgrAig, abstrRefRefinedVars);
+        Ddi_Free(abstrRefRefinedVars);
+        Ddi_Free(rv);
+        Ddi_Free(refinedVars);
+      }
+    }
+  
+
 
     if (rplusRings!=NULL) {
       Trav_MgrSetNewi(travMgrAig, rplusRings);
@@ -12754,12 +13206,24 @@ invarDecompVerif(
               
             if (lookBwd && jj >= 1) {
               int fullTarget = 0;
+              if (!doRunItp && opt->mc.gfp > 0) {
+                if (fromRings!=NULL) {
+                  Trav_MgrSetNewi(travMgrAig,fromRings);
+                }
+                Trav_TravSatItpGfp(travMgrAig,fsmMgr,opt->mc.gfp,
+                         1/*doStrengthen*/,opt->trav.countReached);
+              }
               Ddi_Bdd_t *inWindow =
                 Trav_DeepestRingCex(travMgrAig, fsmMgr2,
                   myTarget, invarspec, fromRings, jj, genCubes,
                                     hintVars,NULL /*&fullTarget*/,
+                                    doRunItp,
                                     opt->pre.specSubsetByAntecedents
                                     );
+              if (!doRunItp && opt->mc.gfp > 0) {
+                Ddi_Free(fromRings);
+                fromRings = Ddi_BddarrayDup(Trav_MgrReadNewi(travMgrAig));
+              }
               opt->trav.abstrRef = Trav_MgrReadAbstrRef(travMgrAig);
               if (inWindow != NULL) {
                 Ddi_Free(myWindow);
@@ -13234,12 +13698,12 @@ invarDecompVerif(
         Ddi_Var_t *v_j = Ddi_VararrayRead(ps2, j);
 
         if (v_j == cvarPs) {
-          iConstr2 = j;
+          iConstr2 = j; break;
         }
       }
       Pdtutil_Assert(iConstr2 >= 0, "missing constr in delta");
       deltaConstr = Ddi_BddarrayRead(delta, iConstr2);
-      if (useRplus) {
+      if (useRplusAsConstr) {
         Ddi_BddAndAcc(deltaConstr, myInvar);
         Fsm_MgrSetConstraintBDD(fsmMgr2,myInvar);
       }
@@ -13425,7 +13889,9 @@ invarDecompVerif(
         }
       }
 
-      //      Ddi_Free(care);
+      if (!useRplusAsCareWithItp)
+        Ddi_Free(care);
+
       if (fromRings != NULL) {
         //        Ddi_Free(care);
         for (jj = 1; jj < Ddi_BddarrayNum(fromRings); jj++) {
@@ -15563,7 +16029,7 @@ coiSccInfoQuit(
   SeeAlso     []
 ******************************************************************************/
 static Ddi_Varsetarray_t *
-computeFsmCoiVars1(
+computeFsmCoiRings(
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t * p,
   Ddi_Varset_t * extraVars,
@@ -15572,7 +16038,7 @@ computeFsmCoiVars1(
 )
 {
   Ddi_Varsetarray_t *coirings;
-  Ddi_Varset_t *ps, *ns, *supp, *cone, *New, *newnew;
+  Ddi_Varset_t *ps, *ns, *supp, *cone, *New, *newNew;
   Ddi_Bddarray_t *delta;
   Ddi_Vararray_t *psv;
   Ddi_Vararray_t *nsv;
@@ -15629,56 +16095,46 @@ computeFsmCoiVars1(
 
   j = 0;
 
-  while (((j++ < maxIter) || (maxIter <= 0)) && (!Ddi_VarsetIsVoid(New))) {
+  newNew = Ddi_VarsetDup(New);
+  
+  while ((j++ < maxIter) || ((maxIter <= 0)) && (!Ddi_VarsetIsVoid(newNew))) {
 
+    Ddi_Free(newNew);
     if (Ddi_VarsetIsArray(New)) {
       Ddi_VarsetSetArray(cone);
     }
     Ddi_VarsetUnionAcc(cone, New);
-    Ddi_VarsetarrayInsertLast(coirings, cone);
+    Ddi_VarsetarrayInsertLast(coirings, New);
     Ddi_VarsetSwapVarsAcc(New, psv, nsv);
-    newnew = Ddi_VarsetVoid(ddiMgr);
 
     //      fprintf(stdout, "NNN: %d\n", j);
     //  Ddi_VarsetPrint(New,0,0,stdout);
 
-    for (i = 0; i < np; i++) {
-      Ddi_Varset_t *common;
-
-      supp = Ddi_VarsetarrayRead(range, i);
-      if (Ddi_VarsetIsArray(New)) {
-        Ddi_VarsetSetArray(supp);
-      }
-      common = Ddi_VarsetIntersect(supp, New);
-      // fprintf(stdout, "SSS: %d\n", i);
-      // Ddi_VarsetPrint(supp,0,0,stdout);
-      if (!Ddi_VarsetIsVoid(common)) {
-#if 0
-        if ((opt->pre.coiSets != NULL) && (opt->pre.coiSets[i] != NULL)) {
-          Ddi_VarsetUnionAcc(cone, opt->pre.coiSets[i]);
-        } else
-#endif
-        {
-          //        fprintf(stdout, "CCC: %d\n", i);
-          if (Ddi_VarsetIsArray(Ddi_VarsetarrayRead(domain, i))) {
-            Ddi_VarsetSetArray(newnew);
-          }
-          if (Ddi_VarsetIsArray(newnew)) {
-            Ddi_VarsetSetArray(Ddi_VarsetarrayRead(domain, i));
-          }
-          Ddi_VarsetUnionAcc(newnew, Ddi_VarsetarrayRead(domain, i));
-          //        printf("I: %d - ", i);
-          //      Ddi_VarsetPrint(Ddi_VarsetarrayRead(domain,i),0,NULL,stdout);
-        }
-      }
-      Ddi_Free(common);
-    }
+    Ddi_VarsetWriteMark (ps, 0);
+    Ddi_VarsetWriteMark (ns, 0);
+    Ddi_VarsetWriteMark (New, 1);
     Ddi_Free(New);
-    if (Ddi_VarsetIsArray(cone)) {
-      Ddi_VarsetSetArray(newnew);
+    New = Ddi_VarsetVoid(ddiMgr);
+    
+    for (i = 0; i < np; i++) {
+      Ddi_Var_t *ns_i = Ddi_VararrayRead(nsv,i);
+      if (Ddi_VarReadMark(ns_i) > 0) {
+        supp = Ddi_VarsetarrayRead(domain, i);
+        Ddi_VarsetWriteMark (supp, 1);
+      }
     }
-    New = Ddi_VarsetDiff(newnew, cone);
-    Ddi_Free(newnew);
+    Ddi_VarsetWriteMark (ns, 0);
+    
+    for (i = 0; i < np; i++) {
+      Ddi_Var_t *ps_i = Ddi_VararrayRead(psv,i);
+      if (Ddi_VarReadMark(ps_i) > 0) {
+        Ddi_VarsetAddAcc(New,ps_i);
+      }
+    }
+
+    newNew = Ddi_VarsetDiff(New,cone);
+    
+    Ddi_VarsetWriteMark (ps, 0);
 
     Pdtutil_VerbosityLocal(verbosityLocal, Pdtutil_VerbLevelUsrMax_c,
       fprintf(stdout, ".(%d)", Ddi_VarsetNum(cone))
@@ -15695,6 +16151,7 @@ computeFsmCoiVars1(
     );
 
   Ddi_Free(New);
+  Ddi_Free(newNew);
   Ddi_Free(domain);
   Ddi_Free(range);
   Ddi_Free(ps);
@@ -16119,7 +16576,7 @@ InsertCutLatches(
   }
 
   if (useXors) {
-    Ddi_Bddarray_t *xors = Ddi_AigarrayFindXors(delta, ps);
+    Ddi_Bddarray_t *xors = Ddi_AigarrayFindXors(delta, ps, 0);
     if (xors != NULL) {
       Ddi_BddarrayAppend(cuts,xors);
       Ddi_Free(xors);
@@ -17053,9 +17510,12 @@ fsmConstReduction(
   }
   Ddi_BddSetAig(reached);
 
+  substV = Ddi_VararrayAlloc(ddiMgr, 0);
+  substF = Ddi_BddarrayAlloc(ddiMgr, 0);
   do {
     addStub = 0;
     n = Ddi_BddarrayNum(delta);
+
     for (i = n - 1; i >= 0; i--) {
       Ddi_Var_t *pv_i = Ddi_VararrayRead(ps, i);
       Ddi_Bdd_t *d_i = Ddi_BddarrayRead(delta, i);
@@ -17102,6 +17562,8 @@ fsmConstReduction(
 #else
           Ddi_BddCofactorAcc(d_i, pv_i, isOne);
 #endif
+          Ddi_VararrayInsertLast(substV, pv_i);
+          Ddi_BddarrayInsertLast(substF, lit);
           nconst++;
         }
         Ddi_Free(lit);
@@ -17129,7 +17591,7 @@ fsmConstReduction(
       Pdtutil_WresIncrInitStubSteps(1);
     }
   } while (addStub);
-
+  
   Ddi_Free(reached);
 
   n = Ddi_BddarrayNum(delta);
@@ -17139,14 +17601,16 @@ fsmConstReduction(
       fprintf(stdout, "Found %d Constants; ", nconst);
       fprintf(stdout, "Reduced Delta: Size=%d; #Partitions=%d.\n",
         Ddi_BddarraySize(delta), n));
+    Ddi_Bdd_t *eq = Ddi_BddMakeEq(substV,substF);
+    Fsm_MgrAddLatchEqClassesBDD(fsmMgr,eq);
+    Ddi_Free(eq);
+    Ddi_Bdd_t *r = Fsm_MgrReadReachedBDD(fsmMgr);
+    if (r!=NULL)
+      Ddi_BddComposeAcc(r, substV, substF);      
   }
 
-  sizeA = Pdtutil_Alloc(int,
-    n
-  );
-  enEq = Pdtutil_Alloc(int,
-    n
-  );
+  sizeA = Pdtutil_Alloc(int,n);
+  enEq = Pdtutil_Alloc(int,n);
 
   for (i = 0; i < n; i++) {
     Ddi_Bdd_t *d_i = Ddi_BddarrayRead(delta, i);
@@ -17165,6 +17629,8 @@ fsmConstReduction(
     }
   }
 
+  Ddi_Free(substV);
+  Ddi_Free(substF);
   substV = Ddi_VararrayAlloc(ddiMgr, 0);
   substF = Ddi_BddarrayAlloc(ddiMgr, 0);
 
@@ -17297,6 +17763,12 @@ fsmConstReduction(
     }
     Ddi_AigarrayComposeNoMultipleAcc(delta, substV, substF);
     Ddi_AigarrayComposeNoMultipleAcc(lambda, substV, substF);
+    Ddi_Bdd_t *eq = Ddi_BddMakeEq(substV,substF);
+    Fsm_MgrAddLatchEqClassesBDD(fsmMgr,eq);
+    Ddi_Free(eq);
+    Ddi_Bdd_t *r = Fsm_MgrReadReachedBDD(fsmMgr);
+    if (r!=NULL)
+      Ddi_BddComposeAcc(r, substV, substF);      
   }
 
   if (neq > 0) {
@@ -18320,7 +18792,7 @@ FbvTargetEn(
   Ddi_Free(psVars);
 
   Fsm_FsmFoldProperty(fsmFsm, 0, 0, 1);
-  Fsm_FsmFoldConstraint(fsmFsm);
+  Fsm_FsmFoldConstraint(fsmFsm, 0);
   Fsm_FsmWriteToFsmMgr(fsmMgr, fsmFsm);
   Fsm_FsmFree(fsmFsm);
 
@@ -19577,6 +20049,20 @@ FbvSetTravMgrOpt(
   Trav_MgrSetTernaryAbstr(travMgr, opt->trav.ternaryAbstr);
   Trav_MgrSetAbstrRef(travMgr, opt->trav.abstrRef);
   Trav_MgrSetAbstrRefGla(travMgr, opt->trav.abstrRefGla);
+  Trav_MgrSetOption(travMgr, Pdt_TravAbstrRefItp_c, inum,
+    opt->trav.abstrRefItp);
+  Trav_MgrSetOption(travMgr, Pdt_TravAbstrRefItpMaxIter_c, inum,
+    opt->trav.abstrRefItpMaxIter);
+  Trav_MgrSetOption(travMgr, Pdt_TravTrAbstrItp_c, inum,
+    opt->trav.trAbstrItp);
+  Trav_MgrSetOption(travMgr, Pdt_TravTrAbstrItpMaxFwdStep_c, inum,
+    opt->trav.trAbstrItpMaxFwdStep);
+  Trav_MgrSetOption(travMgr, Pdt_TravTrAbstrItpLoad_c, pchar,
+    opt->trav.trAbstrItpLoad);
+  Trav_MgrSetOption(travMgr, Pdt_TravTrAbstrItpStore_c, pchar,
+    opt->trav.trAbstrItpStore);
+  Trav_MgrSetOption(travMgr, Pdt_TravStoreAbstrRefRefinedVars_c, pchar,
+    opt->trav.abstrRefStore);
   Trav_MgrSetInputRegs(travMgr, opt->trav.inputRegs);
   Trav_MgrSetSelfTuningLevel(travMgr, opt->trav.travSelfTuning);
 
@@ -19685,6 +20171,14 @@ FbvSetTravMgrOpt(
   Trav_MgrSetOption(travMgr, Pdt_TravPdrTimeLimit_c, inum,
     opt->expt.pdrTimeLimit);
 
+  /* bmc */
+  Trav_MgrSetOption(travMgr, Pdt_TravBmcItpRingsPeriod_c, inum,
+    opt->trav.bmcItpRingsPeriod);
+  Trav_MgrSetOption(travMgr, Pdt_TravBmcTrAbstrPeriod_c, inum,
+    opt->trav.bmcTrAbstrPeriod);
+  Trav_MgrSetOption(travMgr, Pdt_TravBmcTrAbstrInit_c, inum,
+    opt->trav.bmcTrAbstrInit);
+  
   /* tr */
   //Trav_MgrSetOption(travMgr, Pdt_TravTrProfileMethod_c, inum, opt->trav.???);
   //Trav_MgrSetOption(travMgr, Pdt_TravTrProfileDynamicEnable_c, inum, opt->trav.???);
@@ -19797,6 +20291,7 @@ FbvSetTravMgrOpt(
   Trav_MgrSetOption(travMgr, Pdt_TravInvarFile_c, pchar, opt->trav.invarFile);
   Trav_MgrSetOption(travMgr, Pdt_TravStoreCnf_c, pchar, opt->trav.storeCNF);
   Trav_MgrSetOption(travMgr, Pdt_TravStoreCnfTr_c, inum, opt->trav.storeCNFTR);
+  Trav_MgrSetOption(travMgr, Pdt_TravItpStoreRings_c, pchar, opt->trav.itpStoreRings);
   Trav_MgrSetOption(travMgr, Pdt_TravStoreCnfMode_c, inum,
     (int)opt->trav.storeCNFmode);
   Trav_MgrSetOption(travMgr, Pdt_TravStoreCnfPhase_c, inum,
@@ -19871,6 +20366,7 @@ FbvFsmCheckComposePi(
   Ddi_Free(piv);
   Ddi_Free(substVar);
   Ddi_Free(substFunc);
+  return 0;
 }
 
 /**Function*******************************************************************
@@ -21308,6 +21804,89 @@ quitMem:
   SideEffects []
   SeeAlso     []
 ******************************************************************************/
+void
+FbvTask(
+  Fbv_Globals_t * opt
+)
+{
+  Ddi_Mgr_t *ddiMgr;
+
+  ddiMgr = Ddi_MgrInit("DDI_manager", NULL, 0, DDI_UNIQUE_SLOTS,
+                       DDI_CACHE_SLOTS * 10, 0, -1, -1);
+
+  if (((Pdtutil_VerbLevel_e) opt->verbosity) >= Pdtutil_VerbLevelNone_c &&
+      ((Pdtutil_VerbLevel_e) opt->verbosity) <= Pdtutil_VerbLevelSame_c) {
+    Ddi_MgrSetVerbosity(ddiMgr, Pdtutil_VerbLevel_e(opt->verbosity));
+  }
+
+  Ddi_AigInit(ddiMgr, 100);
+
+  Ddi_MgrSiftEnable(ddiMgr, Ddi_ReorderingMethodString2Enum("sift"));
+  Ddi_MgrSetSiftThresh(ddiMgr, opt->ddi.siftTh);
+
+  Ddi_MgrSetAigCnfLevel(ddiMgr, opt->ddi.aigCnfLevel);
+  Ddi_MgrSetAigRedRemLevel(ddiMgr, opt->ddi.aigRedRem);
+  Ddi_MgrSetAigRedRemMaxCnt(ddiMgr, opt->ddi.aigRedRemPeriod);
+  Ddi_MgrSetAigAbcOptLevel(ddiMgr, opt->common.aigAbcOpt);
+
+  Ddi_MgrSetAigItpAbc(ddiMgr, opt->ddi.itpAbc);
+  Ddi_MgrSetAigItpCore(ddiMgr, opt->ddi.itpCore);
+  Ddi_MgrSetAigItpMem(ddiMgr, opt->ddi.itpMem);
+  Ddi_MgrSetAigItpOpt(ddiMgr, opt->ddi.itpOpt);
+  Ddi_MgrSetAigItpStore(ddiMgr, opt->ddi.itpStore);
+  Ddi_MgrSetAigItpPartTh(ddiMgr, opt->ddi.itpPartTh);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpActiveVars_c, inum, opt->ddi.itpActiveVars);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpStoreTh_c, inum, opt->ddi.itpStoreTh);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpAigCore_c, inum, opt->ddi.itpAigCore);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpTwice_c, inum, opt->ddi.itpTwice);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpIteOptTh_c, inum, opt->ddi.itpIteOptTh);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpStructOdcTh_c, inum,
+                   opt->ddi.itpStructOdcTh);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiNnfClustSimplify_c, inum,
+                   opt->ddi.nnfClustSimplify);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompute_c, inum, opt->ddi.itpCompute);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpDrup_c, inum, opt->ddi.itpDrup);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpCompact_c, inum, opt->ddi.itpCompact);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpClust_c, inum, opt->ddi.itpClust);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpNorm_c, inum, opt->ddi.itpNorm);
+  Ddi_MgrSetOption(ddiMgr, Pdt_DdiItpSimp_c, inum, opt->ddi.itpSimp);
+
+
+  char **argv = opt->mc.task;
+  char *task = argv[0]; argv++;
+  if (strcmp(task,"op")==0) {
+    char *op = argv[0]; argv++;
+    Ddi_Bdd_t *op0, *op1, *res;
+    op0 = Ddi_AigNetLoadAiger(ddiMgr, NULL, argv[0]);
+    op1 = Ddi_AigNetLoadAiger(ddiMgr, NULL, argv[1]);
+    if (strcmp(op,"and")==0) {
+      res = Ddi_BddAnd(op0,op1);
+    }
+    else if (strcmp(op,"or")==0) {
+      res = Ddi_BddOr(op0,op1);
+    }
+    Pdtutil_VerbosityMgrIf(ddiMgr, Pdtutil_VerbLevelUsrMax_c) {
+      fprintf(dMgrO(ddiMgr),
+              "op done: |%d| %s |%d| -> |%d|\n",
+              Ddi_BddSize(op0), op, Ddi_BddSize(op1), Ddi_BddSize(res));
+    }
+    Ddi_AigNetStoreAiger(res, 0, argv[2]);
+    Ddi_Free(op0);
+    Ddi_Free(op1);
+    Ddi_Free(res);
+  }
+
+  Ddi_MgrQuit(ddiMgr);
+  exit(8);
+}
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
 Pdtutil_OptList_t *
 FbvOpt2OptList(
   Fbv_Globals_t * opt
@@ -21523,7 +22102,7 @@ FbvOpt2OptList(
   opt->trav.autoHint = 0;
   opt->mc.decompTimeLimit = 2000.0;
   opt->mc.abcOptFilename = NULL;
-  opt->pre.speculateEqProp = 1;
+  opt->pre.speculateEqProp = 0;
 
   /* fsm opt on FILE */
 
@@ -21662,8 +22241,11 @@ FbvOpt2OptList(
   opt->trav.approxTrClustFile = NULL;
   opt->tr.manualTrDpartFile = NULL;
   opt->fsm.manualAbstr = NULL;
+  opt->fsm.writeRetimeCut = NULL;
   opt->trav.hintsFile = NULL;
   opt->trav.invarFile = NULL;
+  opt->trav.writeInvar = NULL;
+  opt->trav.writeProof = NULL;
   opt->mc.invSpec = NULL;
   opt->mc.ctlSpec = NULL;
   opt->trav.rPlus = NULL;
@@ -21754,7 +22336,7 @@ ddiOpt2OptList(
   Pdtutil_OptListIns(pkgOpt, eDdiOpt, Pdt_DdiItpMap_c, inum, opt->ddi.itpMap);
   Pdtutil_OptListIns(pkgOpt, eDdiOpt, Pdt_DdiItpStore_c, pchar,
     opt->ddi.itpStore);
-  Pdtutil_OptListIns(pkgOpt, eDdiOpt, Pdt_DdiItpLoad_c, inum,
+  Pdtutil_OptListIns(pkgOpt, eDdiOpt, Pdt_DdiItpLoad_c, pchar,
     opt->ddi.itpLoad);
   Pdtutil_OptListIns(pkgOpt, eDdiOpt, Pdt_DdiItpDrup_c, inum,
     opt->ddi.itpDrup);
@@ -21883,6 +22465,18 @@ travOpt2OptList(
     opt->trav.abstrRef);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravAbstrRefGla_c, inum,
     opt->trav.abstrRefGla);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravAbstrRefItp_c, inum,
+    opt->trav.abstrRefItp);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravAbstrRefItpMaxIter_c, inum,
+    opt->trav.abstrRefItpMaxIter);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravTrAbstrItp_c, inum,
+    opt->trav.trAbstrItp);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravTrAbstrItpMaxFwdStep_c, inum,
+    opt->trav.trAbstrItpMaxFwdStep);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravTrAbstrItpLoad_c, pchar,
+    opt->trav.trAbstrItpLoad);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravTrAbstrItpStore_c, pchar,
+    opt->trav.trAbstrItpStore);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravInputRegs_c, inum,
     opt->trav.inputRegs);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravSelfTuning_c, inum,
@@ -21958,6 +22552,8 @@ travOpt2OptList(
     opt->trav.itpStrengthen);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpRpm_c, inum,
     opt->trav.itpRpm);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpStoreRings_c, pchar,
+    opt->trav.itpStoreRings);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpTimeLimit_c, inum,
     opt->expt.itpTimeLimit);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpPeakAig_c, inum,
@@ -22168,6 +22764,15 @@ travOpt2OptList(
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravMaxCnfLength_c, inum,
     opt->trav.maxCNFLength);
 
+  /* bmc */
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravBmcItpRingsPeriod_c, inum,
+    opt->trav.bmcItpRingsPeriod);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravBmcTrAbstrPeriod_c, inum,
+    opt->trav.bmcTrAbstrPeriod);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravBmcTrAbstrInit_c, inum,
+    opt->trav.bmcTrAbstrInit);
+
+  
   return pkgOpt;
 }
 
@@ -22250,6 +22855,7 @@ new_settings(
 
   opt->verbosity = 0;
   opt->expName = NULL;
+  opt->mc.task = NULL;
   opt->mc.strategy = NULL;
   opt->expt.expertArgv = NULL;
   opt->expt.expertArgc = 0;
@@ -22290,7 +22896,7 @@ new_settings(
   opt->ddi.itpMem = 4;
   opt->ddi.itpMap = -1;
   opt->ddi.itpStore = NULL;
-  opt->ddi.itpLoad = 0;
+  opt->ddi.itpLoad = NULL;
   opt->ddi.itpDrup = 0;
   opt->ddi.itpCompute = 0;
   opt->ddi.itpIteOptTh = 50000;
@@ -22309,6 +22915,7 @@ new_settings(
    *  fsm options
    */
 
+  opt->fsm.insertCutLatches = -1;
   opt->fsm.cutAtAuxVar = -1;
   opt->fsm.cut = -1;
   opt->fsm.useAig = 0;
@@ -22366,6 +22973,14 @@ new_settings(
   opt->trav.ternaryAbstr = 0;
   opt->trav.abstrRef = 0;
   opt->trav.abstrRefGla = 0;
+  opt->trav.abstrRefItp = 0;
+  opt->trav.abstrRefItpMaxIter = 4;
+  opt->trav.trAbstrItp = 0;
+  opt->trav.trAbstrItpOpt = 0;
+  opt->trav.trAbstrItpFirstFwdStep = 0;
+  opt->trav.trAbstrItpMaxFwdStep = 0;
+  opt->trav.trAbstrItpLoad = NULL;
+  opt->trav.trAbstrItpStore = NULL;
   opt->trav.inputRegs = 0;
 
   opt->trav.itpBdd = 0;
@@ -22474,6 +23089,7 @@ new_settings(
   opt->trav.sort_for_bck = 1;
   opt->trav.univQuantifyTh = -1;
   opt->trav.trDpartVar = NULL;
+  opt->trav.checkProof = 0;
   opt->trav.wP = NULL;
   opt->trav.wR = NULL;
   opt->trav.wC = NULL;
@@ -22481,8 +23097,7 @@ new_settings(
   opt->trav.wU = NULL;
   opt->trav.wOrd = NULL;
   opt->trav.rPlus = NULL;
-
-
+  opt->trav.itpStoreRings = NULL;
 
   /*
    *  other options: TO BE MANAGED
@@ -22542,6 +23157,7 @@ new_settings(
   opt->mc.lemmas = -1;
   opt->mc.lazy = -1;
   opt->mc.gfp = 0;
+  opt->mc.exit_after_checkInv = 0;
   opt->mc.qbf = 0;
   opt->mc.diameter = -1;
   opt->mc.checkMult = 0;
@@ -22554,6 +23170,9 @@ new_settings(
   opt->trav.bmcStrategy = 1;
   opt->trav.interpolantBmcSteps = 0;
   opt->trav.bmcLearnStep = 4;
+  opt->trav.bmcItpRingsPeriod = 0;
+  opt->trav.bmcTrAbstrPeriod = 0;
+  opt->trav.bmcTrAbstrInit = 0;
 
   opt->mc.itpSeq = 0;
   opt->mc.itpSeqGroup = 0;
@@ -22592,7 +23211,7 @@ new_settings(
   opt->expt.expertLevel = 0;
   opt->mc.decompTimeLimit = 5000.0;
   opt->mc.abcOptFilename = NULL;
-  opt->pre.speculateEqProp = 1;
+  opt->pre.speculateEqProp = 0;
 
   /* fsm opt on FILE */
 
@@ -22718,8 +23337,11 @@ new_settings(
   opt->pre.thresholdCluster = 1;
   opt->tr.manualTrDpartFile = NULL;
   opt->fsm.manualAbstr = NULL;
+  opt->fsm.writeRetimeCut = NULL;
   opt->trav.hintsFile = NULL;
   opt->trav.invarFile = NULL;
+  opt->trav.writeInvar = NULL;
+  opt->trav.writeProof = NULL;
   opt->mc.invSpec = NULL;
   opt->mc.ctlSpec = NULL;
   opt->mc.rInit = NULL;
@@ -22770,17 +23392,22 @@ FbvDupSettings(
   opt->mc.nlambda = Pdtutil_StrDup(opt0->mc.nlambda);
   opt->mc.ninvar = Pdtutil_StrDup(opt0->mc.ninvar);
   opt->ddi.itpStore = Pdtutil_StrDup(opt0->ddi.itpStore);
+  opt->ddi.itpLoad = Pdtutil_StrDup(opt0->ddi.itpLoad);
   opt->trav.auxVarFile = Pdtutil_StrDup(opt0->trav.auxVarFile);
   opt->trav.bwdTrClustFile = Pdtutil_StrDup(opt0->trav.bwdTrClustFile);
   opt->trav.approxTrClustFile = Pdtutil_StrDup(opt0->trav.approxTrClustFile);
   opt->tr.manualTrDpartFile = Pdtutil_StrDup(opt0->tr.manualTrDpartFile);
   opt->fsm.manualAbstr = Pdtutil_StrDup(opt0->fsm.manualAbstr);
+  opt->fsm.writeRetimeCut = Pdtutil_StrDup(opt0->fsm.writeRetimeCut);
   opt->trav.hintsFile = Pdtutil_StrDup(opt0->trav.hintsFile);
   opt->trav.invarFile = Pdtutil_StrDup(opt0->trav.invarFile);
+  opt->trav.writeInvar = Pdtutil_StrDup(opt0->trav.writeInvar);
+  opt->trav.writeProof = Pdtutil_StrDup(opt0->trav.writeProof);
   opt->mc.invSpec = Pdtutil_StrDup(opt0->mc.invSpec);
   opt->mc.ctlSpec = Pdtutil_StrDup(opt0->mc.ctlSpec);
   opt->trav.rPlus = Pdtutil_StrDup(opt0->trav.rPlus);
   opt->trav.rPlusRings = Pdtutil_StrDup(opt0->trav.rPlusRings);
+  opt->trav.itpStoreRings = Pdtutil_StrDup(opt0->trav.itpStoreRings);
   opt->mc.rInit = Pdtutil_StrDup(opt0->mc.rInit);
   opt->trav.wP = Pdtutil_StrDup(opt0->trav.wP);
   opt->trav.wR = Pdtutil_StrDup(opt0->trav.wR);
@@ -22795,6 +23422,7 @@ FbvDupSettings(
   opt->trav.storeCNF = Pdtutil_StrDup(opt0->trav.storeCNF);
   opt->tr.en = Pdtutil_StrDup(opt0->tr.en);
   opt->pre.wrCoi = Pdtutil_StrDup(opt0->pre.wrCoi);
+  opt->mc.task = opt0->mc.task;
   opt->mc.strategy = Pdtutil_StrDup(opt0->mc.strategy);
 
   //opt->common.clk = NULL;
@@ -22829,12 +23457,16 @@ dispose_settings(
   Pdtutil_Free(opt->trav.approxTrClustFile);
   Pdtutil_Free(opt->tr.manualTrDpartFile);
   Pdtutil_Free(opt->fsm.manualAbstr);
+  Pdtutil_Free(opt->fsm.writeRetimeCut);
   Pdtutil_Free(opt->trav.hintsFile);
   Pdtutil_Free(opt->trav.invarFile);
   Pdtutil_Free(opt->mc.invSpec);
   Pdtutil_Free(opt->mc.ctlSpec);
   Pdtutil_Free(opt->trav.rPlus);
   Pdtutil_Free(opt->trav.rPlusRings);
+  Pdtutil_Free(opt->trav.itpStoreRings);
+  Pdtutil_Free(opt->trav.writeInvar);
+  Pdtutil_Free(opt->trav.writeProof);
   Pdtutil_Free(opt->mc.rInit);
   Pdtutil_Free(opt->trav.wP);
   Pdtutil_Free(opt->trav.wR);

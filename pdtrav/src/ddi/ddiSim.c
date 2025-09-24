@@ -2071,6 +2071,44 @@ Ddi_AigEvalVarSignatures (
   Description  []
   SideEffects  []
 ******************************************************************************/
+Ddi_Vararray_t *
+Ddi_GetSccLatches (
+  Ddi_SccMgr_t *sccMgr,
+  Ddi_Vararray_t *ps,
+  int sccBit
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(ps);
+  Ddi_Vararray_t *vars = Ddi_VararrayAlloc(ddm,0);
+  for (int i=0; i<Ddi_VararrayNum(ps); i++) {
+    if (sccMgr->mapLatches[i] == sccBit) {
+      Ddi_Var_t *ps_i = Ddi_VararrayRead(ps,i);
+      Ddi_VararrayInsertLast(vars,ps_i);
+    }
+  }
+
+  return vars;
+}
+
+/**Function********************************************************************
+  Synopsis     []
+  Description  []
+  SideEffects  []
+******************************************************************************/
+int
+Ddi_GetSccBitWithMaxLatches (
+  Ddi_SccMgr_t *sccMgr
+)
+{
+  return sccMgr->sccWithMaxLatches;
+}
+
+
+/**Function********************************************************************
+  Synopsis     []
+  Description  []
+  SideEffects  []
+******************************************************************************/
 Ddi_AigDynSignatureArray_t *
 Ddi_AigEvalVarSignaturesWithScc (
   Ddi_SccMgr_t *sccMgr,
@@ -2613,8 +2651,13 @@ Ddi_FsmSccTarjan (
     bAig_CacheAig(bmgr,varIndex) = bAig_NULL;
   }
 
+  int maxNumLatches = -1;
   for (i=currBit=0; i<sccMgr->nScc; i++) {
     if (sccMgr->sccLatchCnt[i]>0) {
+      if (sccMgr->sccLatchCnt[i]>maxNumLatches) {
+        sccMgr->sccWithMaxLatches = currBit;
+        maxNumLatches = sccMgr->sccLatchCnt[i];
+      }          
       sccMgr->mapSccBit[i] = currBit++;
     }
     else {
@@ -3968,6 +4011,7 @@ sccMgrAlloc(
   sccMgr->size1 = 0;
   sccMgr->size2 = 0;
   sccMgr->nLatches = Ddi_BddarrayNum(delta);
+  sccMgr->sccWithMaxLatches = -1;
   sccMgr->delta = delta;
   sccMgr->ps = ps;
   sccMgr->aigStack = bAigArrayAlloc();
@@ -4438,6 +4482,22 @@ Ddi_FindIte(
   Ddi_Vararray_t *ps,
   int threshold
 ) {
+  return Ddi_FindIteFull(fA,ps,NULL,threshold);
+}
+
+/**Function********************************************************************
+  Synopsis    [Looks for ITE constructs and tracks ENABLE signals]
+  Description [Looks for ITE constructs and tracks ENABLE signals]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bddarray_t *
+Ddi_FindIteFull(
+  Ddi_Bddarray_t *fA,
+  Ddi_Vararray_t *ps,
+  Ddi_Bddarray_t *iteArray,
+  int threshold
+) {
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(fA);
   bAig_Manager_t *bmgr = ddm->aig.mgr;
   bAig_array_t *visitedNodes = bAigArrayAlloc();
@@ -4560,6 +4620,11 @@ Ddi_FindIte(
 	default: Pdtutil_Assert(0,"wrong case");
 	}
 	if (1 || threshold<0) {
+          if (iteArray!=NULL) {
+            Ddi_Bdd_t *ite_i = Ddi_BddMakeFromBaig(ddm, baig);
+            Ddi_BddarrayInsertLast(iteArray,ite_i);
+            Ddi_Free(ite_i);
+          }
 	  Ddi_Bdd_t *en_i = Ddi_BddMakeFromBaig(ddm, en);
 	  int cnt = en>=max ? 0 : Pdtutil_MapInt2IntReadDir(mapEnableCnt, en);
 	  if (cnt<=0) {
@@ -4623,6 +4688,46 @@ Ddi_FindIte(
       }
     }  
   }
+
+  // counting sort by fanout
+  int n = Ddi_BddarrayNum(enables);
+  int *countArray = Pdtutil_Alloc(int,maxCnt+1);
+  int *enArray = Pdtutil_Alloc(int,n);
+  Ddi_Bddarray_t *newEnables = Ddi_BddarrayAlloc(ddm,n);
+  for (j=0; j<=maxCnt; j++) countArray[j]=0;
+
+  for (i=0; i<n; i++) {
+    Ddi_Bdd_t *en_i = Ddi_BddarrayRead(enables,i);
+    int ii = (int)Ddi_BddToBaig(en_i);
+    int cnt = Pdtutil_MapInt2IntReadDir(mapEnableCnt, ii);
+    Pdtutil_Assert(cnt>0&&cnt<=maxCnt,"wromng en count");
+    countArray[cnt]++;
+    enArray[i] = cnt;
+  }
+
+  /* multiple occourrences */
+  for (i=1; i<=maxCnt; i++) {
+    countArray[i] += countArray[i-1];
+  }
+
+  /* do sort */
+  for (i=n-1; i>=0; i--) {
+    j=--countArray[enArray[i]];
+    Pdtutil_Assert(j>=0 && j<n, "error in counting sort");
+    Pdtutil_Assert(Ddi_BddarrayRead(newEnables,j)==NULL,
+      "wrong index in counting sort");
+    Ddi_BddarrayWrite(newEnables,j,Ddi_BddarrayRead(enables,i));
+  }
+
+  /* rewrite original array reversing order */
+
+  for (i=0; i<n; i++) {
+    Ddi_BddarrayWrite(enables,n-i-1,Ddi_BddarrayRead(newEnables,i));
+  }
+
+  Ddi_Free(newEnables);
+  Pdtutil_Free(countArray);
+  Pdtutil_Free(enArray);
 
   printf("\nMax ENABLE control count: %d)\n", maxCnt);
   if (0 && (iMaxCnt >= 0)) {

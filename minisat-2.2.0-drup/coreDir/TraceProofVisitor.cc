@@ -1157,15 +1157,41 @@ namespace Minisat
     }
   }
 
-  static int proofResolveClauses(vec<Lit>& main,
+
+#pragma GCC push_options
+#pragma GCC optimize ("00")
+  
+  static void proofResolveStart(vec<Lit>& main,
+                               vec<lbool>& mark) {
+    int s=main.size();
+    int j=0;
+    for (j=0; j<s; j++) {
+      // reset var usage
+      //      static int cnt=0; cnt++;
+      Lit l_j = main[j];
+      Var v_j = var(l_j);
+      //      printf("j: %d, v_j: %d - s: %d - s-j: %d\n", j, v_j, s, s-j);
+      if (mark[v_j]!=l_Undef) {
+        // common literal
+        assert(mark[v_j]==l_True ? !sign(l_j) : sign(l_j));
+      }
+      mark[v_j] = sign(l_j) ? l_False : l_True;
+    }
+  }   
+
+  static void proofResolveClauses(vec<Lit>& main,
                                  vec<Lit>& other,
                                  Lit l,
                                  vec<lbool>& mark) {
     Var x = var(l);
-    for (int j = 0; j < other.size(); j++) {
+    int s=other.size();
+    int j=0;
+    for (j=0; j<s; j++) {
       // reset var usage
+      //      static int cnt=0; cnt++;
       Lit l_j = other[j];
       Var v_j = var(l_j);
+      //      printf("j: %d, v_j: %d - s: %d - s-j: %d\n", j, v_j, s, s-j);
       if (x != var_Undef && v_j == x) {
         // remove from array and skip
         assert(sign(l_j)!=sign(l));
@@ -1184,6 +1210,8 @@ namespace Minisat
     }
   }   
 
+#pragma GCC pop_options
+  
   //NB: call only after replay
   static int proofNodeSwapResolutions(ProofPdt& proofPdt,
                                       int i, bool doStrengthen) {
@@ -1285,7 +1313,7 @@ namespace Minisat
     resNodes[aId0].resolvents.copyTo(res);
 
     // start
-    proofResolveClauses(res, res, lit_Undef, mark);
+    proofResolveStart(res, mark);
 
     int nRemoved=0;    
     vec<bool> removed(pivots.size(),false);
@@ -1313,7 +1341,7 @@ namespace Minisat
         // take other branch - remove main
         proofResolveClearMarkNoCheck (mark,res);
         other.copyTo(res);
-        proofResolveClauses(res, res, lit_Undef, mark);
+        proofResolveStart(res, mark);
         antecedents[0] = aId;
         start_i = j+1; // skip up to here
         nRemoved = j+1;
@@ -1351,6 +1379,7 @@ namespace Minisat
     vec<lbool> mark(nVars,l_Undef);
     for(int i = 0; i < resNodes.size(); i++){
       if(resNodes[i].isOriginal()) continue;
+      //      printf("restruct: %d/%d\n", i, resNodes.size());
       totRemoved += proofNodeRestructProof(proofPdt,i,mark);
       if (i<(resNodes.size()-1) &&
           (resNodes[i].resolvents.size()==0)) {
@@ -1387,14 +1416,17 @@ namespace Minisat
     //Load original core clauses
     //    printf("CORE CLAUSES\n");
 
-    int nRemoved;
+    static int nRemoved;
     if (enSimplify) {
       nRemoved = proofCompactResolvents();
-      if (proofPdt.verbosity()>0)
-        printf("RES PROOF REMOVED %d redundant  literals\n",
-           nRemoved);
-      nRemoved = proofRestructProof(proofPdt, nVars());
-
+      if (nRemoved>0) {
+        if (proofPdt.verbosity()>0) {
+          printf("RES PROOF REMOVED %d redundant  literals\n",
+                 nRemoved);
+          printf("REMOVED: %d\n", nRemoved);
+        }
+        nRemoved = proofRestructProof(proofPdt, nVars());
+      }
       if (pdtChecks) proofCheck();
     }
     if (enSimplify) {
@@ -1829,7 +1861,6 @@ namespace Minisat
     return nFound;
   }
 
-
   //NB: call only after replay
   int Solver::proofNodeCheckAntecedents(int i,
                                         vec<lbool>& mark,
@@ -1850,15 +1881,17 @@ namespace Minisat
         }
       }
     }
+   
     // resolutions
     int aId0 = resNodes[i].antecedents[0];
     vec<Lit> res;
     vec<Lit>& pivots = resNodes[i].pivots;
     vec<int>& antecedents = resNodes[i].antecedents;
+    res.clear();
     resNodes[aId0].resolvents.copyTo(res);
 
     // start
-    proofResolveClauses(res, res, lit_Undef, mark);
+    proofResolveStart(res, mark);
     for(int j=0; j<pivots.size(); j++) {
       Lit p = pivots[j];
       Var v = var(p);
@@ -1881,7 +1914,7 @@ namespace Minisat
     assert(ok);
     return (ok==true);
   }
-
+  
   //NB: call only after replay
   static int proofNodeCompactResolvents(ProofPdt& proofPdt,
       int i, vec<bool>& mark) {

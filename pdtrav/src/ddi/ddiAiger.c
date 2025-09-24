@@ -225,13 +225,9 @@ Ddi_AigNetLoadAiger(
 }
 
 /**Function********************************************************************
-
   Synopsis           []
-
   Description        []
-
   SideEffects        []
-
   SeeAlso            []
 
 ******************************************************************************/
@@ -239,6 +235,24 @@ Ddi_Bddarray_t *
 Ddi_AigarrayNetLoadAiger(
   Ddi_Mgr_t *dd,
   Ddi_Vararray_t *vars,
+  char *filename                 /* IN: file name */
+)
+{
+  return Ddi_AigarrayNetLoadAigerMapVars(dd,vars,NULL,filename);
+}  
+
+/**Function********************************************************************
+  Synopsis           []
+  Description        []
+  SideEffects        []
+  SeeAlso            []
+
+******************************************************************************/
+Ddi_Bddarray_t *
+Ddi_AigarrayNetLoadAigerMapVars(
+  Ddi_Mgr_t *dd,
+  Ddi_Vararray_t *vars,
+  Ddi_Vararray_t *mapVars,
   char *filename                 /* IN: file name */
 )
 {
@@ -318,27 +332,34 @@ Ddi_AigarrayNetLoadAiger(
 
 
   /*------------------ Translate Array of Input Variables -------------------*/
-
+  
   /* GpC: force void input array when no input found */
-
   for (i=0; i<ni; i++) {
     unsigned lit = mgr->inputs[i].lit;
     int index, i1 = i+1;
     Ddi_Var_t *var;
     char *s, *name = aiger_get_symbol (mgr, lit);
 
-    if (name == NULL) {
-      sprintf(buf, "i%d", lit);
-      name = buf;
-    }
-
     Pdtutil_Assert(lit==2*i1,"Wrong variable id in AIGER manager");
 
-    for (s=name; *s!='\0'; s++) {
-      if (*s=='#' || *s==':' || *s=='(' || *s==')') *s='_';
+    if (mapVars == NULL || name!=NULL) {
+      if (name == NULL) {
+	Pdtutil_Assert(lit%2==0 && lit/2>0,"wrong aiger variable lit");
+	sprintf(buf, "i%d", lit/2-1);
+	name = buf;
+      }
+      
+      for (s=name; *s!='\0'; s++) {
+	if (*s=='#' || *s==':' || *s=='(' || *s==')') *s='_';
+      }
+      var = Ddi_VarFromName(dd,name);
     }
-
-    var = Ddi_VarFromName(dd,name);
+    else {
+      Pdtutil_Assert(Ddi_VararrayNum(mapVars)==ni,
+                     "wrong number of vars");
+      var = Ddi_VararrayRead(mapVars,i);
+    }
+    
     if (var==NULL) {
       var = Ddi_VarNew (dd);
       Ddi_VarAttachName(var,name);
@@ -426,8 +447,6 @@ Ddi_AigarrayNetLoadAiger(
 
   return (fA);
 }
-
-
 
 /**Function********************************************************************
 

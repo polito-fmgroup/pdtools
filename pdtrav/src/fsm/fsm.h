@@ -277,6 +277,12 @@ EXTERN Ddi_Bdd_t *Fsm_FsmReadFairness(
 EXTERN Ddi_Bdd_t *Fsm_FsmReadCex(
   Fsm_Fsm_t * fsmFsm
 );
+EXTERN Ddi_Bdd_t *Fsm_FsmReadLatchEqClasses(
+  Fsm_Fsm_t * fsmFsm
+);
+EXTERN Ddi_Bdd_t *Fsm_FsmReadConstrInvar(
+  Fsm_Fsm_t * fsmFsm
+);
 EXTERN Ddi_Bdd_t *Fsm_FsmReadInitStubConstraint(
   Fsm_Fsm_t * fsmFsm
 );
@@ -314,7 +320,8 @@ EXTERN void Fsm_FsmFoldInitWithPi(
   Fsm_Fsm_t * fsmFsm
 );
 EXTERN void Fsm_FsmFoldConstraint(
-  Fsm_Fsm_t * fsmFsm
+  Fsm_Fsm_t * fsmFsm,
+  int compl_invarspec
 );
 EXTERN void Fsm_FsmDeltaWithConstraint(
   Fsm_Fsm_t * fsmFsm
@@ -398,6 +405,14 @@ EXTERN void Fsm_FsmWriteCex(
   Fsm_Fsm_t * fsmFsm,
   Ddi_Bdd_t * cex
 );
+EXTERN void Fsm_FsmWriteLatchEqClasses(
+  Fsm_Fsm_t * fsmFsm,
+  Ddi_Bdd_t * lEq
+);
+EXTERN void Fsm_FsmWriteConstrInvar(
+  Fsm_Fsm_t * fsmFsm,
+  Ddi_Bdd_t * lEq
+);
 EXTERN void Fsm_FsmWriteSettings(
   Fsm_Fsm_t * fsmFsm,
   Pdtutil_List_t * settings
@@ -469,6 +484,7 @@ EXTERN int Fsm_MgrLoadAiger(
   Ddi_Mgr_t * dd,
   char *fileFsmName,
   char *fileOrdName,
+  Ddi_Vararray_t *mapVars,
   Pdtutil_VariableOrderFormat_e ordFileFormat
 );
 EXTERN int Fsm_AigsimCex(
@@ -495,6 +511,9 @@ EXTERN Fsm_Mgr_t *Fsm_MgrDupWithNewDdiMgrAligned(
   Fsm_Mgr_t * fsmMgr
 );
 EXTERN void Fsm_MgrAuxVarRemove(
+  Fsm_Mgr_t * fsmMgr
+);
+EXTERN void Fsm_MgrFold(
   Fsm_Mgr_t * fsmMgr
 );
 EXTERN void Fsm_MgrCoiReduction(
@@ -546,6 +565,12 @@ EXTERN Ddi_Bdd_t *Fsm_MgrReadCexBDD(
 EXTERN Ddi_Bdd_t *Fsm_MgrReadInitStubConstraintBDD(
   Fsm_Mgr_t * fsmMgr
 );
+EXTERN Ddi_Bdd_t *Fsm_MgrReadLatchEqClassesBDD(
+  Fsm_Mgr_t * fsmMgr
+);
+EXTERN Ddi_Bdd_t *Fsm_MgrReadConstrInvarBDD(
+  Fsm_Mgr_t * fsmMgr
+);
 EXTERN Ddi_Bdd_t *Fsm_MgrReadCareBDD(
   Fsm_Mgr_t * fsmMgr
 );
@@ -553,6 +578,9 @@ EXTERN Ddi_Bdd_t *Fsm_MgrReadInvarspecBDD(
   Fsm_Mgr_t * fsmMgr
 );
 EXTERN int Fsm_MgrReadIFoldedProp(
+  Fsm_Mgr_t * fsmMgr
+);
+EXTERN int Fsm_MgrReadIFoldedConstr(
   Fsm_Mgr_t * fsmMgr
 );
 EXTERN Ddi_Varsetarray_t *Fsm_MgrReadRetimedPis(
@@ -714,6 +742,19 @@ EXTERN void Fsm_MgrSetCexBDD(
 EXTERN void Fsm_MgrSetInitStubConstraintBDD(
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t * con
+);
+EXTERN void
+Fsm_MgrAddLatchEqClassesBDD(
+  Fsm_Mgr_t * fsmMgr,
+  Ddi_Bdd_t * lEq
+);
+EXTERN void Fsm_MgrSetLatchEqClassesBDD(
+  Fsm_Mgr_t * fsmMgr,
+  Ddi_Bdd_t * lEq
+);
+EXTERN void Fsm_MgrSetConstrInvarBDD(
+  Fsm_Mgr_t * fsmMgr,
+  Ddi_Bdd_t * cInv
 );
 EXTERN void Fsm_MgrSetConstraintBDD(
   Fsm_Mgr_t * fsmMgr,
@@ -959,6 +1000,11 @@ EXTERN int Fsm_MgrPMBuild(
   Fsm_Mgr_t * fsmMgr1,
   Fsm_Mgr_t * fsmMgr2
 );
+EXTERN Fsm_Mgr_t *
+Fsm_RetimeGateCuts(
+  Fsm_Mgr_t * fsmMgr,
+  int mode
+);
 EXTERN Fsm_Mgr_t *Fsm_RetimeForRACompute(
   Fsm_Mgr_t * fsmMgr,
   Fsm_Retime_t * retimeStrPtr
@@ -1034,6 +1080,8 @@ EXTERN Ddi_Bdd_t *Fsm_ReduceCegar(
 EXTERN int Fsm_RetimeMinreg(
   Fsm_Mgr_t * fsmMgr,
   Ddi_Bdd_t * care,
+  Ddi_Bddarray_t *retimeCutF,
+  Ddi_Vararray_t *retimeCutV,
   int strategy
 );
 EXTERN void Fsm_RetimeInitStub2Init(
@@ -1225,6 +1273,12 @@ EXTERN Fsm_Fsm_t *
 Fsm_FsmReduceEnable(
   Fsm_Fsm_t * fsmFsm,
   Ddi_Bddarray_t *enArray
+);
+EXTERN void
+Fsm_IsoMapLatches(
+  Fsm_Mgr_t * fsm1Mgr,
+  Fsm_Mgr_t * fsm2Mgr,
+  char *mapName
 );
 
 // TEST PURPOSES :: June '13

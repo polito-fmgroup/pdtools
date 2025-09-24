@@ -236,7 +236,7 @@ Pdtutil_WresNum(
 
       fd = open(buf, O_RDWR | O_CREAT, 0666);
       if (fd == -1) {
-        fd = open(buf, O_WRONLY | O_CREAT);
+        fd = open(buf, O_WRONLY | O_CREAT, 0666);
         n = -1;
         nr = nb;
       } else {
@@ -253,6 +253,10 @@ Pdtutil_WresNum(
         lseek(fd, 0, SEEK_SET);
         nw = write(fd, &num, (size_t) nb);
         close(fd);
+	if (nw != nb) {
+	  fprintf(stdout, "Error writing file %s\n", wRes);
+	  return 1;
+	}
       }
     }
   }
@@ -271,7 +275,7 @@ Pdtutil_WresNum(
 	fprintf(pdtResOut,"%s",buf); fflush(pdtResOut);
       }
       else {
-	fd = open(wRes, O_APPEND | O_WRONLY);
+	fd = open(wRes, O_APPEND | O_WRONLY, 0666);
 	if (fd == -1) {
 	  fprintf(stdout, "Error opening file %s\n", wRes);
 	  return 1;
@@ -3223,6 +3227,7 @@ Pdtutil_EqClassState_e Pdtutil_EqClassUpdate(Pdtutil_EqClasses_t * eqCl, int i
       return Pdtutil_EqClass_SameClass_c;
     }
   }
+  return Pdtutil_EqClass_SameClass_c;
 
 }
 
@@ -3552,6 +3557,8 @@ Pdtutil_OptListExtractHead(
   Pdtutil_OptItem_t item;
 
   if (list->N == 0) {
+    item.optTag.eListOpt = Pdt_ListNone_c;
+    item.optData.pvoid = NULL;
     return item;
   }
 
@@ -3588,9 +3595,12 @@ Pdtutil_OptListExtractTail(
 
   Pdtutil_OptItem_t item;
 
-  if (list->N == 0)
+  if (list->N == 0) {
+    item.optTag.eListOpt = Pdt_ListNone_c;
+    item.optData.pvoid = NULL;
     return item;
-
+  }
+  
   item = list->tail->item;
 
   if (list->head == list->tail) {
@@ -3897,7 +3907,7 @@ Pdtutil_InfoArraySort(
 char *
 Pdtutil_StrSkipPrefix(
   char *str,
-  char *prefix
+  const char *prefix
 )
 {
   int n = strlen(prefix);
@@ -3928,6 +3938,29 @@ Pdtutil_StrRemoveNumSuffix(
 
   if (str[k] == separator) {
     str[k] = '\0';
+    ret = atoi(str + k + 1);
+  }
+  return ret;
+}
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+int
+Pdtutil_StrGetNumSuffix(
+  char *str,
+  char separator
+)
+{
+  int k, n = strlen(str);
+  int ret = -1;
+
+  for (k = n - 1; k > 0 && str[k] != separator; k--) ;
+
+  if (str[k] == separator) {
     ret = atoi(str + k + 1);
   }
   return ret;

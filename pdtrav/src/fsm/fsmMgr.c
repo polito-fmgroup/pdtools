@@ -158,6 +158,14 @@ Fsm_MgrInit(
   fsmMgr->invarspec.name = NULL;
   fsmMgr->invarspec.string = NULL;
   fsmMgr->invarspec.bdd = NULL;
+
+  fsmMgr->latchEqClasses.name = NULL;
+  fsmMgr->latchEqClasses.string = NULL;
+  fsmMgr->latchEqClasses.bdd = NULL;
+  fsmMgr->constrInvar.name = NULL;
+  fsmMgr->constrInvar.string = NULL;
+  fsmMgr->constrInvar.bdd = NULL;
+
   fsmMgr->retimedPis = NULL;
   fsmMgr->initStubPiConstr = NULL;
   fsmMgr->pdtSpecVar = NULL;
@@ -409,6 +417,14 @@ Fsm_MgrQuit(
   Pdtutil_Free(fsmMgr->invarspec.name);
   Ddi_Free(fsmMgr->invarspec.bdd);
 
+  /* latch eq classes */
+  Pdtutil_Free(fsmMgr->latchEqClasses.name);
+  Ddi_Free(fsmMgr->latchEqClasses.bdd);
+
+    /* constr invar */
+  Pdtutil_Free(fsmMgr->constrInvar.name);
+  Ddi_Free(fsmMgr->constrInvar.bdd);
+
   Ddi_Free(fsmMgr->retimedPis);
   Ddi_Free(fsmMgr->initStubPiConstr);
   /* vars */
@@ -614,6 +630,14 @@ MgrDupIntern(
     Fsm_MgrSetInitStubConstraintBDD(fsmMgrNew,
       Fsm_MgrReadInitStubConstraintBDD(fsmMgr));
   }
+  if (Fsm_MgrReadLatchEqClassesBDD(fsmMgr) != NULL) {
+    Fsm_MgrSetLatchEqClassesBDD(fsmMgrNew,
+      Fsm_MgrReadLatchEqClassesBDD(fsmMgr));
+  }
+  if (Fsm_MgrReadConstrInvarBDD(fsmMgr) != NULL) {
+    Fsm_MgrSetConstrInvarBDD(fsmMgrNew,
+      Fsm_MgrReadConstrInvarBDD(fsmMgr));
+  }
   if (Fsm_MgrReadCareBDD(fsmMgr) != NULL) {
     Fsm_MgrSetCareBDD(fsmMgrNew, Fsm_MgrReadCareBDD(fsmMgr));
   }
@@ -773,6 +797,58 @@ Fsm_MgrAuxVarRemove(
 
   return;
 }
+
+
+/**Function********************************************************************
+
+  Synopsis    [Remove Auxiliary Variables from the FSM structure.]
+
+  Description [The same FSM is returned in any case.]
+
+  SideEffects [none]
+
+  SeeAlso     []
+
+******************************************************************************/
+
+void
+Fsm_MgrFold(
+  Fsm_Mgr_t * fsmMgr            /* FSM Manager */
+)
+{
+  Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
+  Fsm_FsmFoldProperty(fsmFsm,0,0,1);
+  Fsm_FsmFoldConstraint(fsmFsm, 1);
+  Fsm_FsmWriteToFsmMgr(fsmMgr,fsmFsm);
+
+  Fsm_FsmFree(fsmFsm);
+}
+
+/**Function********************************************************************
+
+  Synopsis    [Remove Auxiliary Variables from the FSM structure.]
+
+  Description [The same FSM is returned in any case.]
+
+  SideEffects [none]
+
+  SeeAlso     []
+
+******************************************************************************/
+
+void
+Fsm_MgrUnfold(
+  Fsm_Mgr_t * fsmMgr            /* FSM Manager */
+)
+{
+  Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
+  Fsm_FsmUnfoldProperty(fsmFsm, 1);
+  Fsm_FsmUnfoldConstraint(fsmFsm);
+  Fsm_FsmWriteToFsmMgr(fsmMgr,fsmFsm);
+
+  Fsm_FsmFree(fsmFsm);
+}
+
 
 /**Function********************************************************************
 
@@ -1743,6 +1819,34 @@ Fsm_MgrReadInitStubConstraintBDD(
 }
 
 /**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bdd_t *
+Fsm_MgrReadLatchEqClassesBDD(
+  Fsm_Mgr_t * fsmMgr
+)
+{
+  return (fsmMgr->latchEqClasses.bdd);
+}
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bdd_t *
+Fsm_MgrReadConstrInvarBDD(
+  Fsm_Mgr_t * fsmMgr
+)
+{
+  return (fsmMgr->constrInvar.bdd);
+}
+
+/**Function********************************************************************
 
   Synopsis    []
 
@@ -1820,6 +1924,26 @@ Fsm_MgrReadIFoldedProp(
 )
 {
   return (fsmMgr->iFoldedProp);
+}
+
+/**Function********************************************************************
+
+  Synopsis    []
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+******************************************************************************/
+
+int
+Fsm_MgrReadIFoldedConstr(
+  Fsm_Mgr_t * fsmMgr
+)
+{
+  return (fsmMgr->iFoldedConstr);
 }
 
 /**Function********************************************************************
@@ -2862,6 +2986,89 @@ Fsm_MgrSetInitStubConstraintBDD(
     fsmMgr->initStubConstraint.bdd = Ddi_BddCopy(fsmMgr->dd, con);
   } else {
     fsmMgr->initStubConstraint.bdd = NULL;
+  }
+
+  return;
+}
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+void
+Fsm_MgrSetLatchEqClassesBDD(
+  Fsm_Mgr_t * fsmMgr,
+  Ddi_Bdd_t * lEq
+)
+{
+  if (fsmMgr->latchEqClasses.bdd != NULL) {
+    Ddi_Free(fsmMgr->latchEqClasses.bdd);
+  }
+  if (lEq != NULL) {
+    fsmMgr->latchEqClasses.bdd = Ddi_BddCopy(fsmMgr->dd, lEq);
+  } else {
+    fsmMgr->latchEqClasses.bdd = NULL;
+  }
+
+  return;
+}
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+void
+Fsm_MgrAddLatchEqClassesBDD(
+  Fsm_Mgr_t * fsmMgr,
+  Ddi_Bdd_t * lEq
+)
+{
+  if (lEq == NULL)
+    return;
+
+  Ddi_Bdd_t *lEqCopy = Ddi_BddCopy(fsmMgr->dd, lEq);
+  
+  if (fsmMgr->latchEqClasses.bdd != NULL) {
+    Ddi_Bdd_t *eq0 = fsmMgr->latchEqClasses.bdd;
+    Ddi_Vararray_t *vars0 = Ddi_BddReadEqVars(eq0);
+    Ddi_Bddarray_t *subst0 = Ddi_BddReadEqSubst(eq0);
+    Ddi_Vararray_t *vars1 = Ddi_BddReadEqVars(lEqCopy);
+    Ddi_Bddarray_t *subst1 = Ddi_BddReadEqSubst(lEqCopy);
+    Ddi_VararrayAppend(vars1,vars0);
+    Ddi_BddarrayAppend(subst1,subst0);
+    Ddi_Bdd_t *eq1 = Ddi_BddMakeEq(vars1,subst1);
+    Ddi_Free(lEqCopy);
+    lEqCopy = eq1;
+  }
+  Ddi_Free(fsmMgr->latchEqClasses.bdd);
+  fsmMgr->latchEqClasses.bdd = lEqCopy;
+
+  return;
+}
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+void
+Fsm_MgrSetConstrInvarBDD(
+  Fsm_Mgr_t * fsmMgr,
+  Ddi_Bdd_t * cInv
+)
+{
+  if (fsmMgr->constrInvar.bdd != NULL) {
+    Ddi_Free(fsmMgr->constrInvar.bdd);
+  }
+  if (cInv != NULL) {
+    fsmMgr->constrInvar.bdd = Ddi_BddCopy(fsmMgr->dd, cInv);
+  } else {
+    fsmMgr->constrInvar.bdd = NULL;
   }
 
   return;

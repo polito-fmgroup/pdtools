@@ -468,9 +468,15 @@ Trav_PdrMgrInit(
   //  Ddi_Free(myInvar);
   // myInvar = Ddi_BddDup(invar);
   if (care != NULL && !Ddi_BddIsOne(care)) {
+    Ddi_Free(myInvar);
     myInvar = Ddi_BddDup(care);
   }
 #endif
+  if (Trav_MgrReadReached(travMgr) != NULL) {
+    Ddi_Free(myInvar);
+    myInvar = Ddi_BddDup(Trav_MgrReadReached(travMgr));
+  }
+
   Ddi_Free(myProp);
 
   //Allocate and initialize trav pdr manager
@@ -712,7 +718,8 @@ Trav_PdrMgrQuit(
 	rOut = Ddi_BddDup(Ddi_BddarrayRead(rings, fp_i));
       }
       else {
-	rOut = Ddi_BddMakeConstAig(ddm, 0);
+        int val = pdrMgr->nTimeFrames>0?0:1;
+	rOut = Ddi_BddMakeConstAig(ddm, val);
 	for (i = pdrMgr->nTimeFrames - 2; i > 0; i--) {
 	  tfAig = Ddi_BddarrayRead(rings, i);
 	  Ddi_BddOrAcc(rOut, tfAig);

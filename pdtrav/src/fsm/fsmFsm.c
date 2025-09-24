@@ -133,6 +133,8 @@ Fsm_FsmInit(
   fsmFsm->justice = NULL;
   fsmFsm->fairness = NULL;
   fsmFsm->initStubConstraint = NULL;
+  fsmFsm->latchEqClasses = NULL;
+  fsmFsm->constrInvar = NULL;
 
   fsmFsm->iFoldedProp = -1;
   fsmFsm->iFoldedConstr = -1;
@@ -262,6 +264,16 @@ FsmFsmDupIntern(
       Fsm_FsmReadInitStubConstraint(fsmFsm));
   }
 
+  if (Fsm_FsmReadLatchEqClasses(fsmFsm) != NULL) {
+    Fsm_FsmWriteLatchEqClasses(fsmFsmNew,
+      Fsm_FsmReadLatchEqClasses(fsmFsm));
+  }
+  
+  if (Fsm_FsmReadConstrInvar(fsmFsm) != NULL) {
+    Fsm_FsmWriteConstrInvar(fsmFsmNew,
+      Fsm_FsmReadConstrInvar(fsmFsm));
+  }
+  
   if (Fsm_FsmReadCex(fsmFsm) != NULL) {
     Fsm_FsmWriteCex(fsmFsmNew, Fsm_FsmReadCex(fsmFsm));
   }
@@ -428,6 +440,22 @@ Fsm_FsmReadInitStubConstraint(
 )
 {
   return (fsmFsm->initStubConstraint);
+}
+
+Ddi_Bdd_t *
+Fsm_FsmReadLatchEqClasses(
+  Fsm_Fsm_t * fsmFsm
+)
+{
+  return (fsmFsm->latchEqClasses);
+}
+
+Ddi_Bdd_t *
+Fsm_FsmReadConstrInvar(
+  Fsm_Fsm_t * fsmFsm
+)
+{
+  return (fsmFsm->constrInvar);
 }
 
 Ddi_Bdd_t *
@@ -667,6 +695,30 @@ Fsm_FsmWriteInitStubConstraint(
 }
 
 void
+Fsm_FsmWriteLatchEqClasses(
+  Fsm_Fsm_t * fsmFsm,
+  Ddi_Bdd_t * lEq
+)
+{
+  Ddi_Unlock(fsmFsm->latchEqClasses);
+  Ddi_Free(fsmFsm->latchEqClasses);
+  fsmFsm->latchEqClasses = Ddi_BddDup(lEq);
+  Ddi_Lock(fsmFsm->latchEqClasses);
+}
+
+void
+Fsm_FsmWriteConstrInvar(
+  Fsm_Fsm_t * fsmFsm,
+  Ddi_Bdd_t * cInv
+)
+{
+  Ddi_Unlock(fsmFsm->constrInvar);
+  Ddi_Free(fsmFsm->constrInvar);
+  fsmFsm->constrInvar = Ddi_BddDup(cInv);
+  Ddi_Lock(fsmFsm->constrInvar);
+}
+
+void
 Fsm_FsmWriteCex(
   Fsm_Fsm_t * fsmFsm,
   Ddi_Bdd_t * cex
@@ -809,6 +861,14 @@ Fsm_FsmMake(
   }
   if (Fsm_MgrReadFairnessBDD(fsmMgr) != NULL) {
     Fsm_FsmWriteFairness(fsmFsm, Fsm_MgrReadFairnessBDD(fsmMgr));
+  }
+
+  if (Fsm_MgrReadLatchEqClassesBDD(fsmMgr) != NULL) {
+    Fsm_FsmWriteLatchEqClasses(fsmFsm, Fsm_MgrReadLatchEqClassesBDD(fsmMgr));
+  }
+
+  if (Fsm_MgrReadConstrInvarBDD(fsmMgr) != NULL) {
+    Fsm_FsmWriteConstrInvar(fsmFsm, Fsm_MgrReadConstrInvarBDD(fsmMgr));
   }
 
   if (initStubConstraint == NULL) {
@@ -962,6 +1022,8 @@ Fsm_FsmWriteToFsmMgr(
   Fsm_MgrSetFairnessBDD(fsmMgr, Fsm_FsmReadFairness(fsmFsm));
   Fsm_MgrSetInitStubConstraintBDD(fsmMgr,
     Fsm_FsmReadInitStubConstraint(fsmFsm));
+  Fsm_MgrSetLatchEqClassesBDD(fsmMgr, Fsm_FsmReadLatchEqClasses(fsmFsm));
+  Fsm_MgrSetConstrInvarBDD(fsmMgr, Fsm_FsmReadConstrInvar(fsmFsm));
   Fsm_MgrSetInvarspecBDD(fsmMgr, Fsm_FsmReadInvarspec(fsmFsm));
 
   if (fsmFsm->iFoldedProp>0) {
@@ -1372,15 +1434,15 @@ Fsm_FsmFoldInit(
 
     if (var == cvarPs) {
       isPosition = nl - 1;
-      foldedConstr = isPosition;
+      foldedConstr = isPosition+1;
     } else if (var == pvarPs) {
       isPosition = nl - 1;
-      foldedConstr = isPosition;
+      foldedConstr = isPosition+1;
       if (nl > 1) {
         var = Ddi_VararrayRead(fsmFsm->ps, nl - 2);
         if (var == cvarPs) {
           isPosition = nl - 2;
-          foldedConstr = isPosition;
+          foldedConstr = isPosition+1;
         }
       }
     }
@@ -1440,7 +1502,9 @@ Fsm_FsmFoldInit(
     Ddi_Bdd_t *initStubConstr = fsmFsm->initStubConstraint;
 
     if (initStubConstr == NULL) {
+      Ddi_BddNotAcc(newDeltaLit);
       Ddi_BddOrAcc(constraint, newDeltaLit);
+      Ddi_BddNotAcc(newDeltaLit);
     } else {
       Ddi_Bdd_t *ddiNewITE = Ddi_BddIte(newDeltaLit,
         constraint, initStubConstr);
@@ -1878,7 +1942,8 @@ Fsm_FsmDeltaWithConstraint(
 
 void
 Fsm_FsmFoldConstraint(
-  Fsm_Fsm_t * fsmFsm
+  Fsm_Fsm_t * fsmFsm,
+  int compl_invarspec
 )
 {
 
@@ -1994,7 +2059,13 @@ Fsm_FsmFoldConstraint(
   }
 
   for (i = 0; i < Ddi_BddarrayNum(fsmFsm->lambda); i++) {
-    Ddi_BddAndAcc(Ddi_BddarrayRead(fsmFsm->lambda, i), newLambdaBdd);
+    if (compl_invarspec) {
+      Ddi_BddNotAcc(newLambdaBdd);
+      Ddi_BddOrAcc(Ddi_BddarrayRead(fsmFsm->lambda, i), newLambdaBdd);
+      Ddi_BddNotAcc(newLambdaBdd);
+    }
+    else 
+      Ddi_BddAndAcc(Ddi_BddarrayRead(fsmFsm->lambda, i), newLambdaBdd);
   }
 
   Ddi_Free(newLambdaBdd);
@@ -2111,8 +2182,10 @@ Fsm_FsmUnfoldProperty(
   iProp = fsmFsm->iFoldedProp;
   fsmFsm->iFoldedProp = -1;
 
-  if (unfoldLambda)
+  if (unfoldLambda) {
+    Ddi_BddarrayCofactorAcc(fsmFsm->lambda,cvarPs,1);
     Ddi_BddarrayComposeAcc(fsmFsm->lambda, ps, delta);
+  }
   if (fsmFsm->invarspec != NULL)
     Ddi_BddComposeAcc(fsmFsm->invarspec, ps, delta);
 
@@ -2278,7 +2351,18 @@ Fsm_FsmFree(
     Ddi_Unlock(fsmFsm->constraint);
     Ddi_Free(fsmFsm->constraint);
     Ddi_Unlock(fsmFsm->invarspec);
-    Ddi_Free(fsmFsm->invarspec);;
+    Ddi_Free(fsmFsm->invarspec);
+    Ddi_Unlock(fsmFsm->justice);
+    Ddi_Free(fsmFsm->justice);
+    Ddi_Unlock(fsmFsm->fairness);
+    Ddi_Free(fsmFsm->fairness);
+    Ddi_Unlock(fsmFsm->initStubConstraint);
+    Ddi_Free(fsmFsm->initStubConstraint);
+    Ddi_Unlock(fsmFsm->latchEqClasses);
+    Ddi_Free(fsmFsm->latchEqClasses);
+    Ddi_Unlock(fsmFsm->constrInvar);
+    Ddi_Free(fsmFsm->constrInvar);
+
     Pdtutil_ListFree(fsmFsm->settings);
     Pdtutil_ListFree(fsmFsm->stats);
 
@@ -2331,7 +2415,7 @@ Fsm_FsmAbcReduce(
     if (pUnfold)
       Fsm_FsmFoldProperty(fsmOpt, 0, 0);
     if (cUnfold)
-      Fsm_FsmFoldConstraint(fsmOpt);
+      Fsm_FsmFoldConstraint(fsmOpt, 0);
 
     for (i = 0; i < Ddi_BddarrayNum(fsmOpt->delta); i++) {
       Ddi_Bdd_t *d_i = Ddi_BddarrayRead(fsmOpt->delta, i);
@@ -2387,7 +2471,7 @@ Fsm_FsmAbcReduce(
       if (pUnfold)
         Fsm_FsmFoldProperty(fsmOpt, 0, 0, 1); 
       if (cUnfold)
-        Fsm_FsmFoldConstraint(fsmOpt);
+        Fsm_FsmFoldConstraint(fsmOpt, 0);
    }
 
   } else {
@@ -2466,7 +2550,7 @@ Fsm_FsmAbcScorr(
   if (pUnfold)
     Fsm_FsmFoldProperty(fsmOpt, 0, 0, 0);
   if (cUnfold)
-    Fsm_FsmFoldConstraint(fsmOpt);
+    Fsm_FsmFoldConstraint(fsmOpt, 0);
 
   return fsmOpt;
 }
@@ -2480,7 +2564,9 @@ Fsm_FsmAbcReduceMulti(
   Fsm_Fsm_t *fsmOpt = Fsm_FsmDup(fsmFsm);
   Ddi_Mgr_t *ddm = fsmFsm->fsmMgr->dd;
   int useConstr = 0, nc = 0, nprop = Ddi_BddarrayNum(fsmFsm->lambda);
-
+  int pUnfold = Fsm_FsmUnfoldProperty(fsmOpt, 1);
+  int cUnfold = Fsm_FsmUnfoldConstraint(fsmOpt);
+  
   Pdtutil_Assert(fsmOpt->invarspec == NULL,
     "partitioned spec not supported in abc reduce");
   Pdtutil_Assert(1 || fsmOpt->initStub == NULL,
@@ -2542,6 +2628,10 @@ Fsm_FsmAbcReduceMulti(
       Ddi_AigCubeExistProjectAcc(fsmOpt->init, psv);
       Ddi_Free(psv);
     }
+    if (pUnfold)
+        Fsm_FsmFoldProperty(fsmOpt, 0, 0, 1); 
+    if (cUnfold)
+        Fsm_FsmFoldConstraint(fsmOpt, 0);
 
   } else {
     Fsm_FsmFree(fsmOpt);

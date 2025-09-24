@@ -255,6 +255,7 @@ FbvThrdVerif(
   Fsm_Fsm_t *fsmFsm = NULL;
   int forceDeltaConstraint = 0;
   int doEnableSyn = 1;
+  int fsmHasConstraint = 0;
 
   /**********************************************************************/
   /*                        Create DDI manager                          */
@@ -282,11 +283,13 @@ FbvThrdVerif(
   /**********************************************************************/
 
   fsmMgr = FbvFsmMgrLoad(fsmMgr, fsm, opt);
+  if (Fsm_MgrReadConstraintBDD(fsmMgr)!=NULL && Ddi_BddSize(Fsm_MgrReadConstraintBDD(fsmMgr))>0)
+    fsmHasConstraint = 1;
   if (!opt->mc.combinationalProblem) {
     fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
     Fsm_FsmFoldProperty(fsmFsm, opt->mc.compl_invarspec,
       opt->trav.cntReachedOK, 1);
-    Fsm_FsmFoldConstraint(fsmFsm);
+    Fsm_FsmFoldConstraint(fsmFsm, opt->mc.compl_invarspec);
     //    Fsm_FsmFoldInit(fsmFsm);
     Fsm_FsmWriteToFsmMgr(fsmMgr, fsmFsm);
     Fsm_FsmFree(fsmFsm);
@@ -476,11 +479,12 @@ FbvThrdVerif(
   if (1&&(heuristic == Fbv_HeuristicCpu_c || Fbv_HeuristicIbm_c || heuristic == Fbv_HeuristicBmcBig_c ||
     heuristic == Fbv_HeuristicPdtSw_c ||
 	    heuristic == Fbv_HeuristicSec_c)) {
-    int reduced = FbvFsmReductions(fsmMgr, opt, 4);
+    int reduced = 0;
     Ddi_Bddarray_t *optDelta = Fsm_MgrReadDeltaBDD(fsmMgr);
     Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
     Ddi_Bdd_t *myInvarspec = Ddi_BddDup(invarspec);
-
+    if (!fsmHasConstraint)
+      reduced = FbvFsmReductions(fsmMgr, opt, 4);
     opt->mc.combinationalProblem = opt->mc.combinationalProblem
       || Ddi_BddarrayNum(optDelta) == 0;
     if (!opt->mc.combinationalProblem && Ddi_BddarrayNum(optDelta) == 2) {
@@ -2271,9 +2275,9 @@ logThrdCex(
 	  Fsm_MgrReadCexBDD(fsmMgrRef));
 	ret2 = Fsm_CexNormalize(fsmMgrRef);
 	Pdtutil_Assert(!ret2,"error extending cex");
-        FbvWriteCexNormalized(fname, fsmMgrRef, fsmMgrRef);
+        FbvWriteCexNormalized(fname, fsmMgrRef, fsmMgrRef, 0);
       } else {
-        FbvWriteCexNormalized(fname, fsmMgr, fsmMgrRef);
+        FbvWriteCexNormalized(fname, fsmMgr, fsmMgrRef, 0);
       }
       fprintf(stdout, "\ncex written to: %s.cex\n", fname);
     }

@@ -121,14 +121,14 @@ typedef struct {
     int itpIteOptTh;            // command line parameter
     int itpStructOdcTh;         // command line parameter
     int itpMap;                 // command line parameter
-    int itpLoad;                // command line parameter
+    char *itpLoad;                // command line parameter
     int itpDrup;                // command line parameter
     int itpCompute;             // command line parameter
     int nnfClustSimplify;       // command line parameter
     int itpCompact;                 // command line parameter
-   int itpClust;             // INTERNAL FIELD
-   int itpNorm;             // INTERNAL FIELD
-   int itpSimp;             // INTERNAL FIELD
+    int itpClust;             // INTERNAL FIELD
+    int itpNorm;             // INTERNAL FIELD
+    int itpSimp;             // INTERNAL FIELD
 
     int aigPartial;             // command line parameter -> used in fbv only!
     int aigBddOpt;              // command line parameter
@@ -145,11 +145,13 @@ typedef struct {
   struct {
     int nnf;                    // command line parameter -> used in fbv only!
     int cutAtAuxVar;            // command line parameter
+    int insertCutLatches;       // command line parameter
     int cut;                    // command line parameter
     int useAig;                 // INTERNAL FIELD ???
     int cegarStrategy;          // command line parameter
     int auxVarsUsed;            // INTERNAL FIELD
     char *manualAbstr;          // command line parameter -> used in fbv only!
+    char *writeRetimeCut;       // command line parameter
   } fsm;
 
   struct {
@@ -250,7 +252,8 @@ typedef struct {
     int apprAig;                // command line parameter -> used in fbv only!
     int noInit;                 // command line parameter -> used in fbv only!
     int cntReachedOK;           // INTERNAL FIELD --> replace with countReached?
-
+    int checkProof;             // command line parameter
+    
     /* trav.tr */
     int sort_for_bck;           // command line parameter
     int trPreimgSort;           // command line parameter
@@ -274,10 +277,20 @@ typedef struct {
     int ternaryAbstr;           // command line parameter
     int abstrRef;               // command line parameter
     int abstrRefGla;            // command line parameter
+    int abstrRefItp;            // command line parameter
+    int abstrRefItpMaxIter;     // command line parameter
+    int trAbstrItp;             // command line parameter
+    int trAbstrItpOpt;          // command line parameter
+    int trAbstrItpFirstFwdStep; // command line parameter
+    int trAbstrItpMaxFwdStep;   // command line parameter
+    char *trAbstrItpLoad;       // command line parameter
+    char *trAbstrItpStore;      // command line parameter
     int inputRegs;              // command line parameter
     int travSelfTuning;         // command line parameter
     float lazyTimeLimit;        // command line parameter
-
+    char *abstrRefStore;        // command line parameter
+    char *abstrRefLoad;         // command line parameter
+    
     /* trav.bmc */
     int bmcTr;                  // command line parameter -> used in fbv only!
     int bmcTe;                  // command line parameter -> used in fbv only!
@@ -286,9 +299,12 @@ typedef struct {
     int bmcStrategy;            // command line parameter -> used in fbv only!
     int interpolantBmcSteps;    // command line parameter -> used in fbv only!
     int bmcLearnStep;           // command line parameter
+    int bmcItpRingsPeriod;      // command line parameter
+    int bmcTrAbstrPeriod;       // command line parameter
+    int bmcTrAbstrInit;         // command line parameter
 
     /* trav.pdr */
-    int pdrMaxBlock;          // command line parameter
+    int pdrMaxBlock;            // command line parameter
     int pdrReuseRings;          // command line parameter
     int pdrFwdEq;               // command line parameter
     int pdrUnfold;              // command line parameter
@@ -338,6 +354,7 @@ typedef struct {
     int itpRefineCex;           // command line parameter
     int itpUsePdrReached;       // command line parameter
     int itpRpm;                 // command line parameter
+    char *itpStoreRings;        // command line parameter
 
     /* trav.igr */
     int igrSide;                // command line parameter
@@ -408,6 +425,8 @@ typedef struct {
     int univQuantifyTh;         // command line parameter
     int opt_img;                // command line parameter
     int opt_preimg;             // command line parameter
+    char *writeProof;           // command line parameter
+    char *writeInvar;           // command line parameter
     char *wP;                   // command line parameter
     char *wR;                   // command line parameter
     char *wC;                   // command line parameter
@@ -446,6 +465,7 @@ typedef struct {
     char *rInit;                // command line parameter -> used in fbv only!
     char *ord;                  // command line parameter -> used in fbv only!
 
+    char **task;                // command line parameter -> used in fbv only!
     char *strategy;             // command line parameter -> used in fbv only!
     char *wRes;                 // command line parameter -> used in fbv only!
     char *wFsm;                 // command line parameter -> used in fbv only!
@@ -468,6 +488,7 @@ typedef struct {
     int lemmas;                 // command line parameter
     int qbf;                    // command line parameter -> used in fbv only!
     int gfp;                    // command line parameter -> used in fbv only!
+    int exit_after_checkInv;    // command line parameter -> used in fbv only!
     int diameter;               // command line parameter -> used in fbv only!
     int checkMult;              // command line parameter -> used in fbv only!
     int checkDead;              // command line parameter -> used in fbv only!
@@ -608,6 +629,14 @@ EXTERN int Fbv_CheckFsmCex(
 EXTERN int Fbv_CheckFsmProp(
   Fsm_Mgr_t * fsmMgr
 );
+EXTERN Fbv_Globals_t *
+Fbv_GlobalsInit(
+);
+EXTERN void
+Fbv_GlobalsQuit(
+  Fbv_Globals_t *opt
+);
+
 
 /**AutomaticEnd***************************************************************/
 

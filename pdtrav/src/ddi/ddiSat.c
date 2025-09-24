@@ -1104,7 +1104,7 @@ Ddi_PdrMake(
   }
   //  Ddi_BddCofactorAcc(Ddi_BddarrayRead(delta,nRoots-1),pv,1);
 
-  if (invar!=NULL) {
+  if (0 && invar!=NULL) {
     Ddi_BddAndAcc(target,invar);
   }
 
@@ -1270,7 +1270,7 @@ Ddi_PdrMake(
     Ddi_SatSolverQuit(s1);
   }
   pdrMgr->trClausesInit = Ddi_ClausesMakeRel(deltaInit,ns,NULL);
-  if (invar != NULL) {
+  if (1 && invar != NULL) {
     pdrMgr->invarClauses = Ddi_AigClauses(invar,0,NULL);
   }
   else {
@@ -5305,7 +5305,8 @@ Ddi_AigAbstrRefinePba(
   Ddi_Vararray_t *abstrVars,
   Ddi_Bddarray_t *noAbstr,
   Ddi_Bddarray_t *prevAbstr,
-  int *result
+  int *result,
+  float timeLimit
 )
 {
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
@@ -5361,9 +5362,12 @@ Ddi_AigAbstrRefinePba(
   }
 
   *result = 0;
-  Sat = Ddi_SatSolve(solver,assume,-1);
+  Sat = Ddi_SatSolve(solver,assume,timeLimit);
 
-  if (Sat) {
+  if (Sat<0) {
+    *result = -1;
+  }
+  else if (Sat) {
     *result = 1;
   }
   else {
@@ -5434,7 +5438,8 @@ Ddi_AigAbstrRefineCegarPba(
   Ddi_Vararray_t *abstrVars,
   Ddi_Bddarray_t *noAbstr,
   Ddi_Bddarray_t *prevAbstr,
-  int *result
+  int *result,
+  float timeLimit
 )
 {
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
@@ -5452,7 +5457,6 @@ Ddi_AigAbstrRefineCegarPba(
   Ddi_Clause_t *piVars = Ddi_ClauseAlloc(0,0);
   Ddi_Clause_t *assumeVars = Ddi_ClauseAlloc(0,0);
   long startTime, currTime;
-  int timeLimit=ddm->settings.aig.satTimeLimit;
   int ret, incrementalAbstr=1; 
   int tryJustify = 0;
 
@@ -5522,7 +5526,9 @@ Ddi_AigAbstrRefineCegarPba(
     Ddi_Var_t *a_j = Ddi_VararrayRead(abstrVars,j);
     Ddi_Bdd_t *c_j = Ddi_BddarrayRead(noAbstr,j);
     Ddi_Bdd_t *p_j = prevAbstr==NULL ? NULL : Ddi_BddarrayRead(prevAbstr,j);
-    if (Ddi_BddIsZero(c_j) && (p_j==NULL || Ddi_BddIsOne(p_j))) {
+    int doAssume = Ddi_BddIsZero(c_j) && (p_j==NULL || Ddi_BddIsOne(p_j));
+    //int doAssume = Ddi_BddIsZero(c_j) || (p_j!=NULL && Ddi_BddIsZero(p_j));
+    if (doAssume) {
       bAigEdge_t aBaig = Ddi_VarToBaig(a_j);
       int vCnf = DdiAig2CnfId(bmgr,aBaig);
       Ddi_Bdd_t *cOut_j = Ddi_BddarrayRead(noAbstrOut,j);
@@ -5557,6 +5563,9 @@ Ddi_AigAbstrRefineCegarPba(
     }
     if (ret < 0) {
       /* undefined */
+      *result = -1;
+      break;
+      // DISABLED
       Ddi_SatSolver_t *solver2 = Ddi_SatSolverAlloc();
       Ddi_Bdd_t *fDupAbstr = Ddi_BddCompose(fDup,abstrVars,noAbstrOut);
       incrementalAbstr=0; // for next iterations
@@ -5637,7 +5646,7 @@ Ddi_AigAbstrRefineCegarPba(
         cl = Ddi_SatSolverFinal(solver,-1);
       }
       nIter++;
-      for (j=0; j<cl->nLits; j++) {
+      for (j=0; cl!=NULL && j<cl->nLits; j++) {
         int vj = abs(cl->lits[j]);
         Pdtutil_Assert(vj<ddm->cnf.cnf2aigSize,"invalid cnf 2 aig");
         bAigEdge_t baig = ddm->cnf.cnf2aig[vj];
@@ -5668,7 +5677,7 @@ Ddi_AigAbstrRefineCegarPba(
           DdiClauseAddLiteral(assumeWithAbstr,-vCnf);
         }
       }
-      for (j=0; j<cl->nLits; j++) {
+      for (j=0; cl!=NULL && j<cl->nLits; j++) {
         int vj = abs(cl->lits[j]);
         Pdtutil_Assert(vj<ddm->cnf.cnf2aigSize,"invalid cnf 2 aig");
         bAigEdge_t baig = ddm->cnf.cnf2aig[vj];

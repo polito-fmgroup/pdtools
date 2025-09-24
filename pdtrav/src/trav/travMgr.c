@@ -175,6 +175,14 @@ Trav_MgrInit(
   travMgr->settings.aig.ternaryAbstr = 0;
   travMgr->settings.aig.abstrRef = 0;
   travMgr->settings.aig.abstrRefGla = 0;
+  travMgr->settings.aig.abstrRefItp = 0;
+  travMgr->settings.aig.abstrRefItpMaxIter = 4;
+  travMgr->settings.aig.trAbstrItp = 0;
+  travMgr->settings.aig.trAbstrItpMaxFwdStep = 0;
+  travMgr->settings.aig.trAbstrItpLoad = NULL;
+  travMgr->settings.aig.trAbstrItpStore = NULL;
+  travMgr->settings.aig.storeAbstrRefRefinedVars = NULL;
+  travMgr->settings.aig.itpStoreRings = NULL;
   travMgr->settings.aig.inputRegs = 0;
   travMgr->settings.aig.selfTuningLevel = 0;    // 1
   travMgr->settings.aig.lemmasTimeLimit = 60.0; // 120.0
@@ -258,6 +266,9 @@ Trav_MgrInit(
   /* bmc */
   travMgr->settings.aig.bmcTimeLimit = 0;
   travMgr->settings.aig.bmcMemLimit = 0;
+  travMgr->settings.aig.bmcItpRingsPeriod = 0;
+  travMgr->settings.aig.bmcTrAbstrPeriod = 0;
+  travMgr->settings.aig.bmcTrAbstrInit = 0;
 
   /* bdd */
   travMgr->settings.bdd.fromSelect = Trav_FromSelectCofactor_c;
@@ -277,7 +288,7 @@ Trav_MgrInit(
   travMgr->settings.bdd.countReached = 0;
   travMgr->settings.bdd.autoHint = 0;
   travMgr->settings.bdd.hintsStrategy = 0;
-  travMgr->settings.bdd.hintsTh = 1000;
+  travMgr->settings.bdd.hintsTh = 0;
   travMgr->settings.bdd.hints = NULL;
   travMgr->settings.bdd.auxPsSet = NULL;
   travMgr->settings.bdd.gfpApproxRange = 1;
@@ -413,6 +424,10 @@ Trav_MgrQuit(
 
   Ddi_Free(travMgr->settings.ints.univQuantifyVars);
   Ddi_Free(travMgr->settings.ints.abstrRefRefinedVars);
+  Pdtutil_Free(travMgr->settings.aig.trAbstrItpLoad);
+  Pdtutil_Free(travMgr->settings.aig.trAbstrItpStore);
+  Pdtutil_Free(travMgr->settings.aig.storeAbstrRefRefinedVars);
+  Pdtutil_Free(travMgr->settings.aig.itpStoreRings);
 
   Pdtutil_Free(travMgr->settings.clk);
   Pdtutil_Free(travMgr->settings.savePeriodName);
@@ -972,6 +987,8 @@ Trav_MgrSetTravOpt(
   travMgr->settings.tr.bwdTrClustFile = Pdtutil_StrDup(opt->tr.bwdTrClustFile);
 
   travMgr->settings.aig.satSolver = Pdtutil_StrDup(opt->aig.satSolver);
+  travMgr->settings.aig.storeAbstrRefRefinedVars = Pdtutil_StrDup(opt->aig.storeAbstrRefRefinedVars);
+  travMgr->settings.aig.itpStoreRings = Pdtutil_StrDup(opt->aig.itpStoreRings);
 
   travMgr->settings.bdd.hints = Ddi_BddarrayDup(opt->bdd.hints);
   travMgr->settings.bdd.auxPsSet = Ddi_VarsetDup(opt->bdd.auxPsSet);
@@ -988,6 +1005,8 @@ Trav_MgrSetTravOpt(
   travMgr->settings.ints.auxFwdTr = NULL;
   travMgr->settings.ints.univQuantifyVars = NULL;
   travMgr->settings.ints.abstrRefRefinedVars = NULL;
+  if (opt->ints.abstrRefRefinedVars != NULL)
+    travMgr->settings.ints.abstrRefRefinedVars = Ddi_VarsetarrayDup(opt->ints.abstrRefRefinedVars);
   travMgr->settings.ints.timeFrameClauses = NULL;
 }
 
@@ -4718,11 +4737,35 @@ Trav_MgrSetOptionItem(
     case Pdt_TravTernaryAbstr_c:
       travMgr->settings.aig.ternaryAbstr = optItem.optData.inum;
       break;
+    case Pdt_TravItpStoreRings_c:
+      travMgr->settings.aig.itpStoreRings = Pdtutil_StrDup(optItem.optData.pchar);
+      break;
+    case Pdt_TravStoreAbstrRefRefinedVars_c:
+      travMgr->settings.aig.storeAbstrRefRefinedVars = Pdtutil_StrDup(optItem.optData.pchar);
+      break;
     case Pdt_TravAbstrRef_c:
       travMgr->settings.aig.abstrRef = optItem.optData.inum;
       break;
     case Pdt_TravAbstrRefGla_c:
       travMgr->settings.aig.abstrRefGla = optItem.optData.inum;
+      break;
+    case Pdt_TravAbstrRefItp_c:
+      travMgr->settings.aig.abstrRefItp = optItem.optData.inum;
+      break;
+    case Pdt_TravAbstrRefItpMaxIter_c:
+      travMgr->settings.aig.abstrRefItpMaxIter = optItem.optData.inum;
+      break;
+    case Pdt_TravTrAbstrItp_c:
+      travMgr->settings.aig.trAbstrItp = optItem.optData.inum;
+      break;
+    case Pdt_TravTrAbstrItpMaxFwdStep_c:
+      travMgr->settings.aig.trAbstrItpMaxFwdStep = optItem.optData.inum;
+      break;
+    case Pdt_TravTrAbstrItpLoad_c:
+      travMgr->settings.aig.trAbstrItpLoad = Pdtutil_StrDup(optItem.optData.pchar);
+      break;
+    case Pdt_TravTrAbstrItpStore_c:
+      travMgr->settings.aig.trAbstrItpStore = Pdtutil_StrDup(optItem.optData.pchar);
       break;
     case Pdt_TravInputRegs_c:
       travMgr->settings.aig.inputRegs = optItem.optData.inum;
@@ -4962,6 +5005,15 @@ Trav_MgrSetOptionItem(
       break;
     case Pdt_TravBmcMemLimit_c:
       travMgr->settings.aig.bmcMemLimit = optItem.optData.inum;
+      break;
+    case Pdt_TravBmcItpRingsPeriod_c:
+      travMgr->settings.aig.bmcItpRingsPeriod = optItem.optData.inum;
+      break;
+    case Pdt_TravBmcTrAbstrPeriod_c:
+      travMgr->settings.aig.bmcTrAbstrPeriod = optItem.optData.inum;
+      break;
+    case Pdt_TravBmcTrAbstrInit_c:
+      travMgr->settings.aig.bmcTrAbstrInit = optItem.optData.inum;
       break;
 
       /* bdd */
@@ -5290,11 +5342,35 @@ Trav_MgrReadOption(
     case Pdt_TravTernaryAbstr_c:
       *(int *)optRet = travMgr->settings.aig.ternaryAbstr;
       break;
+    case Pdt_TravItpStoreRings_c:
+      *(char **)optRet = travMgr->settings.aig.itpStoreRings;
+      break;
+    case Pdt_TravStoreAbstrRefRefinedVars_c:
+      *(char **)optRet = travMgr->settings.aig.storeAbstrRefRefinedVars;
+      break;
     case Pdt_TravAbstrRef_c:
       *(int *)optRet = travMgr->settings.aig.abstrRef;
       break;
     case Pdt_TravAbstrRefGla_c:
       *(int *)optRet = travMgr->settings.aig.abstrRefGla;
+      break;
+    case Pdt_TravAbstrRefItp_c:
+      *(int *)optRet = travMgr->settings.aig.abstrRefItp;
+      break;
+    case Pdt_TravAbstrRefItpMaxIter_c:
+      *(int *)optRet = travMgr->settings.aig.abstrRefItpMaxIter;
+      break;
+    case Pdt_TravTrAbstrItp_c:
+      *(int *)optRet = travMgr->settings.aig.trAbstrItp;
+      break;
+    case Pdt_TravTrAbstrItpMaxFwdStep_c:
+      *(int *)optRet = travMgr->settings.aig.trAbstrItpMaxFwdStep;
+      break;
+    case Pdt_TravTrAbstrItpLoad_c:
+      *(char **)optRet = travMgr->settings.aig.trAbstrItpLoad;
+      break;
+    case Pdt_TravTrAbstrItpStore_c:
+      *(char **)optRet = travMgr->settings.aig.trAbstrItpStore;
       break;
     case Pdt_TravInputRegs_c:
       *(int *)optRet = travMgr->settings.aig.inputRegs;
@@ -5528,6 +5604,15 @@ Trav_MgrReadOption(
       break;
     case Pdt_TravBmcMemLimit_c:
       *(int *)optRet = travMgr->settings.aig.bmcMemLimit;
+      break;
+    case Pdt_TravBmcItpRingsPeriod_c:
+      *(int *)optRet = travMgr->settings.aig.bmcItpRingsPeriod;
+      break;
+    case Pdt_TravBmcTrAbstrPeriod_c:
+      *(int *)optRet = travMgr->settings.aig.bmcTrAbstrPeriod;
+      break;
+    case Pdt_TravBmcTrAbstrInit_c:
+      *(int *)optRet = travMgr->settings.aig.bmcTrAbstrInit;
       break;
 
       /* bdd */
