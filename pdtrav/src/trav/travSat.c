@@ -10421,6 +10421,8 @@ Trav_TravSatItpGfp(
   int lastRing = Ddi_BddarrayNum(itpMgr->fromRings)-1;
   itpTravMgr->careBwd = Ddi_BddMakeConstAig(ddm, 1);
 
+  long startTime = util_cpu_time();
+  
   if (itpTravMgr->reached == NULL) {
     Ddi_Free(itpTravMgr->reached);
     if (lastRing>0) {
@@ -10498,6 +10500,13 @@ Trav_TravSatItpGfp(
       Ddi_Free(rBdd);
     }
   }
+
+  if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
+      printf("\nGFP time:  %s\n",
+         util_print_time(
+                         (util_cpu_time() - startTime)));
+  }
+
 
   Ddi_Bdd_t *r = Ddi_BddSubstVars(itpTravMgr->reached,
                                   itpMgr->ns,itpMgr->ps);
