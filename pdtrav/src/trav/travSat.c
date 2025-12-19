@@ -10144,8 +10144,36 @@ genItpSequence(
     Ddi_BddPartInsertLast(a,prev);
     //Ddi_BddSetAig(a);
     Ddi_Bdd_t *b = Ddi_BddarrayRead(coneArray,k);
-    Ddi_Bdd_t *itp = Ddi_AigSat22AndWithInterpolant(NULL,a,b,NULL,
+    Ddi_Bdd_t *itpGen=NULL;
+    int tryItpGen=1;
+    int resItpGen=0;
+    Ddi_Bdd_t *itpPlus = NULL;
+    Ddi_Bdd_t *itp = NULL;
+    if (tryItpGen) {
+      Ddi_Vararray_t *glbA = Ddi_BddSuppVararray(a);
+      int maxGen = 1000; //2*Ddi_BddSize(invar);
+      Ddi_VararrayIntersectAcc(glbA, ns);
+      itpGen = Ddi_AigInterpolantByGenClauses(b, a, NULL, NULL,
+               ps, ns, NULL, glbA, NULL,
+                       NULL, NULL, maxGen, 0, &resItpGen);
+      Ddi_Free(glbA);
+      Pdtutil_Assert (resItpGen >= 0,"UNSAT required for ITPGEN");
+      Ddi_BddNotAcc(itpGen);
+      if (!resItpGen) {
+        Ddi_BddAndAcc(b,itpGen);
+      }
+    }
+    if (!resItpGen) {
+      itp = Ddi_AigSat22AndWithInterpolant(NULL,a,b,NULL,
            nsVars, NULL,NULL,0,NULL,NULL, &sat, 0, 1, 0, -1.0);
+      if (itpGen!=NULL) {
+        Ddi_BddAndAcc(itp,itpGen);
+      }
+    }
+    else {
+      itp = Ddi_BddDup(itpGen);
+    }
+    Ddi_Free(itpGen);
     Ddi_Free(a);
     if (sat) {
       Ddi_Free(itpSeq);
