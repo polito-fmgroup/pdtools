@@ -2186,3 +2186,80 @@ void Solver::printTrail(void)
 
 
 
+// ===================================================================================
+// GpC 2025
+
+/*_________________________________________________________________________________________________
+|
+|  assign : (p: Lit, nof_conflicts : int) -> [lbool]
+|
+|  Description:
+|
+|    Assign a literal and perform propagation, up to the specified number of conflicts.
+|
+|  Output:
+|    'l_True' if a partial assigment that is consistent with respect to the clauseset is found. 
+|    If all variables are decision variables, this means that the clause set is satisfiable. 
+|    'l_False' if the clause set is unsatisfiable. 
+|    'l_Undef' if the bound on number of conflicts is reached.
+|________________________________________________________________________________________________@*/
+lbool Solver::assign(Lit p, int nof_conflicts)
+{
+    assert(ok);
+
+    int         conflictC = 0;
+    Range       part;
+    starts++;
+    int backtrack_level = decisionLevel();
+    
+    if (value(p) == l_True){
+      // Dummy decision level:
+      newDecisionLevel();
+      return l_True;
+    }else if (value(p) == l_False){
+      analyzeFinal(~p, conflict);
+      return l_False;
+    }else{
+      // Increase decision level and enqueue 'p'
+      newDecisionLevel();
+      uncheckedEnqueue(p);
+    }
+
+    CRef confl = propagate();
+    if (confl != CRef_Undef){
+      // CONFLICT
+      conflicts++; conflictC++;
+      cancelUntil(backtrack_level);
+      return l_False;
+
+    }else{
+      // NO CONFLICT
+      if (nof_conflicts >= 0 && conflictC >= nof_conflicts){
+        // Reached bound on number of conflicts:
+        progress_estimate = progressEstimate();
+        cancelUntil(0);
+        return l_Undef; }
+      
+      // Simplify the set of problem clauses:
+      if (decisionLevel() == 0 && !simplify())
+        return l_False;
+
+      if (learnts.size()-nAssigns() >= max_learnts)
+        // Reduce the set of learnt clauses:
+        reduceDB();
+
+      return l_True;
+
+    }
+}
+
+
+void Solver::assignBacktrack()
+{
+    assert(ok);
+
+    int backtrack_level = decisionLevel()-1;
+
+    assert(backtrack_level>=0);
+    cancelUntil(backtrack_level);
+}

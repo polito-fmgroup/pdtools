@@ -124,6 +124,8 @@ namespace Minisat {
     int verbosityLevel;
     bool saved;
     bool solverUndef;
+    void *Scare;
+
     vec<ResolutionNode> resNodes;
     vec<bool> isProofVar;
     vec<bool> isUsedVar;
@@ -147,6 +149,7 @@ namespace Minisat {
       verbosityLevel = 0;
       nANodes = nBNodes = nResNodes = nRedNodes =
         nSolverAClauses = nSolverACr = 0;
+      Scare = NULL;
       resNodes.clear();
       isUsedVar.clear();
       isProofVar.clear();

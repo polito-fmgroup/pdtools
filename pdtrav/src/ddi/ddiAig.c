@@ -502,7 +502,7 @@ static int MinisatClauses2Solvers(Solver& S, Solver& S2, Ddi_Bdd_t *f, Ddi_Bdd_t
 static void bAigArrayMinisatClausesWithNum(Ddi_Mgr_t *ddm, Solver&    S, bAig_array_t *visitedNodes, int i0, int N);
 static void bAigArrayMinisatClauses(Ddi_Mgr_t *ddm, Solver&    S, bAig_array_t *visitedNodes, int i0);
 static void MinisatInterpolant(Solver& S, Ddi_Mgr_t *ddm, int nAClauses, int reverseItp, Ddi_Bdd_t **interpolantP, Ddi_Bdd_t **interpolantOptP, Ddi_Bdd_t *care,  Ddi_Bddarray_t *partitionLits, vec<vec<Lit> > *partitionClausesP, int nSuppVars, int itpOdc);
-static Ddi_Bdd_t *getProof22(void *Svoid, struct Checker *travP, Ddi_Bdd_t *a, Ddi_Bdd_t *b, int nAClauses, Ddi_Varset_t *globalvars,int computeAuxItp);
+static Ddi_Bdd_t *getProof22(void *Svoid, struct Checker *travP, Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Bdd_t *c, int nAClauses, Ddi_Varset_t *globalvars,int computeAuxItp);
 static Ddi_Bdd_t *Minisat22InterpolantUndefTopLits (void *Svoid, Ddi_Mgr_t *ddm, int maxn);
 static bool
 Minisat22InterpolantUndef (void    *Svoid, Ddi_Mgr_t *ddm, Ddi_Bdd_t *a, Ddi_Varset_t *globalvars, int reverseItp, Ddi_Bdd_t **interpolantP, Ddi_Bdd_t *care, int nSuppVars, int itpOdc, int genProof, int nACl, int useB);
@@ -85954,6 +85954,7 @@ getProof22(
   struct Checker *travP,
   Ddi_Bdd_t *a,
   Ddi_Bdd_t *b,
+  Ddi_Bdd_t *c,
   int nAClauses,
   Ddi_Varset_t *globalvars,
   int computeAuxItp
@@ -86007,7 +86008,19 @@ getProof22(
   }
   
   markProofVars(S22,a,b);
-  S22->proofClassifyNodes(nAClauses,true);
+  if (1 && c!=NULL && !Ddi_BddIsOne(c)) {
+    Minisat22Solver *S22care = new Minisat22Solver();
+    Solver Sdummy;
+
+    MinisatClausesWithSuppFlow(NULL,Sdummy,(void *)S22care,c,NULL,NULL,NULL,NULL,NULL,0,0,0,0);
+    S22->proofPdt.Scare = (void*)S22care;
+    S22->proofClassifyNodes(nAClauses,true);
+    delete S22care;
+    S22->proofPdt.Scare = NULL;
+  }
+  else {
+    S22->proofClassifyNodes(nAClauses,true);
+  }
   //S22->printProof(NULL,NULL);
   int constItp = S22->getProof(clauses, nAClausesCore, proofNodes,
 			       pivots, topResClP);
@@ -86113,7 +86126,9 @@ getProof22(
                      travP,nAClausesCore,remapClauseIds);
     }
   }
-  
+  if (c!=NULL && !Ddi_BddIsOne(c) && auxItp!=NULL) {
+    Ddi_BddAndAcc(auxItp,c);
+  } 
   return auxItp;
 }
 
@@ -86555,7 +86570,7 @@ Minisat22InterpolantUndef (
     fflush(dMgrO(ddm));
   }
 
-  getProof22((void *)S22,&trav,a,NULL,nACl,globalvars,0);
+  getProof22((void *)S22,&trav,a,NULL,NULL,nACl,globalvars,0);
   trav.done22();
   trav.genitp();
   //  S.proof->deleteTemps();
@@ -86754,6 +86769,7 @@ Minisat22Interpolant (
   bool success = true;
   Ddi_Bdd_t *auxItp=NULL;
   int compareWithStndardItp = 0;
+  int andWithCare=0;
   
   if (ddm->settings.aig.itpMem>2) {
     trav.useRemapped = 1;
@@ -86836,7 +86852,7 @@ Minisat22Interpolant (
   }
   else if (!useMaxPivots) {
     auxItp =
-      getProof22((void *)S22,&trav,a,NULL,nAClauses,globalvars,
+      getProof22((void *)S22,&trav,a,NULL,care,nAClauses,globalvars,
                  computeAuxItp);
     if (auxItp!=NULL) {
       interpolant = auxItp;
@@ -86861,7 +86877,7 @@ Minisat22Interpolant (
     }
 
     auxItp =
-      getProof22((void *)S22,&trav,a,b,nAClauses,globalvars,
+      getProof22((void *)S22,&trav,a,b,NULL,nAClauses,globalvars,
                  computeAuxItp);
     /* use first cofactor */
     if (auxItp!=NULL &&
@@ -87040,6 +87056,9 @@ Minisat22Interpolant (
       Ddi_BddSetAig(trav.nodes.last().orClause);
       Ddi_BddOrAcc(interpolant,trav.nodes.last().orClause);
     }
+    if (andWithCare&&care!=NULL && !Ddi_BddIsOne(care)) {
+      Ddi_BddAndAcc(interpolant,care);
+    } 
   }
 
   for (int i = 0; i < trav.nodes.size(); i++) {

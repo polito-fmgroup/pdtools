@@ -79,6 +79,13 @@ public:
     void    toDimacs     (const char* file, Lit p, Lit q);
     void    toDimacs     (const char* file, Lit p, Lit q, Lit r);
 
+
+    // GpC 2025
+    lbool assign(Lit p, int nof_conflicts);
+    void assignBacktrack();
+    inline int currDecisionLevel() {
+      return decisionLevel();}
+
     // Proof validation / traversal
     inline bool isAttached(CRef r) {
       Clause &rc = ca [r];
@@ -191,7 +198,6 @@ public:
   void printTrail(void);
 
   
-
   int maxPivot(int i){
     if (i>=maxPivots.size()) return -1;
     return maxPivots[i];
