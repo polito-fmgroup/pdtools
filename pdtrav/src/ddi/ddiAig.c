@@ -83149,7 +83149,7 @@ Ddi_AigSat22AndWithInterpolant (
   Ddi_Vararray_t **tfPiVars,
   int tfPiNum,
   Ddi_Bdd_t *optCare,
-  Ddi_Bdd_t *itpPlus, // *prevItp,
+  Ddi_Bdd_t *prevItp, // *itpPlus, 
   int *psat,
   int itpPart,
   int itpOdc,
@@ -83197,7 +83197,7 @@ Ddi_AigSat22AndWithInterpolant (
   int saveBCore=0, bshared=0;
   int doIncrItp=0;
   int addReverseItp = 0;
-  Ddi_Bdd_t *prevItp=NULL;
+  //  Ddi_Bdd_t *prevItp=NULL;
   Ddi_Bdd_t *itpInvar=NULL;
   Solver Sdummy;
   int doDupSolver = 0;
@@ -83211,6 +83211,7 @@ Ddi_AigSat22AndWithInterpolant (
 
   static int nCalls = 0;
   int tryPartial = 0;
+  Ddi_Bdd_t *itpPlus = NULL;
 
   if (ddm->settings.aig.itpDrup>2)
     itpCoreTh = 0;
@@ -83227,7 +83228,7 @@ Ddi_AigSat22AndWithInterpolant (
 			 incrSat,a,b,NULL,
 			 globalVars, domainVars,
 			 tfPiVars,tfPiNum,
-			 optCare,itpPlus,
+			 optCare,prevItp,
 			 psat, 0, itpOdc,0, 
 			 myTimeLimit);
       if (itp!=NULL) {
@@ -83244,7 +83245,7 @@ Ddi_AigSat22AndWithInterpolant (
 			 incrSat,a,myB,NULL,
 			 globalVars, domainVars,
 			 tfPiVars,tfPiNum,
-			 optCare,itpPlus,
+			 optCare,prevItp,
 			 psat, 0, itpOdc,0, 
 			 timeLimit);
 	    Ddi_Free(myB);
@@ -83265,7 +83266,7 @@ Ddi_AigSat22AndWithInterpolant (
 			 incrSat,a,myB,NULL,
 			 globalVars, domainVars,
 			 tfPiVars,tfPiNum,
-			 optCare,itpPlus,
+			 optCare,prevItp,
 			 psat, 0, itpOdc,0, 
 			 2*myTimeLimit);
 	  Ddi_Free(myB);
@@ -83286,7 +83287,7 @@ Ddi_AigSat22AndWithInterpolant (
 						     incrSat,a,myB,NULL,
 						     globalVars, domainVars,
 						     tfPiVars,tfPiNum,
-						     optCare,itpPlus,
+						     optCare,prevItp,
 						     psat, 0, itpOdc,0, 
 						     timeLimit);
 		Ddi_Free(myB);
@@ -83307,7 +83308,7 @@ Ddi_AigSat22AndWithInterpolant (
 						   incrSat,a,myB,NULL,
 						   globalVars, domainVars,
 						   tfPiVars,tfPiNum,
-						   optCare,itpPlus,
+						   optCare,prevItp,
 						   psat, 0, itpOdc,0, 
 						   timeLimit);
 	      Ddi_Free(myB);
@@ -83334,7 +83335,7 @@ Ddi_AigSat22AndWithInterpolant (
 			 incrSat,myA,b,NULL,
 			 globalVars, domainVars,
 			 tfPiVars,tfPiNum,
-			 optCare,itpPlus,
+			 optCare,prevItp,
 			 psat, 0, itpOdc,0, 
 			 timeLimit);
 	  Ddi_Free(myA);
@@ -83350,7 +83351,7 @@ Ddi_AigSat22AndWithInterpolant (
 			 incrSat,a,myB,NULL,
 			 globalVars, domainVars,
 			 tfPiVars,tfPiNum,
-			 optCare,itpPlus,
+			 optCare,prevItp,
 			 psat, 0, itpOdc,0, 
 			 timeLimit);
 	  Ddi_Free(myB);
@@ -83360,7 +83361,7 @@ Ddi_AigSat22AndWithInterpolant (
 			 incrSat,a,myB,NULL,
 			 globalVars, domainVars,
 			 tfPiVars,tfPiNum,
-			 optCare,itpPlus,
+			 optCare,prevItp,
 			 psat, 0, itpOdc,0, 
 			 timeLimit);
 	    if (itp2 != NULL) {
@@ -83384,12 +83385,11 @@ Ddi_AigSat22AndWithInterpolant (
       return Ddi_AigSat22AndWithInterpolantPartNnf(incrSat,a,b,NULL,
 					      globalVars, domainVars,
 					      tfPiVars,tfPiNum,
-					      optCare,itpPlus,
+					      optCare,prevItp,
 					      psat, itpPart, itpOdc, 
 					      timeLimit);
     }
   }
-  itpPlus = NULL;
 
   sizeA = Ddi_BddSize(a);
   sizeB = Ddi_BddSize(b);
@@ -83603,6 +83603,9 @@ Ddi_AigSat22AndWithInterpolant (
 
   if (1 && optCare != NULL && !Ddi_BddIsOne(optCare)) {
     Ddi_BddAndAcc(b2,optCare);
+  }
+  if (1 && prevItp != NULL) {
+    Ddi_BddDiffAcc(b2,prevItp);
   }
   if (Ddi_BddIsZero(b2) /*|| !Ddi_AigSat(b2)*/) {
     Ddi_Free(a2); Ddi_Free(b2); 
@@ -84039,7 +84042,7 @@ Ddi_AigSat22AndWithInterpolant (
 			 incrSat,myA,myB,NULL,
 			 globalVars, domainVars,
 			 tfPiVars,tfPiNum,
-			 optCare,itpPlus,
+			 optCare,prevItp,
 			 psat, 0, itpOdc,0, 
 			 timeLimit*2);
 	Ddi_Free(itpA);
@@ -84129,12 +84132,18 @@ Ddi_AigSat22AndWithInterpolant (
     interpolant = Ddi_BddMakeConstAig(ddm, 1);
   }
   else {
-
+    Ddi_Bdd_t *myCare = NULL; // optCare;
+    if (prevItp!=NULL) {
+      Ddi_BddNotAcc(prevItp);
+      myCare = prevItp;
+    }
     success = Minisat22Interpolant ((void *)S22, ddm, a2, b2,
                                     nACl, globalVars, 
 				    0, &interpolant, &interpolantOpt,
-				    optCare, nSuppVars,itpOdc,1);
-
+				    myCare, nSuppVars,itpOdc,1);
+    if (prevItp!=NULL) {
+      Ddi_BddNotAcc(prevItp);
+    }
     if (0 && interpolant != NULL && Ddi_BddIsOne(interpolant)) {
       // problem! Force a fix with old minisat
       fprintf(dMgrO(ddm)," Minisat 22 Interpolant ABORTED as = 1\n");
@@ -84399,16 +84408,26 @@ Ddi_AigSat22AndWithInterpolant (
   if (interpolant != NULL && checkInterpolant && !undefined) {
     Ddi_BddSetAig(a);
     Ddi_Bdd_t *tmp = Ddi_BddDiff(a,interpolant);
-    if (optCare!=NULL) {
+    if (prevItp!=NULL) {
+      Ddi_BddNotAcc(prevItp);
+      Pdtutil_Assert(!Ddi_AigSatAnd(tmp,prevItp,NULL),
+		     "invalid interpolant (A)");
+      Pdtutil_Assert(!Ddi_AigSatAnd(interpolant,b,prevItp),
+		   "invalid interpolant");
+      Ddi_BddNotAcc(prevItp);
+    }
+    else if (optCare!=NULL) {
       Pdtutil_Assert(!Ddi_AigSatAnd(tmp,optCare,NULL),
 		     "invalid interpolant (A)");
+      Pdtutil_Assert(!Ddi_AigSatAnd(interpolant,b,optCare),
+		   "invalid interpolant");
     }
     else {
       Pdtutil_Assert(!Ddi_AigSat(tmp), "invalid interpolant (A)");
+      Pdtutil_Assert(!Ddi_AigSatAnd(interpolant,b,optCare),
+		   "invalid interpolant");
     }
     Ddi_Free(tmp);
-    Pdtutil_Assert(!Ddi_AigSatAnd(interpolant,b,optCare),
-		   "invalid interpolant");
     Ddi_Free(tmp);
   }
 
@@ -87928,6 +87947,56 @@ aigSat22RedBySimplify (
 
 
 #endif
+
+/**Function********************************************************************
+
+  Synopsis    [Count nodes of a bAig. Internal recursion]
+  Description [Count nodes of a bAig. Internal recursion]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Bdd_t *
+Ddi_BddMakeFromCnfLit( 
+ Minisat::Lit lit,
+  Ddi_Mgr_t *ddm                
+)
+{
+  if (ddm==NULL) {
+    return NULL;
+  }
+  int vCnf = Minisat::var(lit)+1;
+  bAigEdge_t baig = ddm-> cnf.cnf2aig[vCnf];
+  Ddi_Bdd_t *f = Ddi_BddMakeFromBaig(ddm, baig);
+  if (Minisat::sign(lit)) Ddi_BddNotAcc(f);
+  
+  return f;
+}
+/**Function********************************************************************
+
+  Synopsis    [Count nodes of a bAig. Internal recursion]
+  Description [Count nodes of a bAig. Internal recursion]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Bdd_t *
+Ddi_BddMakeFromCnfCube(
+  Minisat::vec<Minisat::Lit>& lits,
+  Ddi_Mgr_t *ddm                
+)
+{
+  if (ddm==NULL) {
+    return NULL;
+  }
+  Ddi_Bdd_t *ret = Ddi_BddMakeConstAig(ddm,1); 
+  for (int i=0; i<lits.size(); i++) {
+    Minisat::Lit l_i = lits[i];
+    Ddi_Bdd_t *f = Ddi_BddMakeFromCnfLit(l_i,ddm);
+    Ddi_BddAndAcc(ret,f);
+    Ddi_Free(f);
+  }
+  
+  return ret;
+}
 
 /**Function********************************************************************
   Synopsis    [Satisfiability Check on a&b with aig core generation]

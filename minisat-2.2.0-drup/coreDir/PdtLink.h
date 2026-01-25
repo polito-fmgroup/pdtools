@@ -26,6 +26,7 @@ namespace Minisat {
     vec<int>        antecedents;
     CRef            resClauseId;
     bool            topNode;
+    bool            careNode;
     bool            mark;
     proofCode       code;
     proofCode       savedCode;
@@ -37,6 +38,7 @@ namespace Minisat {
       antecedents.clear();
       resClauseId = CRef_Undef;
       topNode = false;
+      careNode = false;
       mark = false;
       code = proof_undef;
       savedCode = proof_undef;
@@ -47,6 +49,7 @@ namespace Minisat {
       pivots.copyTo(this->pivots);
       resClauseId = CRef_Undef;
       topNode = false;
+      careNode = false;
       mark = false;
       code = proof_undef;
       savedCode = proof_undef;
@@ -58,6 +61,7 @@ namespace Minisat {
       rn.pivots.copyTo(this->pivots);
       this->resClauseId = rn.resClauseId;
       this->topNode = rn.topNode;
+      this->careNode = rn.careNode;
       this->mark = rn.mark;
       this->code = rn.code;
       this->savedCode = rn.savedCode;
@@ -68,6 +72,7 @@ namespace Minisat {
       rn.pivots.copyTo(this->pivots);
       this->resClauseId = rn.resClauseId;
       this->topNode = rn.topNode;
+      this->careNode = rn.careNode;
       this->mark = rn.mark;
       this->code = rn.code;
       this->savedCode = rn.savedCode;
@@ -76,10 +81,12 @@ namespace Minisat {
 
     void setResClauseId(CRef id) { resClauseId = id; }
     void setTopNode(bool val) { topNode = val; }
+    void setCareNode(bool val) { careNode = val; }
     void setCode(proofCode val) { code = val; }
     void setSavedCode(proofCode val) { savedCode = val; }
     CRef getResClauseId() { return resClauseId; }
     bool isTopNode() { return topNode; }
+    bool isCareNode() { return careNode; }
     proofCode getCode() { return code; }
     proofCode getSavedCode() { return savedCode; }
     int isOriginal() { return antecedents.size() == 0; }
@@ -125,8 +132,10 @@ namespace Minisat {
     bool saved;
     bool solverUndef;
     void *Scare;
+    vec<bool> isScareUsedVar;
 
     vec<ResolutionNode> resNodes;
+    vec<vec<Lit>>   careClauses;
     vec<bool> isProofVar;
     vec<bool> isUsedVar;
     vec<bool> isAvar;
@@ -151,6 +160,7 @@ namespace Minisat {
         nSolverAClauses = nSolverACr = 0;
       Scare = NULL;
       resNodes.clear();
+      careClauses.clear();
       isUsedVar.clear();
       isProofVar.clear();
       isBvar.clear();

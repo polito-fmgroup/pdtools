@@ -28348,10 +28348,10 @@ itpImgPart (
     Ddi_Free(myA);
   }
 
-  if (prevTo!=NULL && itpPart<=8) {
-    static int compareWithItp=0;
-    int usePrevToWithA = 1; int useCareWithA = 0;
-    int usePrevToWithB = 0; int useCareWithB = 1;
+  if (1 && prevTo!=NULL && itpPart<=8) {
+    static int compareWithItp=1;
+    int usePrevToWithA = 0; int useCareWithA = 0;
+    int usePrevToWithB = 1; int useCareWithB = 1;
     int useDontCare = 0;
     int tryPrevImgLearning = 0;
     Ddi_Bdd_t *aNew = Ddi_BddDup(a);
@@ -28396,7 +28396,7 @@ itpImgPart (
 	!Ddi_BddIsOne(itpTravMgr->prevFrom)) {
       Ddi_BddDiffAcc(aNew,itpTravMgr->prevFrom);
     }
-    if (Ddi_BddSize(bNew)>1000) {
+    if (0 && Ddi_BddSize(bNew)>1000) {
       //      ddm->settings.aig.itpNoQuantify = 1;
       if (tryPrevImgLearning &&
           (itpTravMgr->careForBwdCone != NULL)
@@ -28408,7 +28408,7 @@ itpImgPart (
     //    ddm->settings.aig.itpNoQuantify = 10000;
     //    ddm->settings.aig.itpNoQuantify = 10;
     Ddi_Bdd_t *itpNew;
-    int recurPart=1;
+    int recurPart=0;
     if (recurPart) {
       itpNew = itpImgPart (itpTravMgr,kCone,kConeRings,
                          aNew,bNew,NULL,
@@ -28426,7 +28426,7 @@ itpImgPart (
                                           aNew,bNew,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
-					  careAig,itpPlus,
+					  careAig,prevTo,
 					  psat, itpPart, itpOdc, 
 					  0,timeLimit);
     }
@@ -28471,7 +28471,7 @@ itpImgPart (
       itp = Ddi_AigSat22AndWithInterpolant(NULL,a,coneAux,NULL,
 					  globalVars, domainVars,
 					   tfPiVars,tfPiNum,
-					   optCare,itpPlus,
+					   optCare,NULL,
 					   psat, 0, itpOdc, 
 					   0,timeLimit);
       Ddi_Free(coneAux);
@@ -28482,7 +28482,7 @@ itpImgPart (
 	Ddi_Bdd_t *itpRef = Ddi_AigSat22AndWithInterpolant(NULL,a,b,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
-					  optCare,itpPlus,
+					  optCare,NULL,
 					  psat, 0, itpOdc, 
 					  0,timeLimit);
 	printf("ItpWithNew / std Itp: %d / %d\n", Ddi_BddSize(itp),
@@ -28521,7 +28521,7 @@ itpImgPart (
       Ddi_Bdd_t * tmpItp = Ddi_AigSat22AndWithInterpolant(NULL,a,b,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
-					  optCare,itpPlus,
+					  optCare,prevTo,
 					  psat, 0, itpOdc, 
 					  0,timeLimit);
       Ddi_Free(tmpItp);
@@ -28537,7 +28537,7 @@ itpImgPart (
        Ddi_AigSat22AndWithInterpolant(NULL,a,b1,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
-					  optCare,itpPlus,
+					  optCare,prevTo,
 					  psat, 0, itpOdc, 
 					  0,timeLimit);
     if (itp1==NULL) {
@@ -28634,7 +28634,7 @@ itpImgPart (
       Ddi_Bdd_t *itp0 = Ddi_AigSat22AndWithInterpolant(NULL,a,b2b,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
-					  optCare,itpPlus,
+					  optCare,prevTo,
 					  psat, 0, itpOdc, 
 					  0,timeLimit);
       itp = Ddi_BddDup(itp0);
@@ -28653,7 +28653,7 @@ itpImgPart (
         itp = Ddi_AigSat22AndWithInterpolant(NULL,a,b2,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
-					  optCare,itpPlus,
+					  optCare,prevTo,
 					  psat, 0, itpOdc, 
 					  0,timeLimit);
         //        ddm->settings.aig.itpNoQuantify = 0;
@@ -28692,7 +28692,7 @@ itpImgPart (
           itp0 = Ddi_AigSat22AndWithInterpolant(NULL,a,b2Constr,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
-					  optCare,itpPlus,
+					  optCare,prevTo,
 					  psat, 0, itpOdc, 
 					  0,timeLimit);
           ddm->settings.aig.itpActiveVars=genActLits;
@@ -28714,7 +28714,7 @@ itpImgPart (
         itp = Ddi_AigSat22AndWithInterpolant(NULL,a,b2,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
-					  optCare,itpPlus,
+					  optCare,prevTo,
 					  psat, 0, itpOdc, 
 					  0,timeLimit);
       }
@@ -33357,7 +33357,7 @@ itpImg(
                     }                    
                     Ddi_Bdd_t *to22 =
 		      itpImgPart(itpTravMgr,kCone,kConeRings,a,b,
-                        NULL/*itpTravMgr->prevTo*/,step,doSplit,
+                        itpTravMgr->prevTo,step,doSplit,
 			nsvars, psvars,
 			/* careBwd DISABLED */ c, itpPlus, toPlusCube,
                         &sat, itpPart, 1, itpTimeLimit);

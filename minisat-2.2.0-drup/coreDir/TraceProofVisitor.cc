@@ -405,7 +405,10 @@ namespace Minisat
     for (int i = 0; i < nNodes; i++) {
       proofCode code_i = resNodes[i].getCode();
       if (code_i == proof_res) continue;
-      if (mark[i]) {
+      if (mark[i] || resNodes[i].isCareNode()) {
+        if (resNodes[i].isCareNode()) {
+          code_i = proof_rootB;
+        }
         if (code_i == proof_resA) {
           resNodes[i].setCode(proof_rootA);
           proofPdt.nANodes++;
@@ -899,9 +902,11 @@ namespace Minisat
         for (int j=0; j<c.size(); j++) {
           int v = var(c[j]);
           proofPdt.isAvar[v] = true;
+          if (resNodes[i].isCareNode())
+            proofPdt.isGlobal[v] = true;
           int l = toInt(c[j]);
           litsA[l]=true;
-          if (c.size()==1) unitA[j]=true;
+          if (c.size()==1) unitA[l]=true;
         }
       }
     }
@@ -914,11 +919,11 @@ namespace Minisat
         for (int j=0; j<c.size(); j++) {
           int v = var(c[j]);
           proofPdt.isBvar[v] = true;
-          if (proofPdt.isAvar[v])
+          if (proofPdt.isAvar[v] || resNodes[i].isCareNode())
             proofPdt.isGlobal[v] = true;
           int l = toInt(c[j]);
           litsB[l]=true;
-          if (c.size()==1) unitB[j]=true;
+          if (c.size()==1) unitB[l]=true;
         }
       }
     }
@@ -1173,8 +1178,6 @@ namespace Minisat
       //      printf("j: %d, v_j: %d - s: %d - s-j: %d\n", j, v_j, s, s-j);
       if (mark[v_j]!=l_Undef) {
         // common literal
-        if (mark[v_j]==l_True ? sign(l_j) : !sign(l_j))
-          printf("ah\n");
         assert(mark[v_j]==l_True ? !sign(l_j) : sign(l_j));
       }
       mark[v_j] = sign(l_j) ? l_False : l_True;
@@ -1406,7 +1409,7 @@ namespace Minisat
       if(resNodes[i].isOriginal()) continue;
       //      printf("restruct: %d/%d\n", i, resNodes.size());
       totRemoved += proofNodeRestructProof(proofPdt,i,mark);
-      if (i<(resNodes.size()-1) &&
+      if (0 && (i<(resNodes.size()-1)) &&
           (resNodes[i].resolvents.size()==0)) {
         int toRemove = resNodes.size()-i-1;
         totRemoved += toRemove;
@@ -1471,11 +1474,15 @@ namespace Minisat
     if (pdtChecks) proofCheck();
     
     proofPdt.status = proofPdt.labeled;
-    int nResA=0, nResB=0, nRes=0, nA=0, nB=0;
+    int nResA=0, nResB=0, nRes=0, nA=0, nB=0, nC=0;
     static int i;
     for(i = 0; i < proofPdt.resNodes.size(); i++){
       vec<Lit>& c = proofPdt.resNodes[i].resolvents;
-      if(proofPdt.resNodes[i].isOriginal()){
+      if (proofPdt.resNodes[i].isCareNode()) {
+        proofPdt.resNodes[i].setCode(proof_rootB);
+        nB++;
+      }
+      else if(proofPdt.resNodes[i].isOriginal()){
         CRef cr;
         if (c.size()==1) {
           cr = getReason(var(c[0]));
@@ -1536,8 +1543,8 @@ namespace Minisat
     }
 
     if (proofPdt.verbosity()>0)
-      printf("RES PROOF PROCESSED: %d A, %d B, %d resA, %d resB, %d res (tot: %d)\n",
-           nA, nB, nResA, nResB, nRes, proofPdt.resNodes.size());
+      printf("RES PROOF PROCESSED: %d A, %d B, %d C, %d resA, %d resB, %d res (tot: %d)\n",
+          nA, nB, nC, nResA, nResB, nRes, proofPdt.resNodes.size());
     proofPdt.nANodes = nA;
     proofPdt.nBNodes = nB;
     proofPdt.nResNodes = nResA + nResB + nRes;
@@ -1626,6 +1633,77 @@ namespace Minisat
   }
 
   //NB: call only after replay
+  void Solver::proofAddCareImpliedLiterals(void){
+
+    vec<ResolutionNode> resNodes2;
+    //Sanity check
+    assert(proofPdt.resNodes.size() > 0);
+    assert(log_proof);
+    int nNodes = proofPdt.resNodes.size();
+    int nLits = 2*nVars();
+    vec<int> remap(nNodes,-1);
+    vec<int> mappedLiterals(nLits,-1);
+    int nA=0, nB=0;
+    //Load original core clauses
+    //    printf("CORE CLAUSES\n");
+    int i, iNew, nImpl=0;
+    vec<vec<Lit>>& careClauses = proofPdt.careClauses;
+    resNodes2.clear();
+    for(i = iNew = 0; i < nNodes; i++){
+      ResolutionNode r2 = ResolutionNode(proofPdt.resNodes[i]);
+      for(int j=0;
+          j < proofPdt.resNodes[i].antecedents.size(); j++){
+        int aId = proofPdt.resNodes[i].antecedents[j];
+        if (aId<0) {
+          int auxId = -aId-1;
+          assert(auxId>=0 && auxId<careClauses.size());
+          vec<Lit>& res=careClauses[auxId];
+          resNodes2.push();   // 
+          resNodes2[iNew] = ResolutionNode(res);
+          resNodes2[iNew].setCareNode(true);
+          r2.antecedents[j] = iNew;
+          iNew++;          
+#if 0
+          Lit l;
+          if (j==0)
+            l = proofPdt.resNodes[i].pivots[0];
+          else
+            l = ~proofPdt.resNodes[i].pivots[j-1];
+          int l_id = toInt(l);
+          if (mappedLiterals[l_id]<0) {
+            vec<Lit> res;
+            static int custom=0;
+            if (custom && l_id==222) {
+              res.push(toLit(158));
+              res.push(toLit(1));
+            }
+            res.push(l);
+            mappedLiterals[l_id] = iNew;
+            resNodes2.push();   // 
+            resNodes2[iNew] = ResolutionNode(res);
+            resNodes2[iNew].setCareNode(true);
+            iNew++;
+          }
+          r2.antecedents[j] = mappedLiterals[l_id];
+#endif
+          nImpl++;
+        }
+        else
+          r2.antecedents[j] = remap[aId];
+      }
+      resNodes2.push();
+      resNodes2[iNew] = ResolutionNode(r2);
+      remap[i] = iNew++;
+    }
+    careClauses.clear();
+    nNodes = iNew;
+    resNodes2.copyTo(proofPdt.resNodes);
+    if (proofPdt.verbosity()>0)
+      printf("RES PROOF with %d literals implied by care)\n",
+             nImpl);
+  }
+
+  //NB: call only after replay
   void Solver::proofCheck(void){
     //Sanity check
     assert(proofPdt.resNodes.size() > 0);
@@ -1663,8 +1741,8 @@ namespace Minisat
       assert(nRed == proofPdt.nRedNodes);
       if (proofPdt.verbosity()>0)
         printf("RES PROOF checked A:%d B:%d - res:%d (redundant: %d - tot: %d)\n",
-             nA, nB, nRes, nRed, nNodes);
-    }
+             nA, nB, nRes, nRed, nNodes); 
+   }
   }
 
   //NB: call only after replay
@@ -1886,6 +1964,56 @@ namespace Minisat
     return nFound;
   }
 
+
+  static void pushCareClause(
+    vec<vec<Lit>>& careClauses,
+    vec<ResolutionNode>& resNodes,
+    int id,
+    int i0,
+    int i1,
+    vec<Lit>& ScareAssign,
+    vec<lbool>& mark) {
+
+    vec<Lit> careClause;
+    for (int i=i0; i<=i1; i++) {
+      int auxId = resNodes[id].antecedents[i];
+      vec<Lit>& resolvents = resNodes[auxId].resolvents;
+      for (int ii=0; ii<resolvents.size(); ii++) {
+        Lit l=resolvents[ii];
+        Var v = var(l);
+        if (mark[v]==l_Undef) // new lit
+          mark[v] = sign(l)?l_False:l_True;
+        else if (mark[v]==(sign(l)?l_True:l_False))
+          mark[v] = l_Undef; // resolve (clear mark)
+        // else // skip (just confirm literal)
+      }
+    }
+
+    for (int ii=0; ii<ScareAssign.size(); ii++) {
+      Lit l=~ScareAssign[ii];
+      Var v = var(l);
+      if(mark[v]!=l_Undef) {
+        assert(mark[v] == (sign(l)?l_False:l_True));
+        careClause.push(l);
+      }
+    }
+
+    for (int i=i0; i<=i1; i++) {
+      int auxId = resNodes[id].antecedents[i];
+      vec<Lit>& resolvents = resNodes[auxId].resolvents;
+      for (int ii=0; ii<resolvents.size(); ii++) {
+        Lit l=resolvents[ii];
+        Var v = var(l);
+        mark[v] = l_Undef;
+      }
+    }
+
+    int auxId = careClauses.size();
+    careClauses.push();
+    careClause.copyTo(careClauses[auxId]);
+    resNodes[id].antecedents[i0] = -(auxId+1); // dummy
+ }
+
   //NB: call only after replay
   int Solver::proofNodeCheckAntecedents(int i,
                                         vec<lbool>& mark,
@@ -1984,11 +2112,10 @@ namespace Minisat
   }
 
   static int proofNodeRecyclePivotsReduction(ProofPdt& proofPdt,
-    int id, vec<lbool>& mark, vec<bool>& done, vec<int>& ref
+    Solver *Scare, vec<Lit>&ScareAssign,
+    int id, vec<lbool>& mark, vec<lbool>& mark2, vec<bool>& done, vec<int>& ref
   ) {
     static bool enRed = true; static int nCalls=0;
-    static bool enCare = false;
-    Solver *Scare = enCare ? (Solver *) proofPdt.Scare : NULL;
     
     assert(id>=0 && id< proofPdt.resNodes.size());
     if (done[id]) return 0;
@@ -1999,6 +2126,7 @@ namespace Minisat
     bool ok=true;
     int nRemoved = 0, recRemoved = 0;
     vec<Lit>& res = proofPdt.resNodes[id].resolvents;
+    vec<vec<Lit>>& careClauses = proofPdt.careClauses;
     vec<Var> saved;
     for (int j=0; j<res.size(); j++) {
       Var v = var(res[j]);
@@ -2016,6 +2144,7 @@ namespace Minisat
     vec<bool> removed(pivots.size(),false);
     int i;
     int nAssignBtk=0;
+    int enCareSimpl=1;
     for(i=pivots.size()-1; i>=0; i--) {
       Lit l = pivots[i];
       Var v = var(l);
@@ -2027,40 +2156,72 @@ namespace Minisat
         // try recurring on antecedent (~l)
         int antId = antecedents[i+1];
         assert(antId<id);
+        bool isScareVar = Scare!=NULL && v<Scare->nVars() &&
+          proofPdt.isScareUsedVar[v];
+        int decLevel0 = 0;
         if (ref[antId]==1) {
           mark[v] = mark[v]==l_False ? l_True:l_False;
-          if (i>0 && Scare!=NULL && v<Scare->nVars()) {
+          if (i>0 && isScareVar) {
             // check if ~l implied
+            decLevel0 = Scare->currDecisionLevel();
             tryLit = Scare->assign(l,-1);
+            if (tryLit == l_True) {
+              ScareAssign.push(l);
+            }
+          }
+          if (!enCareSimpl && (tryLit == l_False)) {
+            tryLit = l_True;
+            isScareVar=0;
           }
           if (tryLit == l_True) {
             // not implied
             recRemoved +=
-              proofNodeRecyclePivotsReduction(proofPdt,antId,
-                                              mark,done,ref);
-            if (i>0 && Scare!=NULL&& v<Scare->nVars()) {
+              proofNodeRecyclePivotsReduction(proofPdt,Scare,
+                                              ScareAssign,antId,
+                                              mark,mark2,done,ref);
+            if (i>0 && isScareVar) {
               Scare->assignBacktrack();
+              ScareAssign.pop();
             }
           }
           else {
-            antecedents[i+1] = -1; // dummy
+            // generate dummyClause and push in array
+            ScareAssign.push(l);
+            pushCareClause(careClauses,proofPdt.resNodes,id,i+1,i+1,ScareAssign,mark2);
+            ScareAssign.pop();
+            if (decLevel0 < Scare->currDecisionLevel()) {
+              Scare->assignBacktrack();
+            }
           }
           mark[v] = mark[v]==l_False ? l_True:l_False;
         }
         // iterate on chain (l)
-        if (i>0 && Scare!=NULL && v<Scare->nVars()) {
+        if (1 && i>0 && isScareVar) {
           // check if l implied
+          decLevel0 = Scare->currDecisionLevel();
           tryLit = Scare->assign(~l,-1);
-          if (tryLit == l_True)
+          if (tryLit == l_True) {
+            ScareAssign.push(~l);
             nAssignBtk++;
+          }
         }
-        if (tryLit == l_False) {
+        if (!enCareSimpl && (tryLit == l_False)) {
+          tryLit = l_True;
+          isScareVar=0;
+        }
+        if (1 && (tryLit == l_False)) {
           // implied
+          ScareAssign.push(~l);
+          pushCareClause(careClauses,proofPdt.resNodes,id,0,i,ScareAssign,mark2);
+          ScareAssign.pop();
           // remove all remaining chain
-          antecedents[0]=-1; // dummy (to be replaced by removed literal
           for  (int ii=i-1; ii>=0; ii--) {
             removed[ii] = true;
             nRemoved++;
+          }
+          if (decLevel0 < Scare->currDecisionLevel()) {
+            Scare->assignBacktrack();
+            assert(decLevel0==Scare->currDecisionLevel());
           }
           break;
         }
@@ -2086,6 +2247,7 @@ namespace Minisat
     while (nAssignBtk-- > 0) {
       assert(Scare);
       Scare->assignBacktrack();
+      ScareAssign.pop();
     }
 
     if (nRemoved>0) {
@@ -2119,9 +2281,23 @@ namespace Minisat
 
   int Solver::proofRecyclePivotsReduction() {
     int totRemoved=0;
+    static bool enCare = true;
+    Solver *Scare = enCare ? (Solver *) proofPdt.Scare : NULL;
     vec<lbool> mark(nVars(),l_Undef);
+    vec<lbool> mark2(nVars(),l_Undef);
     vec<bool> done(proofPdt.resNodes.size(),false);
     vec<int> ref(proofPdt.resNodes.size(),0);
+    vec<Lit> ScareAssign;
+    if (Scare!=NULL) {
+      proofPdt.isScareUsedVar.clear();
+      proofPdt.isScareUsedVar.growTo(Scare->nVars(),false);
+      for (int i=0; i<Scare->nClauses(); i++) {
+        const Clause& cl = Scare->getClause2(i);
+        for(int j=0; j<cl.size(); ++j){
+          proofPdt.isScareUsedVar[var(cl[j])]=true;
+        }
+      }
+    }
     for(int i = 0; i < proofPdt.resNodes.size(); i++){
       if(proofPdt.resNodes[i].isOriginal()) continue;
       for(int j=0; j<proofPdt.resNodes[i].antecedents.size(); j++){
@@ -2132,7 +2308,10 @@ namespace Minisat
     for(int i = proofPdt.resNodes.size()-1; i>=0; i--){
       if(proofPdt.resNodes[i].isOriginal()) continue;
       totRemoved += proofNodeRecyclePivotsReduction(proofPdt,
-                      i,mark,done,ref);
+                      Scare,ScareAssign,i,mark,mark2,done,ref);
+    }
+    if( Scare != NULL) {
+      proofAddCareImpliedLiterals();
     }
     return totRemoved;
   }
