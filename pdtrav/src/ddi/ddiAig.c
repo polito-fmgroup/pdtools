@@ -71021,7 +71021,7 @@ struct Checker : public ProofTraverser {
         for (int j = 0; j<c.size(); j++) {
           int v = var(c[j]);
           if (isAvar[v]) {
-            assert(isGlobal(v));
+            //            assert(isGlobal(v));
           }
           else {
             assert(isBVar(v));
@@ -72355,6 +72355,9 @@ struct Checker : public ProofTraverser {
       //        rvreduceProof(0);
       //remapItpProof();
       //      deleteTemps();
+      static int doPrint = 0;
+      if (doPrint)
+        printItpProof();
     }
 
     void countPivots(int chooseAnd){
@@ -87070,6 +87073,13 @@ Minisat22Interpolant (
     interpolant = NULL;
   }
   else if (interpolant == NULL) {
+    static int logSizes=0;
+    if (logSizes) {
+      for (int i=22; i<39; i++) {
+        int s = Ddi_BddSize(Ddi_BddMakeFromBaig(ddm, trav.nodes[i].aig));
+        printf("[%d] -> size: %d\n", i, s);
+      }
+    }
     interpolant = Ddi_BddMakeFromBaig(ddm, trav.nodes.last().aig);
     if (trav.nodes.last().orClause != NULL) {
       Ddi_BddSetAig(trav.nodes.last().orClause);

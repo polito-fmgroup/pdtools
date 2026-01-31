@@ -70,3 +70,18 @@ trArray serve per dynAbstr. Si puo' fare meglio ???
 
 
 METTERE A POSTO BLOCCO IN peripheral latches per variabily di folding
+
+
+=======================
+
+interfaccia solver esistente per gestire implicazioni e decisioni
+
+Ddi_ClauseIsBlocked
+Ddi_SatSolverAddClause
+Ddi_SatSolveCustomized
+Ddi_SatSolverSimplify
+Ddi_SatSolverCexCore
+Ddi_SatSolve -> assume
+
+
+
