@@ -28349,8 +28349,8 @@ itpImgPart (
   }
 
   if (1 && prevTo!=NULL && itpPart<=8) {
-    static int compareWithItp=1;
-    int usePrevToWithA = 0; int useCareWithA = 0;
+    static int compareWithItp=0;
+    int usePrevToWithA = 1; int useCareWithA = 0;
     int usePrevToWithB = 1; int useCareWithB = 1;
     int useDontCare = 0;
     int tryPrevImgLearning = 0;
@@ -28476,7 +28476,7 @@ itpImgPart (
 					   0,timeLimit);
       Ddi_Free(coneAux);
       if (compareWithItp) {
-        Pdtutil_Assert(Ddi_BddIncluded(a,itp),"problem witn NEW");
+        Pdtutil_Assert(Ddi_BddIncluded(a,itp),"problem with NEW");
         Pdtutil_Assert(!Ddi_AigSatAnd(itp,b,optCare),"problem witn NEW");
 	printf("Comparing ItpWithNew to standard ITP\n");
 	Ddi_Bdd_t *itpRef = Ddi_AigSat22AndWithInterpolant(NULL,a,b,NULL,

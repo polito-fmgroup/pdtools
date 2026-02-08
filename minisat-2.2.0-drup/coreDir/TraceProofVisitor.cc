@@ -51,7 +51,7 @@ namespace Minisat
     //If the unit resolving clause doesn't already have a node id, one is assigned
     //and the node is outputted
     vec<Lit> res;
-    vec<int> ants;
+    vec<ant_t> ants;
     vec<Lit> pivots;
 
     if (m_units [var (p1)] < 0)
@@ -101,8 +101,8 @@ namespace Minisat
     //    fprintf (m_out, "%d %d 0\n", m_units [var (p1)], id);
 
     res.push(parent);
-    ants.push(m_units [var (p1)]-1);
-    ants.push(id-1);
+    ants.push(mkAnt(m_units [var (p1)]-1));
+    ants.push(mkAnt(id-1));
     pivots.push(p1);
     m_Solver.proofPdt.resNodes.growTo(m_ids-1);
     m_Solver.proofPdt.resNodes[m_ids-2] = ResolutionNode(res, ants, pivots);
@@ -118,7 +118,7 @@ namespace Minisat
     doAntecendents ();
 
     vec<Lit> res;
-    vec<int> ants;
+    vec<ant_t> ants;
     vec<Lit> pivots;
 
     Var vp = var (parent);
@@ -134,7 +134,7 @@ namespace Minisat
     int id;
     m_visited.has (chainClauses [0], id);
     //    fprintf (m_out, "%d ", id);
-    ants.push(id-1);
+    ants.push(mkAnt(id-1));
     for (int i = 0; i < chainPivots.size (); ++i)
     {
       pivots.push(chainPivots[i]);
@@ -142,11 +142,11 @@ namespace Minisat
       {
         m_visited.has (chainClauses [i+1], id);
 	//        fprintf (m_out, "%d ", id);
-        ants.push(id-1);
+        ants.push(mkAnt(id-1));
       }
       else {
 	//        fprintf (m_out, "%d ", m_units [var (chainPivots [i])]);
-        ants.push(m_units [var (chainPivots [i])]-1);
+        ants.push(mkAnt(m_units [var (chainPivots [i])]-1));
       }
     }
     //    fprintf (m_out, " 0\n");
@@ -245,7 +245,7 @@ namespace Minisat
     doAntecendents ();
 
     vec<Lit> res;
-    vec<int> ants;
+    vec<ant_t> ants;
     vec<Lit> pivots;
 
     int resId = m_ids++;
@@ -267,7 +267,7 @@ namespace Minisat
       fprintf (m_out, "error: missing visited id\n");
       assert(0);
     }
-    ants.push(id-1);
+    ants.push(mkAnt(id-1));
     //    fprintf (m_out, "%d ", id);
     for (int i = 0; i < chainPivots.size (); ++i)
     {
@@ -277,12 +277,12 @@ namespace Minisat
 	m_visited.has (chainClauses [i+1], id);
 	//        fprintf (m_out, "%d ", id);
 	assert(id>0);
-        ants.push(id-1);
+        ants.push(mkAnt(id-1));
       }
       else {
 	//        fprintf (m_out, "%d ", m_units [var (chainPivots [i])]);
         assert(m_units [var (chainPivots [i])]>0);
-        ants.push(m_units [var (chainPivots [i])]-1);
+        ants.push(mkAnt(m_units [var (chainPivots [i])]-1));
       }
     }
     //    fprintf (m_out, " 0\n");
@@ -395,8 +395,8 @@ namespace Minisat
     for (int i = 0; i < nNodes; i++) {
       proofCode code_i = resNodes[i].getCode();
       if (code_i == proof_res) {
-        for(int j=0; j < resNodes[i].antecedents.size(); j++){
-          int antId = resNodes[i].antecedents[j];
+        for(int j=0; j < resNodes[i].antecedents.size(); j++){ // 
+          int antId = resNodes[i].antecedents[j].id;
           mark[antId] = true;
         }
       }
@@ -457,7 +457,7 @@ namespace Minisat
       proofCode code_i = resNodes[i].getCode();
       if (code_i!=proof_rootA && code_i!=proof_rootB) {
         for(int j=0; j < resNodes[i].antecedents.size(); j++){
-          int antId = resNodes[i].antecedents[j];
+          int antId = resNodes[i].antecedents[j].id;
           int lmin_i = levelMin[antId] + add;
           int lmax_i = levelMax[antId] + add;
           int lchmax_i = levelChainMax[antId] + 1;
@@ -632,7 +632,7 @@ namespace Minisat
       proofCode code_i = resNodes[i].getCode();
       if (code_i!=proof_rootA && code_i!=proof_rootB) {
         for(int j=0; j < resNodes[i].antecedents.size(); j++){
-          int antId = resNodes[i].antecedents[j];
+          int antId = resNodes[i].antecedents[j].id;
           int lmin_i = levelMin[antId] + add;
           int lmax_i = levelMax[antId] + add;
           int lchmax_i = levelChainMax[antId] + 1;
@@ -735,7 +735,7 @@ namespace Minisat
       proofCode code_i = resNodes[i].getCode();
       if (code_i != proof_res) continue;
       vec<Lit>& pivots = resNodes[i].pivots;
-      vec<int>& antecedents = resNodes[i].antecedents;
+      vec<ant_t>& antecedents = resNodes[i].antecedents;
       totRes += pivots.size();
       totChain++;
       if (levelChainMax[i]>1) continue;
@@ -1021,7 +1021,7 @@ namespace Minisat
     for (int i=nNodes-1; i>=0; i--) {
       if (!proofPdt.resNodes[i].mark) continue;
       for(int j=0; j < proofPdt.resNodes[i].antecedents.size(); j++){
-        int antId = proofPdt.resNodes[i].antecedents[j];
+        int antId = proofPdt.resNodes[i].antecedents[j].id;
         proofPdt.resNodes[antId].mark = true;
       }
     }
@@ -1064,7 +1064,7 @@ namespace Minisat
       bool isB = true;
       bool isUndef = true;
       for(int j=0; j < proofPdt.resNodes[i].antecedents.size(); j++){
-        int antId = proofPdt.resNodes[i].antecedents[j];
+        int antId = proofPdt.resNodes[i].antecedents[j].id;
         assert (antId>=0 && antId<proofPdt.resNodes.size());
         proofCode code_j = proofPdt.resNodes[antId].getCode();
         switch (code_j) {
@@ -1228,22 +1228,22 @@ namespace Minisat
     proofCode code_i = resNodes[i].getCode();
     if (code_i != proof_res) return 0;
     vec<Lit>& pivots = resNodes[i].pivots;
-    vec<int>& antecedents = resNodes[i].antecedents;
+    vec<ant_t>& antecedents = resNodes[i].antecedents;
     // check antecedents
     int lev1Only = 0;
     if (lev1Only) {
       for(int j=0; j<antecedents.size(); j++) {
-        int antId = antecedents[j];
+        int antId = antecedents[j].id;
         proofCode code_j = resNodes[antId].getCode();
         if (code_j == proof_res) return 0;
       }
     }
     assert(pivots.size()>0);
     if (proofPdt.Global(var(pivots[0]))) {
-      int ant0 = antecedents[0];
-      int ant1 = antecedents[1];
-      proofCode code_0 = resNodes[ant0].getCode();
-      proofCode code_1 = resNodes[ant1].getCode();
+      ant_t ant0 = antecedents[0];
+      ant_t ant1 = antecedents[1];
+      proofCode code_0 = resNodes[ant0.id].getCode();
+      proofCode code_1 = resNodes[ant1.id].getCode();
       if ((code_0 == proof_resA || code_0 == proof_rootA) &&
           (code_1 == proof_resB || code_1 == proof_rootB)) {
         // swap so that antecedents[0] is B
@@ -1266,18 +1266,18 @@ namespace Minisat
         Var v0 = var(p0);
         Lit p1 = pivots[j+1];
         Var v1 = var(p1);
-        int ant0 = antecedents[j+1];
-        int ant1 = antecedents[j+2];
+        ant_t ant0 = antecedents[j+1];
+        ant_t ant1 = antecedents[j+2];
         bool gbl0 = proofPdt.Global(v0);
         bool gbl1 = proofPdt.Global(v1);
         bool a0 = !proofPdt.Global(v0) && proofPdt.Avar(v0);
         bool a1 = !proofPdt.Global(v1) && proofPdt.Avar(v1);
         bool enSwap = doStrengthen ? gbl0 && a1 : gbl1 && a0;
         if (enSwap) {
-          proofCode code_0 = resNodes[ant0].getCode();
-          proofCode code_1 = resNodes[ant1].getCode();
-          vec<Lit>& c0 = resNodes[ant0].resolvents;
-          vec<Lit>& c1 = resNodes[ant1].resolvents;
+          proofCode code_0 = resNodes[ant0.id].getCode();
+          proofCode code_1 = resNodes[ant1.id].getCode();
+          vec<Lit>& c0 = resNodes[ant0.id].resolvents;
+          vec<Lit>& c1 = resNodes[ant1.id].resolvents;
           if ((code_0 == proof_resA || code_0 == proof_rootA) &&
               (code_1 == proof_resA || code_1 == proof_rootA)) {
             assert(!hasVar(c1,v0));
@@ -1311,19 +1311,15 @@ namespace Minisat
     assert (!proofPdt.resNodes[i].isOriginal());
     vec<ResolutionNode>& resNodes = proofPdt.resNodes;
     vec<Lit>& pivots = resNodes[i].pivots;
-    vec<int>& antecedents = resNodes[i].antecedents;
+    vec<ant_t>& antecedents = resNodes[i].antecedents;
 
     bool ok=true;
     vec<Lit>& c = resNodes[i].resolvents;
-    int aId0 = resNodes[i].antecedents[0];
+    int aId0 = resNodes[i].antecedents[0].id;
     vec<Lit> res;
-    if (aId0<0) {
-      res.clear();
-      res.push(pivots[0]);
-      antecedents[0] = antecedents[1];
-    }
-    else
-      resNodes[aId0].resolvents.copyTo(res);
+    assert (aId0>=0);
+
+    resNodes[aId0].resolvents.copyTo(res);
 
     // start
     proofResolveStart(res, mark);
@@ -1334,50 +1330,40 @@ namespace Minisat
     for(int j=0; j<pivots.size(); j++) {
       Lit p = pivots[j];
       Var v = var(p);
-      int aId = antecedents[j+1];
-      if (aId<0) {
-        bool mainHas_p = mark[v]!=l_Undef;
-        vec<Lit> otherVoid;
-        assert(mainHas_p);
-        otherVoid.clear();
-        proofResolveClauses(res, otherVoid, p, mark);
-        removed[j] = true;
+      int aId = antecedents[j+1].id;
+
+      assert(aId>=0 && aId<i);
+      vec<Lit>& other = resNodes[aId].resolvents;
+      bool mainHas_p = mark[v]!=l_Undef;
+      assert(!mainHas_p || (mark[v] == (sign(p)?l_False:l_True)));
+      bool otherHas_p = clauseHasLit(other,~p);
+      if (mainHas_p && otherHas_p) {
+        // resolve
+        proofResolveClauses(res, other, p, mark);
+        if (j==0 && aId0<0) {
+          start_i=1;
+          removed[0] = true;
+          nRemoved++;
+        }
+      }
+      else if (!mainHas_p && otherHas_p) {
+        // keep main - remove other branch
+        removed[j] = true; // HERE for care impl
         nRemoved++;
       }
+      else if (mainHas_p && !otherHas_p) {
+        // take other branch - remove main
+        proofResolveClearMarkNoCheck (mark,res);
+        other.copyTo(res);
+        proofResolveStart(res, mark);
+        antecedents[0] = antecedents[j+1];
+        start_i = j+1; // skip up to here
+        nRemoved = j+1;
+      }
       else {
-        assert(aId>=0 && aId<i);
-        vec<Lit>& other = resNodes[aId].resolvents;
-        bool mainHas_p = mark[v]!=l_Undef;
-        assert(!mainHas_p || (mark[v] == (sign(p)?l_False:l_True)));
-        bool otherHas_p = clauseHasLit(other,~p);
-        if (mainHas_p && otherHas_p) {
-          // resolve
-          proofResolveClauses(res, other, p, mark);
-          if (j==0 && aId0<0) {
-            start_i=1;
-            removed[0] = true;
-            nRemoved++;
-          }
-        }
-        else if (!mainHas_p && otherHas_p) {
-          // keep main - remove other branch
-          removed[j] = true; // HERE for care impl
-          nRemoved++;
-        }
-        else if (mainHas_p && !otherHas_p) {
-          // take other branch - remove main
-          proofResolveClearMarkNoCheck (mark,res);
-          other.copyTo(res);
-          proofResolveStart(res, mark);
-          antecedents[0] = aId;
-          start_i = j+1; // skip up to here
-          nRemoved = j+1;
-        }
-        else {
-          // none has p - so far keep main
-          removed[j] = true;
-          nRemoved++;
-        }
+        // none has p - so far keep main
+        removed[j] = true;
+        nRemoved++;
       }
     }
     if (nRemoved>0) {
@@ -1459,13 +1445,6 @@ namespace Minisat
     }
     if (enSimplify) {
       nRemoved = proofRecyclePivotsReduction();
-      if (proofPdt.verbosity()>0)
-        printf("RES PROOF RECYCL PIV. REMOVED %d resolutions\n",
-             nRemoved);
-      nRemoved = proofRestructProof(proofPdt, nVars());
-      if (proofPdt.verbosity()>0)
-        printf("RESTRUCT PROOF REMOVED %d redundant resolutions\n",
-             nRemoved);
       //    nRemoved = proofCompactResolvents();
       //printf("RES PROOF REMOVED %d redundant  literals\n",
       //       nRemoved);
@@ -1508,7 +1487,7 @@ namespace Minisat
         bool isA = true;
         bool isB = true;
         for(int j=0; j < proofPdt.resNodes[i].antecedents.size(); j++){
-          int antecedentId = proofPdt.resNodes[i].antecedents[j];
+          int antecedentId = proofPdt.resNodes[i].antecedents[j].id;
           assert (antecedentId>=0 && antecedentId<proofPdt.resNodes.size());
           proofCode code_i = proofPdt.resNodes[antecedentId].getCode();
           switch (code_i) {
@@ -1518,6 +1497,9 @@ namespace Minisat
             break;
           case proof_rootB:
           case proof_resB:
+            if (proofPdt.resNodes[antecedentId].isCareNode()) {
+              isB = false;
+            }
             isA = false;
             break;
           case proof_root:
@@ -1597,7 +1579,7 @@ namespace Minisat
       if (code_i!=proof_rootA && code_i!=proof_rootB) {
         if (proofPdt.resNodes[i].pivots.size()==0) {
           // redundant node - redirect
-          int aId = proofPdt.resNodes[i].antecedents[0];
+          int aId = proofPdt.resNodes[i].antecedents[0].id;
           remap[i] = remap[aId];
           proofPdt.resNodes[i].code = proof_redundant;
           proofPdt.nRedNodes++;
@@ -1607,9 +1589,9 @@ namespace Minisat
         else {
           for(int j=0;
               j < proofPdt.resNodes[i].antecedents.size(); j++){
-            int aId = proofPdt.resNodes[i].antecedents[j];
+            int aId = proofPdt.resNodes[i].antecedents[j].id;
             assert(remap[aId]>=0&& remap[aId]<iNew);
-            proofPdt.resNodes[i].antecedents[j] = remap[aId];
+            proofPdt.resNodes[i].antecedents[j].id = remap[aId];
           }
         }
       }
@@ -1634,7 +1616,6 @@ namespace Minisat
 
   }
 
-  //NB: call only after replay
   void Solver::proofAddCareImpliedLiterals(void){
 
     vec<ResolutionNode> resNodes2;
@@ -1655,7 +1636,7 @@ namespace Minisat
       ResolutionNode r2 = ResolutionNode(proofPdt.resNodes[i]);
       for(int j=0;
           j < proofPdt.resNodes[i].antecedents.size(); j++){
-        int aId = proofPdt.resNodes[i].antecedents[j];
+        int aId = proofPdt.resNodes[i].antecedents[j].id;
         if (aId<0) {
           int auxId = -aId-1;
           assert(auxId>=0 && auxId<careClauses.size());
@@ -1663,7 +1644,8 @@ namespace Minisat
           resNodes2.push();   // 
           resNodes2[iNew] = ResolutionNode(res);
           resNodes2[iNew].setCareNode(true);
-          r2.antecedents[j] = iNew;
+          r2.antecedents[j] = mkAnt(iNew);
+
           iNew++;          
 #if 0
           Lit l;
@@ -1686,12 +1668,58 @@ namespace Minisat
             resNodes2[iNew].setCareNode(true);
             iNew++;
           }
-          r2.antecedents[j] = mappedLiterals[l_id];
+          r2.antecedents[j].id = mappedLiterals[l_id];
 #endif
           nImpl++;
         }
         else
-          r2.antecedents[j] = remap[aId];
+          r2.antecedents[j].id = remap[aId];
+      }
+      resNodes2.push();
+      resNodes2[iNew] = ResolutionNode(r2);
+      remap[i] = iNew++;
+    }
+    careClauses.clear();
+    nNodes = iNew;
+    resNodes2.copyTo(proofPdt.resNodes);
+    if (proofPdt.verbosity()>0)
+      printf("RES PROOF with %d literals implied by care)\n",
+             nImpl);
+  }
+
+  void Solver::proofAddCareResolvents(void){
+
+    vec<ResolutionNode> resNodes2;
+    //Sanity check
+    assert(proofPdt.resNodes.size() > 0);
+    assert(log_proof);
+    int nNodes = proofPdt.resNodes.size();
+    int nLits = 2*nVars();
+    vec<int> remap(nNodes,-1);
+    int nA=0, nB=0;
+    //Load original core clauses
+    //    printf("CORE CLAUSES\n");
+    int i, iNew, nImpl=0;
+    vec<vec<Lit>>& careClauses = proofPdt.careClauses;
+    resNodes2.clear();
+    for(i = iNew = 0; i < nNodes; i++){
+      ResolutionNode r2 = ResolutionNode(proofPdt.resNodes[i]);
+      for(int j=0;
+          j < proofPdt.resNodes[i].antecedents.size(); j++){
+        ant_t aId = proofPdt.resNodes[i].antecedents[j];
+        if (aId.care) {
+          int auxId = aId.id;
+          assert(auxId>=0 && auxId<i);
+          vec<Lit>& res=proofPdt.resNodes[auxId].resolvents;
+          resNodes2.push();   // 
+          resNodes2[iNew] = ResolutionNode(res);
+          resNodes2[iNew].setCareNode(true);
+          r2.antecedents[j] = mkAnt(iNew);
+          iNew++;          
+          nImpl++;
+        }
+        else
+          r2.antecedents[j].id = remap[aId.id];
       }
       resNodes2.push();
       resNodes2[iNew] = ResolutionNode(r2);
@@ -1895,7 +1923,7 @@ namespace Minisat
     printf("RES[%d] %s ", i, names[(int)proofPdt.resNodes[i].code]);
     if (verbosity>1)
       for(int j=0; j < proofPdt.resNodes[i].antecedents.size(); j++){
-        int aId = proofPdt.resNodes[i].antecedents[j];
+        int aId = proofPdt.resNodes[i].antecedents[j].id;
         if (j>0) {
           int v = var(proofPdt.resNodes[i].pivots[j-1]);
           char ab = '-', op = '&';
@@ -1926,7 +1954,7 @@ namespace Minisat
     assert(i>=0 && i< proofPdt.resNodes.size());
     int nFound=0;    
     for(int j=0; j<proofPdt.resNodes[i].antecedents.size(); j++) {
-      int aId = proofPdt.resNodes[i].antecedents[j];
+      int aId = proofPdt.resNodes[i].antecedents[j].id;
       assert(aId>=0 && aId<i);
       vec<Lit>& c = proofPdt.resNodes[aId].resolvents;
       for (int jj=0; jj<c.size(); jj++) {
@@ -1948,7 +1976,7 @@ namespace Minisat
     if (verbosity>0)
       printf("looking for antecendents with var %d\n", v);
     for(int j=0; j < proofPdt.resNodes[i].antecedents.size(); j++){
-      int aId = proofPdt.resNodes[i].antecedents[j];
+      int aId = proofPdt.resNodes[i].antecedents[j].id;
       assert(aId>=0 && aId<i);
       vec<Lit>& c = proofPdt.resNodes[aId].resolvents;
       for (int jj=0; jj<c.size(); jj++) {
@@ -1984,7 +2012,7 @@ namespace Minisat
     ScareAssign.push(l);
     // compute resolution
     for (int i=i0; i<=i1; i++) {
-      int auxId = resNodes[id].antecedents[i];
+      int auxId = resNodes[id].antecedents[i].id;
       vec<Lit>& resolvents = resNodes[auxId].resolvents;
       for (int ii=0; ii<resolvents.size(); ii++) {
         Lit l=resolvents[ii];
@@ -2008,7 +2036,7 @@ namespace Minisat
       }
 
     for (int i=i0; i<=i1; i++) {
-      int auxId = resNodes[id].antecedents[i];
+      int auxId = resNodes[id].antecedents[i].id;
       vec<Lit>& resolvents = resNodes[auxId].resolvents;
       for (int ii=0; ii<resolvents.size(); ii++) {
         Lit l=resolvents[ii];
@@ -2022,7 +2050,7 @@ namespace Minisat
     int auxId = careClauses.size();
     careClauses.push();
     careClause.copyTo(careClauses[auxId]);
-    resNodes[id].antecedents[i0] = -(auxId+1); // dummy
+    resNodes[id].antecedents[i0] = mkAnt(-(auxId+1),true); // dummy
  }
 
   //NB: call only after replay
@@ -2047,10 +2075,10 @@ namespace Minisat
     }
    
     // resolutions
-    int aId0 = resNodes[i].antecedents[0];
+    int aId0 = resNodes[i].antecedents[0].id;
     vec<Lit> res;
     vec<Lit>& pivots = resNodes[i].pivots;
-    vec<int>& antecedents = resNodes[i].antecedents;
+    vec<ant_t>& antecedents = resNodes[i].antecedents;
     res.clear();
     resNodes[aId0].resolvents.copyTo(res);
 
@@ -2059,7 +2087,7 @@ namespace Minisat
     for(int j=0; j<pivots.size(); j++) {
       Lit p = pivots[j];
       Var v = var(p);
-      int aId = antecedents[j+1];
+      int aId = antecedents[j+1].id;
       assert(aId>=0 && aId<i);
 
       vec<Lit>& other = resNodes[aId].resolvents;
@@ -2089,7 +2117,7 @@ namespace Minisat
     vec<Lit> cNew;
     int nMark1 = proofNodeMarkAntecedentVar(proofPdt,i,mark,true);
     for (int j=0; j<c.size(); j++) {
-      Var v = var(c[j]);
+      Var v = var(c[j]);        // 
       if (!mark[v]) {
         ok=false;
         nRemoved++;
@@ -2104,9 +2132,9 @@ namespace Minisat
     int nMark0 = proofNodeMarkAntecedentVar(proofPdt,i,mark,false);
     assert(nMark1==nMark0);
     //assert(c.size()>0 || i==proofPdt.resNodes.size()-1);
-    if (c.size()==0 && i<proofPdt.resNodes.size()-1) {
+    if (1 && (c.size()==0) && i<proofPdt.resNodes.size()-1) {
       printf("ooouck\n");
-      assert(0);
+      //     assert(0);
     }
     return (nRemoved);
   }
@@ -2127,7 +2155,7 @@ namespace Minisat
     int id, vec<lbool>& mark, vec<lbool>& mark2, vec<bool>& done, vec<int>& ref
   ) {
     static bool enRed = true; static int nCalls=0; static int nRed=0;
-    static int maxRedNum=0; // 43
+    static int maxRedNum=4677; // 43
     
     assert(id>=0 && id< proofPdt.resNodes.size());
     if (done[id]) return 0;
@@ -2148,7 +2176,7 @@ namespace Minisat
       }
     }
     vec<Lit>& pivots = proofPdt.resNodes[id].pivots;
-    vec<int>& antecedents = proofPdt.resNodes[id].antecedents;
+    vec<ant_t>& antecedents = proofPdt.resNodes[id].antecedents;
     // down iteration to find redundancies
 
     int decLevel = Scare? Scare->currDecisionLevel():0;
@@ -2166,11 +2194,14 @@ namespace Minisat
         mark[v] = sign(l) ? l_False:l_True;
         saved.push(v);
         // try recurring on antecedent (~l)
-        int antId = antecedents[i+1];
+        int antId = antecedents[i+1].id;
         assert(antId<id);
         bool isScareVar = Scare!=NULL && v<Scare->nVars() &&
           proofPdt.isScareUsedVar[v];
         int decLevel0 = 0;
+        if (maxRedNum>0 && nRed>maxRedNum) {
+          enCareSimpl=0;
+        }
         if (ref[antId]==1) {
           mark[v] = mark[v]==l_False ? l_True:l_False;
           if (i>0 && isScareVar) {
@@ -2180,9 +2211,6 @@ namespace Minisat
             if (tryLit == l_True) {
               ScareAssign.push(l);
             }
-          }
-          if (maxRedNum>0 && nRed>maxRedNum) {
-            enCareSimpl=0;
           }
           if (!enCareSimpl && (tryLit == l_False)) {
             tryLit = l_True;
@@ -2202,12 +2230,20 @@ namespace Minisat
           else {
             // generate dummyClause and push in array
             nRed++;
-            pushCareClause(careClauses,proofPdt.resNodes,id,i+1,i+1,ScareAssign,l,mark2);
+            recRemoved +=
+              proofNodeRecyclePivotsReduction(proofPdt,NULL,
+                                              ScareAssign,antId,
+                                              mark,mark2,done,ref);
+            //pushCareClause(careClauses,proofPdt.resNodes,id,i+1,i+1,ScareAssign,l,mark2);
+            antecedents[i+1].care = true;
             if (decLevel0 < Scare->currDecisionLevel()) {
               Scare->assignBacktrack();
             }
           }
           mark[v] = mark[v]==l_False ? l_True:l_False;
+        }
+        if (maxRedNum>0 && nRed>maxRedNum) {
+          enCareSimpl=0;
         }
         // iterate on chain (l)
         if (1 && i>0 && isScareVar) {
@@ -2219,7 +2255,7 @@ namespace Minisat
             nAssignBtk++;
           }
         }
-        //        enCareSimpl=0;
+        //enCareSimpl=0;
         if (!enCareSimpl && (tryLit == l_False)) {
           tryLit = l_True;
           isScareVar=0;
@@ -2228,7 +2264,7 @@ namespace Minisat
           // implied
           nRed++;
           pushCareClause(careClauses,proofPdt.resNodes,id,0,i,ScareAssign,~l,mark2);
-          // remove all remaining chain
+          // remove all remaining chain - keep i with resolution of antecedents
           for  (int ii=i-1; ii>=0; ii--) {
             removed[ii] = true;
             nRemoved++;
@@ -2315,7 +2351,7 @@ namespace Minisat
     for(int i = 0; i < proofPdt.resNodes.size(); i++){
       if(proofPdt.resNodes[i].isOriginal()) continue;
       for(int j=0; j<proofPdt.resNodes[i].antecedents.size(); j++){
-        int antId = proofPdt.resNodes[i].antecedents[j];
+        int antId = proofPdt.resNodes[i].antecedents[j].id;
         ref[antId]++;
       }
     }
@@ -2327,7 +2363,18 @@ namespace Minisat
     if( Scare != NULL) {
       proofAddCareImpliedLiterals();
     }
-    return totRemoved;
+    if (proofPdt.verbosity()>0)
+        printf("RES PROOF RECYCL PIV. REMOVED %d resolutions\n",
+             totRemoved);
+    int nRemoved = proofRestructProof(proofPdt, nVars());
+      if (proofPdt.verbosity()>0)
+        printf("RESTRUCT PROOF REMOVED %d redundant resolutions\n",
+               nRemoved);
+    if( Scare != NULL) {
+      proofAddCareResolvents();
+    }
+
+    return totRemoved=nRemoved;
   }
 
 
@@ -2443,7 +2490,16 @@ namespace Minisat
       }
       if (code == proof_rootB) {
         ClB.push();
-        c.copyTo(ClB.last());
+        if (proofPdt.resNodes[i].isCareNode()) {
+          vec<Lit> c1;
+          for(int j=0;j<c.size();j++) {
+            if (proofPdt.isBvar[var(c[j])])
+              c1.push(c[j]);
+          }
+          c1.copyTo(ClB.last());
+        }
+        else
+          c.copyTo(ClB.last());
       }
 
     }
@@ -2610,7 +2666,7 @@ namespace Minisat
       assert(code!=proof_root);
       if (code != proof_rootB && code != proof_resB) continue;
       nB++; if (code == proof_resB) nResB++;
-
+      int nRemoved=0;
       vec<Lit>& c = proofPdt.resNodes[i].resolvents;
 
       int extId = Clauses.size();
@@ -2618,7 +2674,19 @@ namespace Minisat
 
       //Copy original clause
       Clauses.push();
-      c.copyTo(Clauses[extId]);
+      if (proofPdt.resNodes[i].isCareNode()) {
+        vec<Lit> c1;
+        for(int j=0;j<c.size();j++) {
+          if (proofPdt.isBvar[var(c[j])])
+            c1.push(c[j]);
+          else {
+            nRemoved++;
+          }
+        }
+        c1.copyTo(Clauses[extId]);
+      }
+      else
+        c.copyTo(Clauses[extId]);
     }
 
     if (proofPdt.verbosity()>0)
@@ -2645,7 +2713,7 @@ namespace Minisat
 
       vec<int> extAntecedents;
       for(int j=0; j < proofPdt.resNodes[i].antecedents.size(); j++){
-        int antecedentId = proofPdt.resNodes[i].antecedents[j];
+        int antecedentId = proofPdt.resNodes[i].antecedents[j].id;
         assert(idMap[antecedentId] != -1);
         extAntecedents.push(idMap[antecedentId]);
         if (myprint) {
@@ -2873,7 +2941,7 @@ namespace Minisat
             //Convert antecedents id to external
             vec<int> extAntecedents;
             for(int j=0; j < proofPdt.resNodes[i].antecedents.size(); j++){
-                int antecedentId = proofPdt.resNodes[i].antecedents[j];
+                int antecedentId = proofPdt.resNodes[i].antecedents[j].id;
                 assert(idMap[antecedentId] != -1);
                 extAntecedents.push(idMap[antecedentId]);
             }

@@ -644,6 +644,7 @@ public:
   void proofClassifyNodes(int nAClauses, bool enSimplify);
   void proofEndAClauses(void);
   void proofCompactNodes(void);
+  void proofAddCareResolvents(void);
   void proofAddCareImpliedLiterals(void);
   int proofMoveNodesToA(float extraRatio);
   void proofSetupProofVars(void);

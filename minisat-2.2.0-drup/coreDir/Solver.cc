@@ -785,10 +785,10 @@ void Solver::dumpGlobalPivots(int i){
 }
 
 void Solver::checkChainSoundness(int i){
-  vec<int>& antecedents = proofPdt.resNodes[i].antecedents;
+  vec<ant_t>& antecedents = proofPdt.resNodes[i].antecedents;
   vec<Lit>& pivots = proofPdt.resNodes[i].pivots;
   for(int j = 0; j < antecedents.size(); j++){
-    vec<Lit>& cl = proofPdt.resNodes[antecedents[j]].resolvents;
+    vec<Lit>& cl = proofPdt.resNodes[antecedents[j].id].resolvents;
     updateChainLevels(cl, j);
   }
 
@@ -800,7 +800,7 @@ void Solver::checkChainSoundness(int i){
   for(int j = 0; j < pivots.size(); j++){
     bool found = false;
     Var v = var(pivots[j]);
-    vec<Lit>& antecendent = proofPdt.resNodes[antecedents[j+1]].resolvents;
+    vec<Lit>& antecendent = proofPdt.resNodes[antecedents[j+1].id].resolvents;
     for(int k = 0; k < antecendent.size(); k++){
       if(var(antecendent[k]) == v){
         found = true;
@@ -818,7 +818,7 @@ void Solver::restructureProof(){
   for(int i = 0; i < proofPdt.resNodes.size(); i++){
     if(!proofPdt.resNodes[i].isChain()) continue;
 
-    vec<int>& antecedents = proofPdt.resNodes[i].antecedents;
+    vec<ant_t>& antecedents = proofPdt.resNodes[i].antecedents;
     vec<Lit>& pivots = proofPdt.resNodes[i].pivots;
 
     int numGlobals = 0;
@@ -832,7 +832,7 @@ void Solver::restructureProof(){
 
     //Update chain levels
     for(int j = 0; j < antecedents.size(); j++){
-      vec<Lit>& cl = proofPdt.resNodes[antecedents[j]].resolvents;
+      vec<Lit>& cl = proofPdt.resNodes[antecedents[j].id].resolvents;
       updateChainLevels(cl, j);
     }
 
@@ -856,19 +856,19 @@ void Solver::restructureProof(){
           pivots[k] = temp;
 
           //Switch clauses
-          int temp2 = antecedents[j+1];
+          ant_t temp2 = antecedents[j+1];
           antecedents[j+1] = antecedents[k+1];
           antecedents[k+1] = temp2;
 
           //Update chain levels
-          vec<Lit>& goneUp = proofPdt.resNodes[antecedents[j+1]].resolvents;
+          vec<Lit>& goneUp = proofPdt.resNodes[antecedents[j+1].id].resolvents;
           for(int q = 0; q < goneUp.size(); q++){
             if(chainLevels[var(goneUp[q])] == k){
               chainLevels[var(goneUp[q])] = j;
             }
           }
           for(int q = k+1; q < j+1; q++){
-            vec<Lit>& cl = proofPdt.resNodes[antecedents[q]].resolvents;
+            vec<Lit>& cl = proofPdt.resNodes[antecedents[q].id].resolvents;
             updateChainLevels(cl, q);
           }
 

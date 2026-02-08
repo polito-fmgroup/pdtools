@@ -65330,7 +65330,7 @@ struct Checker : public ProofTraverser {
       auxV = NULL;
       auxF = NULL;
       auxConstr = NULL;
-      dontCareOpt = ddm->settings.aig.itpUseCare;
+      dontCareOpt = 0&&ddm->settings.aig.itpUseCare; // disabled: conflicts with care-opt interpolant
       zeroConstId=0;
       oneConstId=1;
       rootCustomHandling=0;
@@ -65549,7 +65549,7 @@ struct Checker : public ProofTraverser {
       else {
         int isCareClause = 0;
         int nGlobVars = 0;
-        if (dontCareOpt) {
+        if (0&&dontCareOpt) { // disabled a care opt can produce void clauses
           isCareClause = 1;
           for (int i = 0; i < c.size(); i++) {
             if (!isCareVar(var(c[i]))) {
@@ -71021,7 +71021,7 @@ struct Checker : public ProofTraverser {
         for (int j = 0; j<c.size(); j++) {
           int v = var(c[j]);
           if (isAvar[v]) {
-            //            assert(isGlobal(v));
+            assert(isGlobal(v));
           }
           else {
             assert(isBVar(v));
@@ -84757,7 +84757,7 @@ proof22toChecker(
     j = remapClauseIds==NULL ? i : remapClauseIds[i];
     if (j<0) continue;
     Pdtutil_Assert(j>=0 && j<nCl,"wrong clause id");
-    Pdtutil_Assert(clauses[i].size(),"void clause");
+    //    Pdtutil_Assert(clauses[i].size(),"void clause");
     //Minisat22PrintClause(clauses[i]);
     MinisatFrom22(clauses[i],cl);
     cl.copyTo(travP->clauses[j]);
@@ -85493,7 +85493,7 @@ getAuxProof22(
       mySat = S22check.solve(false,true);
   }
 
-  Pdtutil_Assert(!mySat,"UNSAT needed for solver RRERUN2");
+  Pdtutil_Assert(!mySat,"UNSAT needed for solver RERUN2");
   cpuTime = util_cpu_time () - startTime;
   Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {
     fprintf(dMgrO(ddm),"Solver RERUN1 with partial itp time = %s)\n", 

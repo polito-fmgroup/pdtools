@@ -18,12 +18,24 @@ namespace Minisat {
 
   typedef enum {str_maxChain, str_maxRes,
                 str_maxRef, str_closeGbl} relabelStrategy;
+
+  typedef struct Ant ant_t;
+  struct Ant {
+    int id;
+    bool care;
+
+    // Use this as a constructor:
+    friend ant_t mkAnt(int id, bool care);
+
+  };
+   
+  inline  ant_t  mkAnt (int id, bool care = false) { ant_t a = {id, care}; return a; }
   
   struct ResolutionNode
   {
     vec<Lit>        resolvents;
     vec<Lit>        pivots;
-    vec<int>        antecedents;
+    vec<ant_t>      antecedents;
     CRef            resClauseId;
     bool            topNode;
     bool            careNode;
@@ -43,7 +55,7 @@ namespace Minisat {
       code = proof_undef;
       savedCode = proof_undef;
     }
-    ResolutionNode(vec<Lit>& resolvents, vec<int>& antecedents, vec<Lit>& pivots) {
+    ResolutionNode(vec<Lit>& resolvents, vec<ant_t>& antecedents, vec<Lit>& pivots) {
       resolvents.copyTo(this->resolvents);
       antecedents.copyTo(this->antecedents);
       pivots.copyTo(this->pivots);
