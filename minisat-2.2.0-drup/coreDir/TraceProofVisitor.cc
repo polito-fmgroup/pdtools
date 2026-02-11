@@ -2276,7 +2276,7 @@ namespace Minisat
           break;
         }
       }
-      else if (enRed && i>0) {
+      else if (enRed && i>=0) {
         bool keepChain = (mark[v]==l_True && !sign(l)) ||
           (mark[v]==l_False && sign(l));
         if (keepChain) {
@@ -2442,7 +2442,7 @@ namespace Minisat
       }
     }
   }
-    
+  
   //NB: call only after replay
   void Solver::getProofClausesAfterMove(vec< vec<Lit> >& ClA,
                                        vec< vec<Lit> >& ClB,
@@ -2496,7 +2496,7 @@ namespace Minisat
             if (proofPdt.isBvar[var(c[j])])
               c1.push(c[j]);
           }
-          c1.copyTo(ClB.last());
+          //          c1.copyTo(ClB.last());
         }
         else
           c.copyTo(ClB.last());

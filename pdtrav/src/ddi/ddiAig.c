@@ -78578,6 +78578,28 @@ static void Minisat22PrintClauses(
   }
 }
 
+static void Minisat22SplitClause(
+  Minisat::vec< Minisat::vec<Minisat::Lit> >& c22,
+  int n,
+  Minisat::vec< Minisat::vec<Minisat::Lit> >& c22a,
+  Minisat::vec< Minisat::vec<Minisat::Lit> >& c22b
+) {
+  int i;
+  c22a.clear();
+  c22b.clear();
+  for (i=0; i<c22.size(); i++) {
+    if (i<n) {
+      c22a.push();
+      c22[i].copyTo(c22a.last());
+    }
+    else {
+      c22b.push();
+      c22[i].copyTo(c22b.last());
+    }
+  }
+}
+
+
 static void Minisat22SolverPrintClauses(
    Minisat::Solver &S  
 )
@@ -85212,10 +85234,13 @@ remapProofVars(
 static Ddi_Bdd_t *
 getAuxProof22(
   void    *Svoid,
+  void    *ScareVoid,
+  Ddi_Bdd_t *c,
   Ddi_Mgr_t *ddm
 )
 {
   Minisat22Solver* S22 = (Minisat22Solver *)Svoid;
+  Minisat22Solver* S22care = (Minisat22Solver *)ScareVoid;
   bAig_Manager_t *bmgr = ddm->aig.mgr;
   long cpuTime=0, startTime=0;
   int nAClausesCore = 0;
@@ -85409,6 +85434,7 @@ getAuxProof22(
   S22check.pdtAddClauses(ClAfromB);
   // load A clauses from res
   //S22check.pdtAddClauses(ClAfromRes);
+
   int useItp = S22->proofPdt.B2AvarActive();
   float genAuxClRatio = 0.0; 
   int useBClauses = useItp? 0 : 1;
@@ -85578,6 +85604,9 @@ getAuxProof22(
      //    assert(nSolverCheckACl>0);
      //    S22check.proofClassifyNodes(nSolverCheckACl,true);
      bool enSimplify = true;
+
+     S22check.proofPdt.Scare = (void*)S22care;
+
      S22check.proofClassifyNodes(-1,enSimplify);
      S22check.getProof(clauses2, nAClCore, proofNodes2,
                        pivots2,NULL);
@@ -85694,9 +85723,15 @@ getAuxProof22(
      int tryNnfAbstr = 1;
      if (tryNnfAbstr) {
        S22check.proofSave();
-       if (1)
+       if (0)
          S22check.getProofClausesAfterMove(ClA,ClB,
                                    ClAorig,ClAfromB,ClAfromRes);
+       else {
+         Minisat22SplitClause(clauses2,nAClCore,ClA,ClB);
+       }
+       // Wrong as missing proper support (intermediate itp aux vars
+       //       if (c!=NULL)
+       //         Ddi_BddAndAcc(itp2,c);
 #if 0
        Ddi_BddNotAcc(itp2);
        Ddi_Bdd_t *itp2AbstrA = Minisat22NnfAbstrPba(itp2,ClA,-1.0);
@@ -86030,19 +86065,19 @@ getProof22(
   }
   
   markProofVars(S22,a,b);
+  Minisat22Solver *S22care = NULL; 
   if (1 && c!=NULL && !Ddi_BddIsOne(c)) {
-    Minisat22Solver *S22care = new Minisat22Solver();
+    S22care = new Minisat22Solver();
     Solver Sdummy;
 
     MinisatClausesWithSuppFlow(NULL,Sdummy,(void *)S22care,c,NULL,NULL,NULL,NULL,NULL,0,0,0,0);
+  }
+  
+  if (!doPartialOnSameProof) {
     S22->proofPdt.Scare = (void*)S22care;
-    S22->proofClassifyNodes(nAClauses,true);
-    delete S22care;
-    S22->proofPdt.Scare = NULL;
   }
-  else {
-    S22->proofClassifyNodes(nAClauses,true);
-  }
+  S22->proofClassifyNodes(nAClauses,true);
+
   //S22->printProof(NULL,NULL);
   int constItp = S22->getProof(clauses, nAClausesCore, proofNodes,
 			       pivots, topResClP);
@@ -86054,7 +86089,7 @@ getProof22(
   }
   if (auxItp==NULL && clauses.size()>100) {
     if (doPartialOnSameProof) {
-      auxItp = getAuxProof22(S22,ddm);
+      auxItp = getAuxProof22(S22,S22care,c,ddm);
     }
 
     if (doPartialRerunSolver) {
@@ -86151,6 +86186,12 @@ getProof22(
   if (c!=NULL && !Ddi_BddIsOne(c) && auxItp!=NULL) {
     Ddi_BddAndAcc(auxItp,c);
   } 
+
+  if(S22care!=NULL) {
+    delete S22care;
+    S22->proofPdt.Scare = NULL;
+  }
+  
   return auxItp;
 }
 
@@ -86806,7 +86847,7 @@ Minisat22Interpolant (
     //    trav.genResolution2 = 1;
   }
 
-  if (care != NULL) {
+  if (0&&care != NULL) {
     trav.careBaig = Ddi_BddToBaig(care);
   }
 
