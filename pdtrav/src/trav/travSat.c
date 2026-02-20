@@ -14016,6 +14016,13 @@ Trav_DeepestRingCex(
   Ddi_VararrayDiffAcc(cexSupp,ns);
   Ddi_VararrayUnionAcc(pi,cexSupp);
   Ddi_Free(cexSupp);
+
+  if (1 && cex!=NULL) {
+    Ddi_Bdd_t *invLit = Ddi_BddMakeLiteralAig(cvarNs,1);
+    Ddi_BddAndAcc(cex,invLit);
+    Ddi_Free(invLit);
+  }
+
   return cex;
 }
 
@@ -26579,9 +26586,20 @@ itpImgGetCone(
               int npMax = travMgr->settings.aig.itpPartCone;
               int npMin = npMax/2;
               if ((start_i-end_i) >= npMin) {
-                Ddi_Bdd_t *newCone = Ddi_AigDisjDecomp (localCone,
+                Ddi_Bdd_t *myCone=Ddi_BddDup(localCone);
+                Ddi_Var_t *cvarNs = Ddi_VarFromName(ddm,"PDT_BDD_INVAR_VAR$NS");
+                if (cvarNs!=NULL)
+                  Ddi_BddCofactorAcc(myCone,cvarNs,1);
+                Ddi_Bdd_t *newCone = Ddi_AigDisjDecomp (myCone,
                                                       npMin,npMax);
+                if (cvarNs!=NULL) {
+                  Ddi_Bdd_t *l = Ddi_BddMakeLiteralAig(cvarNs, 1); 
+                  for(int i=0; i<Ddi_BddPartNum(newCone); i++)
+                    Ddi_BddAndAcc(Ddi_BddPartRead(newCone,i),l);
+                  Ddi_Free(l);
+                }
                 Ddi_DataCopy(localCone,newCone); // keep compose info
+                Ddi_Free(myCone);
                 Ddi_Free(newCone);
               }
             }
@@ -27929,7 +27947,7 @@ itpImgPart (
   int genNextRing = 1;
   int incrementalSat = 1;
   Ddi_IncrSatMgr_t *ddiS = NULL;
-  int enPartA = 0, enDisjDecomp = itpTravMgr->observedGates==NULL;
+  int enPartA = 0, enDisjDecomp = 1 && itpTravMgr->observedGates==NULL;
   int completeOnSplit = 1;
   float itpRefTime = 100; // 10; // -1.0;
   int doFixedPart = 1;
@@ -28366,7 +28384,8 @@ itpImgPart (
     }
     if (optCare!=NULL) {
       if (useCareWithA) {
-        Ddi_BddAndAcc(aNew,optCare);
+        if (!Ddi_BddIncluded(aNew,optCare))
+          Ddi_BddAndAcc(aNew,optCare);
       }
       if (useCareWithB) {
         Ddi_BddAndAcc(bNew,optCare);
@@ -28374,7 +28393,8 @@ itpImgPart (
     }
     if (itpPlus!=NULL) {
       if (useCareWithA) {
-        Ddi_BddAndAcc(aNew,itpPlus);
+        if (!Ddi_BddIncluded(aNew,itpPlus))
+          Ddi_BddAndAcc(aNew,itpPlus);
       }
       if (useCareWithB) {
         Ddi_BddAndAcc(bNew,itpPlus);
@@ -28440,7 +28460,7 @@ itpImgPart (
                                           aNew,bNew,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
-					  careAig,itpPlus,
+					  careAig,NULL,
 					  psat, itpPart, itpOdc, 
 					  0,timeLimit);
       printf("Computed itpNew using extra learning\n");
@@ -28453,6 +28473,14 @@ itpImgPart (
     Ddi_Free(bNew);
     Ddi_Free(careAig);
     if (itpNew!=NULL) {
+      if (optCare!=NULL && useCareWithB) {
+        if (!Ddi_BddIncluded(itpNew,optCare))
+          Ddi_BddAndAcc(itpNew,optCare);
+      }
+      if (itpPlus!=NULL && useCareWithB) {
+        if (!Ddi_BddIncluded(itpNew,itpNew))
+          Ddi_BddAndAcc(itpNew,itpPlus);
+      }
       coneAux = Ddi_BddNot(itpNew);
       if (tryPrevImgLearning && !Ddi_BddIsConstant(coneAux)) {
 	Ddi_Free(itpTravMgr->careForBwdCone);
@@ -28498,16 +28526,28 @@ itpImgPart (
     int m = Ddi_BddReadMark(b);
 
     Ddi_BddPartSortBySizeAcc(bPart,0); // decreasing size
+    int largeFirst=0;
+    int np = Ddi_BddPartNum(bPart);
+    int n0 = np/3;
     b0 = Ddi_BddPartExtract(bPart,0);
+    for (int i=1; i<n0; i++) {
+      Ddi_Bdd_t *p = Ddi_BddPartExtract(bPart,0);
+      Ddi_BddOrAcc(b0,p);
+      Ddi_Free(p);
+    }
     b1 = Ddi_BddDup(bPart);
+    if (largeFirst) {
+      Ddi_Bdd_t *t=b0; b0=b1; b1=t;
+    }
+
     Ddi_BddSetAig(b0);
     Ddi_BddSetAig(b1);
-    Ddi_BddDiffAcc(b0,b1);
+    //    Ddi_BddDiffAcc(b0,b1);
     Ddi_AigStructRedRemAcc (b0,NULL);
 
     Ddi_Free(bPart);
     Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
-      printf("ITP by disj CONE decomp: %d -> (%d,%d)\n",
+      printf("\nITP by disj CONE decomp: %d -> (%d,%d)\n",
 	     Ddi_BddSize(b), Ddi_BddSize(b0), Ddi_BddSize(b1));
     }
     static int trySingle = 0;
@@ -28530,7 +28570,7 @@ itpImgPart (
       }
     }
     Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
-      printf("ITP by disj CONE decomp part 0: %d\n",
+      printf("\nITP by disj CONE decomp part 0: %d\n",
 	     Ddi_BddSize(b1));
     }
     Ddi_Bdd_t *itp0, *itp1 = 
@@ -28546,16 +28586,37 @@ itpImgPart (
       return NULL;
     }
     else {
+      int refineByItp=1;
+      if (refineByItp) {
+        printf("\nRe-Computing itp using itp1\n");
+        Ddi_Bdd_t *coneAux = Ddi_BddNot(itp1);
+        Ddi_Bdd_t *itp1b = Ddi_AigSat22AndWithInterpolant(NULL,a,coneAux,NULL,
+					  globalVars, domainVars,
+					   tfPiVars,tfPiNum,
+					   NULL,NULL,
+					   psat, 0, itpOdc, 
+					   0,timeLimit);
+	Ddi_DataCopy(itp1,itp1b);
+	Ddi_Free(itp1b);
+      }
       Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
-        printf("ITP by disj CONE decomp part 1: %d\n",
+        printf("\nITP by disj CONE decomp part 1: %d\n",
                Ddi_BddSize(b0));
       }
       Ddi_BddAndAcc(b0,itp1);
+      Ddi_Bdd_t *myCare = Ddi_BddDup(itp1);
+      if (optCare!=NULL) {
+        Ddi_BddAndAcc(myCare,optCare);
+      }
+      if (itpPlus!=NULL) {
+        Ddi_BddAndAcc(myCare,itpPlus);
+      }
+      Ddi_BddAndAcc(b0,myCare);
       itp0 = 
        Ddi_AigSat22AndWithInterpolant(NULL,a,b0,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
-					  optCare,itpPlus,
+					  myCare,NULL,
 					  psat, 0, itpOdc, 
 					  0,timeLimit);
       Ddi_Free(b0);
@@ -28565,18 +28626,38 @@ itpImgPart (
 	return NULL;
       }
       else {
+        Ddi_BddAndAcc(itp0,myCare);
+        printf("\nRe-Computing itp using itp0\n");
+        Ddi_Bdd_t *coneAux = Ddi_BddNot(itp0);
+        Ddi_Bdd_t *itpRet = Ddi_AigSat22AndWithInterpolant(NULL,a,coneAux,NULL,
+					  globalVars, domainVars,
+					   tfPiVars,tfPiNum,
+					   NULL,NULL,
+					   psat, 0, itpOdc, 
+					   0,timeLimit);
+        
         int s0 = Ddi_BddSize(itp0), s1 = Ddi_BddSize(itp1);
 	Ddi_BddAndAcc(itp1,itp0);
 	Ddi_Free(itp0);
-        Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
-          printf("ITP by disj CONE decomp result: %d+%d=%d\n",
+        if (Ddi_BddSize(itpRet)<Ddi_BddSize(itp1)) {
+          Ddi_DataCopy(itp1,itpRet);
+          Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+            printf("ITP by disj CONE decomp result: ITP(%d,%d)->%d\n",
                  s0,s1,Ddi_BddSize(itp1));
+          }
+        }
+        else {
+          Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+            printf("ITP by disj CONE decomp result: %d+%d=%d\n",
+                 s0,s1,Ddi_BddSize(itp1));
+          }
         }
 	return itp1;
       }
+      Ddi_Free(myCare);
     }
   }
-  else if (/*step<=1 ||*/ itpPart<=0 || Ddi_BddSize(b)<=itpPartTh) {
+  else if (/*step<=1 ||*/ itpPart<=1 || Ddi_BddSize(b)<=itpPartTh) {
     Ddi_Bdd_t *b2 = Ddi_BddDup(b);
     //Ddi_Bdd_t *b2 = Ddi_BddMakeAig(b);
     int saveItpReverse = ddm->settings.aig.itpReverse;
@@ -28715,7 +28796,7 @@ itpImgPart (
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
 					  optCare,prevTo,
-					  psat, 0, itpOdc, 
+					  psat, itpPart, itpOdc, 
 					  0,timeLimit);
       }
       ddm->settings.aig.itpTwice = tryTwice;
@@ -28841,7 +28922,7 @@ itpImgPart (
        Ddi_AigSat22AndWithInterpolant(NULL,a,b1,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
-					  optCare,itpPlus,
+					  optCare,NULL,
 					  psat, 1, itpOdc, 
 					  0,timeLimit);
     if (itp1==NULL) {
@@ -28855,7 +28936,7 @@ itpImgPart (
        Ddi_AigSat22AndWithInterpolant(NULL,a,b0,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
-					  optCare,itpPlus,
+					  optCare,NULL,
 					  psat, 1, itpOdc, 
 					  0,timeLimit);
       Ddi_Free(b0);
@@ -28877,7 +28958,7 @@ itpImgPart (
 					  globalVars, domainVars,
 					  itpMgr->ns, 
 					  tfPiVars,tfPiNum,
-					  optCare,itpPlus,
+					  optCare,NULL,
 					  psat, itpPart, itpOdc, 
 					  timeLimit);
     if (itpRes!=NULL) {
@@ -35628,18 +35709,12 @@ interpolantInnerLoop(
     Ddi_Free(initStub);
   }
   Ddi_Free(myTrRange);
-  Ddi_Free(itpTravMgr->saveConstrainVars);
-  Ddi_Free(itpTravMgr->saveConstrainSubstLits);
   Ddi_Free(myInvarConstr);
   Ddi_Free(savePreviousFrom);
   Ddi_Free(ternarySmooth);
-  Ddi_Free(itpTravMgr->reached);
   Ddi_Free(reached1);
-  Ddi_Free(itpTravMgr->from);
   Ddi_Free(nsvars);
   Ddi_Free(psvars);
-  Ddi_Free(itpTravMgr->constrainVars);
-  Ddi_Free(itpTravMgr->constrainSubstLits);
 //  Ddi_MgrCheckExtRef(ddm,extRef+2);
   return (step - 1);
   /* END INTERPOLANT INNER LOOP */
@@ -39788,18 +39863,12 @@ interpolantInnerLoop0(
     Ddi_Free(initStub);
   }
   Ddi_Free(myTrRange);
-  Ddi_Free(itpTravMgr->saveConstrainVars);
-  Ddi_Free(itpTravMgr->saveConstrainSubstLits);
   Ddi_Free(myInvarConstr);
   Ddi_Free(savePreviousFrom);
   Ddi_Free(ternarySmooth);
-  Ddi_Free(itpTravMgr->reached);
   Ddi_Free(reached1);
-  Ddi_Free(itpTravMgr->from);
   Ddi_Free(nsvars);
   Ddi_Free(psvars);
-  Ddi_Free(itpTravMgr->constrainVars);
-  Ddi_Free(itpTravMgr->constrainSubstLits);
 //  Ddi_MgrCheckExtRef(ddm,extRef+2);
   return (step - 1);
   /* END INTERPOLANT INNER LOOP */

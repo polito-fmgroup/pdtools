@@ -392,19 +392,29 @@ namespace Minisat
     vec<ResolutionNode>& resNodes = proofPdt.resNodes;
     int nNodes = resNodes.size();
     vec<bool>mark(nNodes,false);
-    for (int i = 0; i < nNodes; i++) {
+    mark[nNodes-1] = true;
+    nCore = nNodes;
+    for (int i = nNodes-1; i>=0; i--) {
       proofCode code_i = resNodes[i].getCode();
       if (code_i == proof_res) {
-        for(int j=0; j < resNodes[i].antecedents.size(); j++){ // 
-          int antId = resNodes[i].antecedents[j].id;
-          mark[antId] = true;
+        if (mark[i]) {
+          for(int j=0; j < resNodes[i].antecedents.size(); j++){ // 
+            int antId = resNodes[i].antecedents[j].id;
+            mark[antId] = true;
+          }
+        }
+        else {
+          proofPdt.nResNodes--;
+          proofPdt.nRedNodes++;
+          resNodes[i].setCode(proof_redundant);
+          nCore--;
         }
       }
     }
-    nCore = nNodes;
     for (int i = 0; i < nNodes; i++) {
       proofCode code_i = resNodes[i].getCode();
       if (code_i == proof_res) continue;
+      if (code_i == proof_redundant) continue;
       if (mark[i] || resNodes[i].isCareNode()) {
         if (code_i == proof_resA) {
           resNodes[i].setCode(proof_rootA);
@@ -1535,8 +1545,11 @@ namespace Minisat
     proofPdt.nRedNodes = proofPdt.resNodes.size() -
       (nA + nB + nResA + nResB + nRes);
 
-    if (pdtChecks) proofCheck();
-    resNodesReduceCore(proofPdt);
+    int enCoreRed = !proofPdt.solverUndef;
+    if (enCoreRed) {
+      if (pdtChecks) proofCheck();
+      resNodesReduceCore(proofPdt);
+    }
     if (pdtChecks) proofCheck();
 
     //printProof(NULL,NULL,1);
@@ -2156,6 +2169,8 @@ namespace Minisat
   ) {
     static bool enRed = true; static int nCalls=0; static int nRed=0;
     static int maxRedNum=4677; // 43
+    static volatile int enRecur0=1;
+    static volatile int minI=1;
     
     assert(id>=0 && id< proofPdt.resNodes.size());
     if (done[id]) return 0;
@@ -2246,6 +2261,7 @@ namespace Minisat
           enCareSimpl=0;
         }
         // iterate on chain (l)
+        tryLit = l_True;
         if (1 && i>0 && isScareVar) {
           // check if l implied
           decLevel0 = Scare->currDecisionLevel();
@@ -2275,8 +2291,17 @@ namespace Minisat
           }
           break;
         }
+        else if (i==0 && enRecur0) {
+          int antId0 = antecedents[0].id;
+          if (ref[antId0]==1) {
+            recRemoved +=
+              proofNodeRecyclePivotsReduction(proofPdt,Scare,
+                                              ScareAssign,antId0,
+                                              mark,mark2,done,ref);
+          }
+        }
       }
-      else if (enRed && i>=0) {
+      else if (enRed && i>=minI) {
         bool keepChain = (mark[v]==l_True && !sign(l)) ||
           (mark[v]==l_False && sign(l));
         if (keepChain) {

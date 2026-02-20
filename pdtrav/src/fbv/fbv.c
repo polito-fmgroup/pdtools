@@ -11741,8 +11741,8 @@ invarDecompVerif(
   int replaceReached = 1; // do not and reached at each k - replace it
   int useFullPropAsConstr=0&&(opt->pre.specDecompCore>0);
   int igrFpRing = -1;
-  int useRplusAsConstr = opt->trav.itpGfp>1;
-  int useRplusAsCareWithItp = opt->trav.itpGfp>1;
+  int useRplusAsConstr = opt->trav.itpGfp>=1;
+  int useRplusAsCareWithItp = opt->trav.itpGfp>=1;
   
   /**********************************************************************/
   /*                        Create DDI manager                          */
@@ -19660,7 +19660,7 @@ FbvGetSpec(
       }
       // Ddi_BddOrAcc(deltaTarget1,deltaTarget2);
 
-      if (1) {
+      if (0) {
 	int i;
 	Ddi_Vararray_t *vA, *vA2;
 	char name[1000];

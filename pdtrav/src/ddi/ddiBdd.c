@@ -968,6 +968,7 @@ Ddi_BddSize(
   Ddi_Bdd_t  *f
 )
 {
+  if (f==NULL) return -1;
   DdiConsistencyCheck(f,Ddi_Bdd_c);
   return (DdiGenericBddSize((Ddi_Generic_t *)f,-1));
 }

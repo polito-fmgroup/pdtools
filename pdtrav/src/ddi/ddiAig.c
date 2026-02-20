@@ -136,7 +136,7 @@ typedef struct {
   //    Ddi_Bdd_t *cube;
     Ddi_Bdd_t *orClause;
   //    int aigSize;
-    char chainLevel;
+    int chainLevel;
     int isOdc;
     char optimized;
     char isAndCube;
@@ -70859,6 +70859,22 @@ struct Checker : public ProofTraverser {
 
       }
 
+
+      if (partial) {
+	vec<vec<Lit> >  topResClauses2;
+	topResClauses2.growTo(nNodes);
+	for (i=0; i<remap.size() && i<topResClauses.size(); i++) {
+	  int i2 = remap[i];
+	  if (topResClauses[i].size()>0) {
+	    if (i2<0||i2>=nNodes) {
+	      Pdtutil_Assert(i2>=0 && i2<nNodes,"wrong remap");
+	    }
+	    topResClauses[i].copyTo(topResClauses2[i2]);
+	  }
+	}
+	topResClauses2.moveTo(topResClauses);
+      }
+
       Pdtutil_VerbosityMgr(ddiMgr, Pdtutil_VerbLevelUsrMax_c,
         printf("ITP proof remapped roots: %d - eq nodes: %d - tot: %d\n",
                remappedRoots.size(), nRemappedNodes, remappedNodes.size()));
@@ -70901,20 +70917,6 @@ struct Checker : public ProofTraverser {
 
       remapImplTable();
       
-      if (partial) {
-	vec<vec<Lit> >  topResClauses2;
-	topResClauses2.growTo(nNodes);
-	for (i=0; i<remap.size() && i<topResClauses.size(); i++) {
-	  int i2 = remap[i];
-	  if (topResClauses[i].size()>0) {
-	    if (i2<0||i2>=nNodes) {
-	      Pdtutil_Assert(i2>=0 && i2<nNodes,"wrong remap");
-	    }
-	    topResClauses[i].copyTo(topResClauses2[i2]);
-	  }
-	}
-	topResClauses2.moveTo(topResClauses);
-      }
 
       isCore.clear();
       isRoot.clear();
@@ -83235,7 +83237,7 @@ Ddi_AigSat22AndWithInterpolant (
     ddm->settings.aig.itpDrup%2==0;
 
   static int nCalls = 0;
-  int tryPartial = 0;
+  int tryPartial = 1;
   Ddi_Bdd_t *itpPlus = NULL;
 
   if (ddm->settings.aig.itpDrup>2)
@@ -83404,6 +83406,10 @@ Ddi_AigSat22AndWithInterpolant (
 	  return (itp);
 	}
       }
+      else if (*psat==1){
+        return (NULL);
+      }
+
     }
 
     if (Ddi_BddSize(b)>itpPartTh) {
@@ -83651,6 +83657,9 @@ Ddi_AigSat22AndWithInterpolant (
 
   Pdtutil_VerbosityMgr(ddm, Pdtutil_VerbLevelUsrMax_c,
                        fprintf(dMgrO(ddm),"ITP (|A|=%d,|B|=%d)\n",sizeA,sizeB));
+  Pdtutil_VerbosityMgr(ddm, Pdtutil_VerbLevelUsrMax_c,
+                       fprintf(dMgrO(ddm),"care=%d,itpPlus=%d,prevItp=%d)\n",
+                               Ddi_BddSize(optCare),Ddi_BddSize(itpPlus),Ddi_BddSize(prevItp)));
 
   //  aig2CnfIdInitDecr(ddm,2*(sizeA+sizeB)/3);
   Pdtutil_Assert(incrSat==NULL,"incr sat not allowed across itps");
@@ -83869,8 +83878,8 @@ Ddi_AigSat22AndWithInterpolant (
 
   if (*psat < 0) {
     int ncl, i;
-    int enTopLitConstr = 1;
-    int returnConstr = 1;
+    int enTopLitConstr = 0;
+    int returnConstr = 0;
     undefined = 1;
 
     Pdtutil_VerbosityLocal(Pdtutil_VerbLevelUsrMin_c, Pdtutil_VerbLevelNone_c,
@@ -83902,7 +83911,7 @@ Ddi_AigSat22AndWithInterpolant (
       aig2CnfIdClose(ddm);
     }
     else if (enTopLitConstr) {
-      Ddi_Bdd_t *constrFull = Minisat22InterpolantUndefTopLits ((void *)S22, ddm, 10);
+      Ddi_Bdd_t *constrFull = Minisat22InterpolantUndefTopLits ((void *)S22, ddm, 100);
       aig2CnfIdClose(ddm);
       Ddi_Bdd_t *constrA = Ddi_BddPartFilter (constrFull,a2);
       Ddi_Bdd_t *constrB = Ddi_BddPartFilter (constrFull,b2);
@@ -84024,11 +84033,42 @@ Ddi_AigSat22AndWithInterpolant (
 	Ddi_Bdd_t *itpB = Ddi_BddDup(Ddi_BddPartRead(interpolant,1));
 	Ddi_Bdd_t *itpGA = Ddi_BddDup(Ddi_BddPartRead(interpolant,2));
 	Ddi_Bdd_t *itpGB = Ddi_BddDup(Ddi_BddPartRead(interpolant,3));
+	Ddi_Bdd_t *itpTA = Ddi_BddDup(Ddi_BddPartRead(interpolant,4));
+	Ddi_Bdd_t *itpTB = Ddi_BddDup(Ddi_BddPartRead(interpolant,5));
 	Ddi_Free(interpolant);
 	Ddi_AigStructRedRemAcc (itpA,0);
       	Ddi_AigStructRedRemAcc (itpB,0);
 	// Ddi_NnfClustSimplifyAcc(itpA,0);
 	//	Ddi_NnfClustSimplifyAcc(itpB,0);
+        Ddi_BddNotAcc(itpTA);
+        Ddi_Bdd_t *itpTA2 =  Ddi_AigSat22AndWithInterpolant(
+			 incrSat,a2,itpTA,NULL,
+			 globalVars, domainVars,
+			 tfPiVars,tfPiNum,
+			 NULL,NULL,
+			 psat, 0, itpOdc,0, 
+			 -1);
+        Ddi_BddNotAcc(itpTA);
+        Ddi_BddNotAcc(itpA);
+        Ddi_Bdd_t *itpA2 =  Ddi_AigSat22AndWithInterpolant(
+			 incrSat,a2,itpA,NULL,
+			 globalVars, domainVars,
+			 tfPiVars,tfPiNum,
+			 NULL,NULL,
+			 psat, 0, itpOdc,0, 
+			 -1);
+        Ddi_BddNotAcc(itpA);
+        Ddi_BddAndAcc(itpGA,itpA2);
+        Ddi_BddAndAcc(itpGA,itpTA2);
+        Ddi_BddNotAcc(itpGA);
+        Ddi_Bdd_t *itpGA2 =  Ddi_AigSat22AndWithInterpolant(
+			 incrSat,a2,itpGA,NULL,
+			 globalVars, domainVars,
+			 tfPiVars,tfPiNum,
+			 NULL,NULL,
+			 psat, 0, itpOdc,0, 
+			 -1);
+        Ddi_BddNotAcc(itpGA);
 	if (tryProjectA) {
 	  Ddi_Bdd_t *cex=Ddi_AigSatAndWithCexAndAbort(itpA,itpB,
                       NULL,NULL,-1,NULL);
@@ -84074,6 +84114,11 @@ Ddi_AigSat22AndWithInterpolant (
 	Ddi_Free(itpB);
 	Ddi_Free(itpGA);
 	Ddi_Free(itpGB);
+	Ddi_Free(itpTA);
+	Ddi_Free(itpTB);
+	Ddi_Free(itpTA2);
+	Ddi_Free(itpA2);
+	Ddi_Free(itpGA2);
 	Ddi_Free(myA);
 	Ddi_Free(myB);
 	return interpolant;
@@ -84159,16 +84204,19 @@ Ddi_AigSat22AndWithInterpolant (
   else {
     Ddi_Bdd_t *myCare = NULL; // optCare;
     if (prevItp!=NULL) {
-      Ddi_BddNotAcc(prevItp);
-      myCare = prevItp;
+      myCare = Ddi_BddNot(prevItp);
+    }
+    if (optCare!=NULL && !Ddi_BddIsOne(optCare)) {
+      if (myCare==NULL)
+        myCare = Ddi_BddDup(optCare);
+      else
+        Ddi_BddAndAcc(myCare,optCare);
     }
     success = Minisat22Interpolant ((void *)S22, ddm, a2, b2,
                                     nACl, globalVars, 
 				    0, &interpolant, &interpolantOpt,
 				    myCare, nSuppVars,itpOdc,1);
-    if (prevItp!=NULL) {
-      Ddi_BddNotAcc(prevItp);
-    }
+    Ddi_Free(myCare);
     if (0 && interpolant != NULL && Ddi_BddIsOne(interpolant)) {
       // problem! Force a fix with old minisat
       fprintf(dMgrO(ddm)," Minisat 22 Interpolant ABORTED as = 1\n");
@@ -84452,7 +84500,6 @@ Ddi_AigSat22AndWithInterpolant (
       Pdtutil_Assert(!Ddi_AigSatAnd(interpolant,b,optCare),
 		   "invalid interpolant");
     }
-    Ddi_Free(tmp);
     Ddi_Free(tmp);
   }
 
@@ -86066,7 +86113,7 @@ getProof22(
   
   markProofVars(S22,a,b);
   Minisat22Solver *S22care = NULL; 
-  if (1 && c!=NULL && !Ddi_BddIsOne(c)) {
+  if (0 && c!=NULL && !Ddi_BddIsOne(c)) {
     S22care = new Minisat22Solver();
     Solver Sdummy;
 
@@ -86658,7 +86705,7 @@ Minisat22InterpolantUndef (
   /*vec<Lit>& c =*/ trav.clauses.last();
 
   if (trav.partial) {
-    int nTrees = 0, nTreeA=0, nTreeB=0, nTreeGbl=0, nSkip=0, nTopC=0;
+    int nTrees = 0, nTreeA=0, nTreeB=0, nTreeGbl=0, nTreeTot=0, nSkip=0, nTopC=0;
     int aMax = 32, bMax = 32;
     interpolant = Ddi_BddMakeConstAig(ddm,1);
     Ddi_Vararray_t *gblA = Ddi_VararrayMakeFromVarset(globalvars,1);
@@ -86667,77 +86714,107 @@ Minisat22InterpolantUndef (
     Ddi_Bdd_t *itpPlusB = Ddi_BddMakeConstAig(ddm,1);
     Ddi_Bdd_t *itpGblA = Ddi_BddMakeConstAig(ddm,1);
     Ddi_Bdd_t *itpGblB = Ddi_BddMakeConstAig(ddm,1);
+    Ddi_Bdd_t *itpTotA = Ddi_BddMakeConstAig(ddm,1);
+    Ddi_Bdd_t *itpTotB = Ddi_BddMakeConstAig(ddm,1);
+    int maxChainLevel = 0;
+    int maxRes = 50;
     for (int i = 0; i < trav.nodes.size(); i++) {
-      int enTree = trav.nodes[i].chainLevel>3;
+      if (trav.topResClauses[i].size()>0 && trav.topResClauses[i].size()<=maxRes)
+        if (trav.nodes[i].chainLevel>maxChainLevel)
+          maxChainLevel = trav.nodes[i].chainLevel;
+    }
+    vec<int> count;
+    count.growTo(maxChainLevel+1,0);
+    for (int i = 0; i < trav.nodes.size(); i++) {
+      if (trav.topResClauses[i].size()>0 && trav.topResClauses[i].size()<=maxRes)
+        count[trav.nodes[i].chainLevel]++;
+    }
+    for (int i = maxChainLevel; i>=0; i--) {
+      if (count[i]>0)
+        printf("cnt[%d]: %d\n", i, count[i]);
+    }
+    for (int i = 0; i < trav.nodes.size(); i++) {
+      int enTree = trav.nodes[i].chainLevel>2; //maxChainLevel/4;
+      enTree &= trav.topResClauses[i].size()>0 && trav.topResClauses[i].size()<=maxRes;
       if (!enTree) {
 	nSkip++;
 	continue;
       }
-      if (trav.nodes[i].isTreeRoot && trav.topResClauses[i].size()>0) {
-	Ddi_Bdd_t *p_i = Ddi_BddMakeFromBaig(ddm, trav.nodes[i].aig);
-	Ddi_Bdd_t *p_iAnd = NULL;
-	Ddi_Bdd_t *aClause = Ddi_BddMakeConstAig(ddm,0);
-	Ddi_Bdd_t *bClause = Ddi_BddMakeConstAig(ddm,0);
-	int j;
-	int isGbl = 1, hasGbl = 0, nA=0, nB=0;
-	vec<Lit>& c = trav.topResClauses[i];
-	for (j=0; j<c.size(); j++) {
-	  Lit l = c[j];
-	  int vSat = var(l);
-	  int signSat = sign(l);
-	  int vCnf = vSat+1;
-	  bAigEdge_t baig = ddm->cnf.cnf2aig[vCnf];
-          int isGlob = nodeAuxChar(ddm->aig.mgr,baig) == 3;
-	  int isB = !isGlob && (nodeAuxChar(ddm->aig.mgr,baig)>0);
-	  int isA = !isGlob && !isB;
-	  int used=0;
-	  //	  int isGlob = nodeAuxChar(ddm->aig.mgr,baig)>1;
-	  Ddi_Bdd_t *aig = NULL;
-	  if (bAig_isVarNode(ddm->aig.mgr,baig)) {
-	    Ddi_Var_t *v = Ddi_VarFromBaig(ddm,baig);
-	    Pdtutil_Assert (v!=NULL, "Null var");
-	    aig = Ddi_BddMakeLiteralAig(v,signSat?0:1);
-	    if (isA) isGbl = 0;
-	  }
-	  else {
-	    aig = Ddi_BddMakeFromBaig(ddm, baig);
-	    if (signSat) Ddi_BddNotAcc(aig);
-	    isGbl = 0;
-	  }
-	  if (isGlob || isA)
-	    nA++, Ddi_BddOrAcc(aClause,aig);
-	  if (isGlob || isB)
-	    nB++, Ddi_BddOrAcc(bClause,aig);
-	  if (isGlob) hasGbl = 1;
-	}
-	if (trav.nodes[i].orClause != NULL) {
-	  Ddi_BddSetAig(trav.nodes[i].orClause);
-	  Ddi_BddOrAcc(p_i,trav.nodes[i].orClause);
-	}
-	Ddi_BddOrAcc(aClause,p_i);
-	Ddi_BddNotAcc(p_i);
-	Ddi_BddOrAcc(bClause,p_i);
-	if (isGbl) {
-	  nTreeGbl++; 
-	  Ddi_BddAndAcc(itpGblA,aClause);
-	  Ddi_BddAndAcc(itpGblB,bClause);
-	}
-	if (nA>=aMax) {
-	  nTreeA++;
-	  Ddi_BddAndAcc(itpPlusA,aClause);
-	}
-	if (nB>=bMax) {
-	  nTreeB++;
-	  Ddi_BddAndAcc(itpPlusB,bClause);
-	}
-	nTrees++;
-	Ddi_Free(aClause);
-	Ddi_Free(bClause);
-	Ddi_Free(p_i);
-	if (trav.topResClauses[i].size()>0) {
-	  nTopC++;
+      Ddi_Bdd_t *p_i = Ddi_BddMakeFromBaig(ddm, trav.nodes[i].aig);
+      Ddi_Bdd_t *p_iAnd = NULL;
+      Ddi_Bdd_t *aClause = Ddi_BddMakeConstAig(ddm,0);
+      Ddi_Bdd_t *bClause = Ddi_BddMakeConstAig(ddm,0);
+      Ddi_Bdd_t *clauseTotA = Ddi_BddMakeConstAig(ddm,0);
+      Ddi_Bdd_t *clauseTotB = Ddi_BddMakeConstAig(ddm,0);
+      int j;
+      int isGbl = 1, isGbl2=1, hasGbl = 0, nA=0, nB=0;
+      vec<Lit>& c = trav.topResClauses[i];
+      for (j=0; j<c.size(); j++) {
+        Lit l = c[j];
+        int vSat = var(l);
+        int signSat = sign(l);
+        int vCnf = vSat+1;
+        bAigEdge_t baig = ddm->cnf.cnf2aig[vCnf];
+        int isGlob = nodeAuxChar(ddm->aig.mgr,baig) == 3;
+        int isB = !isGlob && (nodeAuxChar(ddm->aig.mgr,baig)>0);
+        int isA = !isGlob && !isB;
+        int used=0;
+        if (!isGlob) isGbl2=0;
+        //	  int isGlob = nodeAuxChar(ddm->aig.mgr,baig)>1;
+        Ddi_Bdd_t *aig = NULL;
+        if (bAig_isVarNode(ddm->aig.mgr,baig)) {
+          Ddi_Var_t *v = Ddi_VarFromBaig(ddm,baig);
+          Pdtutil_Assert (v!=NULL, "Null var");
+          aig = Ddi_BddMakeLiteralAig(v,signSat?0:1);
+          if (isA) isGbl = 0;
+        }
+        else {
+          aig = Ddi_BddMakeFromBaig(ddm, baig);
+          if (signSat) Ddi_BddNotAcc(aig);
+          isGbl = 0;
+        }
+        if (isGlob || isA)
+          nA++, Ddi_BddOrAcc(aClause,aig);
+        if (isGlob || isB)
+          nB++, Ddi_BddOrAcc(bClause,aig);
+        Ddi_BddOrAcc(clauseTotA,aig);
+        Ddi_BddOrAcc(clauseTotB,aig);
+        if (isGlob) hasGbl = 1;
+      }
+      if (trav.nodes[i].orClause != NULL) {
+        Ddi_BddSetAig(trav.nodes[i].orClause);
+        Ddi_BddOrAcc(p_i,trav.nodes[i].orClause);
+      }
+      Ddi_BddOrAcc(aClause,p_i);
+      Ddi_BddOrAcc(clauseTotA,p_i);
+      Ddi_BddNotAcc(p_i);
+      Ddi_BddOrAcc(bClause,p_i);
+      Ddi_BddOrAcc(clauseTotB,p_i);
+      if (isGbl) {
+        nTreeGbl++; 
+        Ddi_BddAndAcc(itpGblA,aClause);
+        Ddi_BddAndAcc(itpGblB,bClause);
+      }
+      if (Ddi_BddSize(aClause)>0) {
+        nTreeA++;
+        Ddi_BddAndAcc(itpPlusA,aClause);
+      }
+      if (Ddi_BddSize(bClause)>0) {
+        nTreeB++;
+        Ddi_BddAndAcc(itpPlusB,bClause);
+      }
+      if (Ddi_BddSize(clauseTotA)>0) {
+        nTreeTot++;
+        Ddi_BddAndAcc(itpTotA,clauseTotA);
+        Ddi_BddAndAcc(itpTotB,clauseTotB);
+      }
+      nTrees++;
+      Ddi_Free(aClause);
+      Ddi_Free(bClause);
+      Ddi_Free(p_i);
+      if (trav.topResClauses[i].size()>0) {
+        nTopC++;
 	//	printf("%d - size: %d\n",i, trav.topResClauses[i].size());
-	}
       }
     }
     Ddi_DataCopy(interpolant,itpPlusA);
@@ -86745,16 +86822,20 @@ Minisat22InterpolantUndef (
     Ddi_BddPartInsertLast(interpolant,itpPlusB);
     Ddi_BddPartInsertLast(interpolant,itpGblA);
     Ddi_BddPartInsertLast(interpolant,itpGblB);
+    Ddi_BddPartInsertLast(interpolant,itpTotA);
+    Ddi_BddPartInsertLast(interpolant,itpTotB);
     Ddi_Free(itpPlusA);
     Ddi_Free(itpPlusB);
     Ddi_Free(itpGblA);
     Ddi_Free(itpGblB);
+    Ddi_Free(itpTotA);
+    Ddi_Free(itpTotB);
     Ddi_VararrayWriteMark (gblA, 0);
     Ddi_Free(gblA);
     Pdtutil_VerbosityMgr(ddm, Pdtutil_VerbLevelUsrMax_c,
       fprintf(dMgrO(ddm),
-	      "partial interpolant: (%d trees, %d A, %d B, %d G, %d topSkip, %d topC, size: %d\n",
-	      nTrees, nTreeA, nTreeB, nTreeGbl, nSkip, nTopC, Ddi_BddSize(interpolant)));
+	      "partial interpolant: (%d trees, %d A, %d B, %d G, %d T, %d topSkip, %d topC, size: %d\n",
+	      nTrees, nTreeA, nTreeB, nTreeGbl, nTreeTot, nSkip, nTopC, Ddi_BddSize(interpolant)));
   }
 
   for (int i = 0; i < trav.nodes.size(); i++) {
