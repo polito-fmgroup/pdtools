@@ -7703,7 +7703,10 @@ invarVerif(
     Ddi_Vararray_t *pi = Fsm_MgrReadVarI(fsmMgr);
     Ddi_Vararray_t *ps = Fsm_MgrReadVarPS(fsmMgr);
     Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
+    int maxVal = -opt->pre.forceInitStub;
     opt->pre.forceInitStub = Ddi_AbcTemporPrefixLength(delta, lambda, ps, pi);
+    if (maxVal>1 && opt->pre.forceInitStub>maxVal)
+      opt->pre.forceInitStub = maxVal;
   }
   while (opt->pre.forceInitStub) {
     Ddi_Vararray_t *pi = Fsm_MgrReadVarI(fsmMgr);

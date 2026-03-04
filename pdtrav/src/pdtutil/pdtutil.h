@@ -479,6 +479,7 @@ typedef enum {
   Pdt_TravMaxCnfLength_c,
 
   /* certify */
+  Pdt_TravCertEffort_c,
   Pdt_TravCertFramesK_c,
   Pdt_TravCertTDecompK_c,
   Pdt_TravCertItpK_c,

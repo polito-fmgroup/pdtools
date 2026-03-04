@@ -83,6 +83,7 @@ int App_Certify (
   int frameK = 1;
   int tDecompK = 0;
   int itpK = 0;
+  int effort=0;
   
   Pdtutil_OptList_t *certOpt = Pdtutil_OptListCreate(Pdt_OptTrav_c);
 
@@ -98,6 +99,15 @@ int App_Certify (
       simpInvarName = argv[i];
       Pdtutil_OptListIns(certOpt, eTravOpt, Pdt_TravCertSimpInvar_c, pchar,
 			 simpInvarName);
+    }
+    else if (strcmp(argv[i],"-e")==0) {
+      i++;
+      if (i>=argc) {
+        printf("\nmissing effort value (-f)\n");
+        return 0;
+      }
+      effort = atoi(argv[i]);
+      Pdtutil_OptListIns(certOpt, eTravOpt, Pdt_TravCertEffort_c, inum, effort);
     }
     else if (strcmp(argv[i],"-f")==0) {
       i++;

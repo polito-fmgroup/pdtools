@@ -83247,7 +83247,7 @@ Ddi_AigSat22AndWithInterpolant (
 
   if (itpPart>0) {
     if (tryPartial) {
-      float myTimeLimit=50.0;
+      float myTimeLimit=8.0;
       Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
 	printf("DOING PARTIAL interpolant\n");
       }

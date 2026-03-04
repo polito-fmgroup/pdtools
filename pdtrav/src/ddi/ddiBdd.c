@@ -3474,6 +3474,54 @@ Ddi_BddPartQuickRemove(
   Ddi_Free(last);
 }
 
+#if 0
+/**Function********************************************************************
+  Synopsis    [Return selected partitions from i0 to i1.]
+  Description [Return a partitioned BDD with selected partitions from i0
+               (included) to i1 (excluded).]
+  SideEffects []
+******************************************************************************/
+Ddi_Bdd_t *
+Ddi_BddPartSelectRange(
+  Ddi_Bdd_t * f,
+  int i0,
+  int i1
+)
+{
+  int i;
+  Ddi_Bdd_t *part;
+
+  if (!Ddi_BddIsPartConj(f) && !Ddi_BddIsPartDisj(f)) return NULL;
+
+  n = Ddi_BddPartNum(f);
+  part = Ddi_BddIsPartConj(f)?
+  for (i=0; i<n; i++) {
+    Ddi_Bdd_t *f_i = Ddi_BddPartRead(f,i);
+    f_i->common.size = Ddi_BddSize(f_i);
+  }
+  for (i=0; i<n-1; i++) {
+    int jMin=i;
+    Ddi_Bdd_t *fMin = Ddi_BddPartRead(f,i);
+    for (j=i+1; j<n; j++) {
+      Ddi_Bdd_t *f_j = Ddi_BddPartRead(f,j);
+      if (increasing ? (f_j->common.size < fMin->common.size) : 
+          (f_j->common.size > fMin->common.size)) {
+        jMin = j; fMin = f_j;
+      }
+    } 
+    if (jMin != i) {
+      Ddi_BddPartSwap(f,i,jMin);
+    }
+  }
+  for (i=0; i<n; i++) {
+    Ddi_Bdd_t *f_i = Ddi_BddPartRead(f,i);
+    f_i->common.size = 0;
+  }
+
+  return f;
+}
+#endif
+
 /**Function********************************************************************
   Synopsis    [Create a monolithic BDD from a partitioned one]
   Description [Create a monolithic BDD from a partitioned one]

@@ -1073,7 +1073,8 @@ genItpSequence(
   Ddi_Vararray_t *pi,
   Ddi_Vararray_t *ps,
   Ddi_Vararray_t *ns,
-  int fwd
+  int fwd,
+  int effort
 );
 
 
@@ -9567,7 +9568,7 @@ proofHandleInitStub(
     Ddi_BddOrAcc(resetInv,initDone_i);
     if (i>0) {
       Ddi_Bddarray_t *newUnroll = Ddi_BddarrayCompose(delta0,ps0,unroll);
-      char suffix[10];
+      char suffix[12];
       sprintf(suffix, "%d", i-1);
       Ddi_Vararray_t *isPiVars = Ddi_VararrayMakeNewAigVars(suppPi,"PDT_STUB_PI",suffix);
       Ddi_BddarraySubstVarsAcc(newUnroll, suppPi, isPiVars);
@@ -9907,6 +9908,7 @@ itpProofCheck(
   Ddi_Vararray_t *ps,
   Ddi_Vararray_t *ns,
   int *retP,
+  int effort,
   int genInvarOut
 )
 {
@@ -9917,7 +9919,7 @@ itpProofCheck(
 
   if (genInvarOut) {
     Ddi_Bddarray_t *itpSeq =
-      genItpSequence(delta,invar,init,constr,target,init,kITP,pi,ps,ns,0/*bwd*/);
+      genItpSequence(delta,invar,init,constr,target,init,kITP,pi,ps,ns,0/*bwd*/,effort);
     if (itpSeq!=NULL) {
       invarOut = Ddi_BddMakePartConjFromArray(itpSeq);
       Ddi_BddPartInsertLast(invarOut,invar);
@@ -10000,6 +10002,7 @@ tDecompProofCheck(
   Ddi_Vararray_t *ps,
   Ddi_Vararray_t *ns,
   int *retP,
+  int effort,
   int genInvarOut
 )
 {
@@ -10011,7 +10014,8 @@ tDecompProofCheck(
 
   if (genInvarOut) {
     Ddi_Bddarray_t *itpSeq =
-      genItpSequence(delta,invar,init,constr,notInv,target,kTD,pi,ps,ns,1/*fwd*/);
+      genItpSequence(delta,invar,init,constr,notInv,target,kTD,pi,ps,ns,1/*fwd*/,
+                     effort);
     if (itpSeq!=NULL) {
       invarOut = Ddi_BddMakePartDisjFromArray(itpSeq);
       Ddi_BddPartInsertLast(invarOut,invar);
@@ -10077,6 +10081,71 @@ tDecompProofCheck(
   return invarOut;
 }
 
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Bdd_t *
+dpartItpClauseBased(
+  Ddi_Bdd_t *a,
+  Ddi_Bdd_t *b,
+  int sizeTh,
+  int *satp,
+  Ddi_Varset_t *vars
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(a);
+  Pdtutil_VerbLevel_e verbosity = Ddi_MgrReadVerbosity(ddm);
+  if (sizeTh<=0) {
+    sizeTh = Ddi_BddSize(b)/2;
+  }
+  if (Ddi_BddSize(b)<sizeTh) {
+    return Ddi_AigSat22AndWithInterpolant(NULL,a,b,NULL,
+           vars, NULL,NULL,0,NULL,NULL, satp, 0, 1, 0, -1.0);
+  }
+
+  Ddi_Bdd_t *bPart = Ddi_AigPartitionTop(b,0);
+  Ddi_BddPartSortBySizeAcc(bPart,0); // decreasing size
+  Ddi_Bdd_t *p0 = Ddi_BddPartRead(bPart,0);
+  Ddi_Bdd_t *bPartDisj = Ddi_AigPartitionTop(p0,1);
+  int n = Ddi_BddPartNum(bPartDisj);
+  Ddi_Bdd_t *itp = NULL;
+  if (n==1) {
+    itp = Ddi_AigSat22AndWithInterpolant(NULL,a,b,NULL,
+           vars, NULL,NULL,0,NULL,NULL, satp, 0, 1, 0, -1.0);
+  }
+  else {
+    itp = Ddi_BddMakeConstAig(ddm, 1);
+    Ddi_Bdd_t *newB = Ddi_BddMakeConstAig(ddm, 0);
+    for (int i=0, p=0; i<n; i++) {
+      Ddi_BddOrAcc(newB,Ddi_BddPartRead(bPartDisj,i));
+      if (i==(n-1) || Ddi_BddSize(newB) > sizeTh) {
+        for (int j=1; j<Ddi_BddPartNum(bPart); j++) {
+          Ddi_Bdd_t *p_j = Ddi_BddPartRead(bPart,j);
+          Ddi_BddAndAcc(newB,p_j);
+        }
+        Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+          printf("itp part [%d] - size: %d\n", p++, Ddi_BddSize(newB));
+        }
+
+        Ddi_Bdd_t *itp_i = Ddi_AigSat22AndWithInterpolant(NULL,a,newB,NULL,
+           vars, NULL,NULL,0,NULL,NULL, satp, 0, 1, 0, -1.0);
+    
+        Ddi_BddAndAcc(itp,itp_i);
+        Ddi_Free(itp_i);
+        Ddi_Free(newB);
+        newB = Ddi_BddMakeConstAig(ddm, 0);
+      }
+    }
+    Ddi_Free(newB);
+  }
+  Ddi_Free(bPart);
+  Ddi_Free(bPartDisj);
+  return itp;
+}
+
 
 /**Function*******************************************************************
   Synopsis    []
@@ -10096,7 +10165,8 @@ genItpSequence(
   Ddi_Vararray_t *pi,
   Ddi_Vararray_t *ps,
   Ddi_Vararray_t *ns,
-  int fwd
+  int fwd,
+  int effort
 )
 {
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(delta);
@@ -10145,17 +10215,26 @@ genItpSequence(
     //Ddi_BddSetAig(a);
     Ddi_Bdd_t *b = Ddi_BddarrayRead(coneArray,k);
     Ddi_Bdd_t *itpGen=NULL;
-    int tryItpGen=1;
+    int tryItpGen=effort>0;
     int resItpGen=0;
     Ddi_Bdd_t *itpPlus = NULL;
     Ddi_Bdd_t *itp = NULL;
+
+    int l = Ddi_MgrReadAigAbcOptLevel(ddm);
+    Ddi_MgrSetAigAbcOptLevel(ddm,4);
+    ddiAbcOptAcc(b, -1.0);
+    Ddi_MgrSetAigAbcOptLevel(ddm,l);
+
     if (tryItpGen) {
       Ddi_Vararray_t *glbA = Ddi_BddSuppVararray(a);
-      int maxGen = 1000; //2*Ddi_BddSize(invar);
+      int maxGen = 200; //2*Ddi_BddSize(invar);
       Ddi_VararrayIntersectAcc(glbA, ns);
+      int tl = Ddi_MgrReadAigSatTimeLimit(ddm);
+      Ddi_MgrSetAigSatTimeLimit(ddm,10);
       itpGen = Ddi_AigInterpolantByGenClauses(b, a, NULL, NULL,
                ps, ns, NULL, glbA, NULL,
                        NULL, NULL, maxGen, 0, &resItpGen);
+      Ddi_MgrSetAigSatTimeLimit(ddm,tl);
       Ddi_Free(glbA);
       Pdtutil_Assert (resItpGen >= 0,"UNSAT required for ITPGEN");
       Ddi_BddNotAcc(itpGen);
@@ -10164,7 +10243,11 @@ genItpSequence(
       }
     }
     if (!resItpGen) {
-      itp = Ddi_AigSat22AndWithInterpolant(NULL,a,b,NULL,
+      int tryDpart = 0;
+      if (tryDpart)
+        itp = dpartItpClauseBased(a,b,(Ddi_BddSize(b)*3)/5,&sat,nsVars);
+      else
+        itp = Ddi_AigSat22AndWithInterpolant(NULL,a,b,NULL,
            nsVars, NULL,NULL,0,NULL,NULL, &sat, 0, 1, 0, -1.0);
       if (itpGen!=NULL) {
         Ddi_BddAndAcc(itp,itpGen);
@@ -10214,6 +10297,7 @@ proofHandleFrames(
   Ddi_Vararray_t *pi,
   Ddi_Vararray_t *ps,
   Ddi_Vararray_t *ns,
+  int effort,
   int genInvarOut
 )
 {
@@ -10223,7 +10307,7 @@ proofHandleFrames(
   
   if (genInvarOut) {
     Ddi_Bddarray_t *itpSeq =
-      genItpSequence(delta,invar,invar,constr,notInv,target,framesK,pi,ps,ns,1/*fwd*/);
+      genItpSequence(delta,invar,invar,constr,notInv,target,framesK,pi,ps,ns,1/*fwd*/,effort);
     if (itpSeq!=NULL) {
       invarOut = Ddi_BddMakePartDisjFromArray(itpSeq);
       Ddi_BddPartInsertLast(invarOut,invar);
@@ -10273,6 +10357,7 @@ Trav_TravSatCheckInvar(
   int fp=0;
   int tDecompK=0, framesK=0, genInvarOut=0, itpK=0;
   char *retimeName=NULL;
+  int effort=0;
   Fsm_Fsm_t *fsmFsm = Fsm_FsmMakeFromFsmMgr(fsmMgr);
   if (Fsm_MgrReadIFoldedProp(fsmMgr)>=0)
     Fsm_FsmUnfoldProperty(fsmFsm, 1);
@@ -10284,6 +10369,9 @@ Trav_TravSatCheckInvar(
     optItem = Pdtutil_OptListExtractHead(certOpt);
     switch (optItem.optTag.eTravOpt) {
     case Pdt_TravCertSimpInvar_c: // done outside
+      break;
+    case Pdt_TravCertEffort_c:
+      effort = optItem.optData.inum;
       break;
     case Pdt_TravCertFramesK_c:
       framesK = optItem.optData.inum;
@@ -10321,7 +10409,7 @@ Trav_TravSatCheckInvar(
 
   Ddi_Bdd_t *invarOut =
     proofHandleFrames(delta,constr,target,invar,notInv,framesK,
-                      pi,ps,ns,genInvarOut);
+                      pi,ps,ns,effort,genInvarOut);
 
   if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
     printf("Checking inductive invariant of size. %d\n",
@@ -10346,7 +10434,7 @@ Trav_TravSatCheckInvar(
   int checkITPfail = 0;
   if (itpK > 0) {
     Ddi_Bdd_t *itpInvarOut = itpProofCheck(delta,init,constr,target,invar,notInv,
-                    itpK,pi,ps,ns,&checkITPfail,genInvarOut);
+                 itpK,pi,ps,ns,&checkITPfail,effort,genInvarOut);
     if (itpInvarOut != NULL) {
       if (invarOut==NULL)
         invarOut = Ddi_BddMakeConstAig(ddm, 1);
@@ -10357,7 +10445,7 @@ Trav_TravSatCheckInvar(
   int checkTDfail = 0;
   if (tDecompK > 0) {
     Ddi_Bdd_t *tdInvarOut = tDecompProofCheck(delta,init,constr,target,invar,notInv,
-                    tDecompK,pi,ps,ns,&checkTDfail,genInvarOut);
+                              tDecompK,pi,ps,ns,&checkTDfail,effort,genInvarOut);
     if (tdInvarOut != NULL) {
       if (invarOut==NULL)
         invarOut = Ddi_BddMakeConstAig(ddm, 0);
@@ -17476,7 +17564,7 @@ itpStrengthenReachedGfp(
     initNs = Ddi_BddSubstVars(itpMgr->init, ps, ns);
   }
   int again = 1;
-  float growRatio = 1.0;
+  float growRatio = 0.95;
   Ddi_Bdd_t *newReached = Ddi_BddNot(notReached);
 
   Ddi_Vararray_t *tAux =
@@ -17596,10 +17684,48 @@ itpStrengthenReachedGfp(
       Ddi_Free(b);
       Ddi_Free(itp1);
     } 
+
+    int tryPart = 1 && i==0 && Ddi_BddSize(itp) > 20000;
+    if (tryPart) {
+      Ddi_Bdd_t *itpPart = Ddi_AigPartitionTop(itp,0);
+      Ddi_BddPartSortBySizeAcc(itpPart,0); // decreasing size
+      Ddi_Bdd_t *p0 = Ddi_BddPartRead(itpPart,0);
+      Ddi_Bdd_t *itpPartDisj = Ddi_AigPartitionTop(p0,1);
+      int n = Ddi_BddPartNum(itpPartDisj);
+      if (n>1) {
+        int targetSize = Ddi_BddSize(itp)/2;
+        Ddi_Free(itp);
+        itp = Ddi_BddMakeConstAig(ddm, 0);
+        Ddi_Bdd_t *newItp = Ddi_BddMakeConstAig(ddm, 0);
+        for (int i=0, p=0; i<n; i++) {
+          Ddi_BddOrAcc(newItp,Ddi_BddPartRead(itpPartDisj,i));
+          if (i==(n-1) || Ddi_BddSize(newItp) > targetSize) {
+            for (int j=1; j<Ddi_BddPartNum(itpPart); j++) {
+              Ddi_Bdd_t *p_j = Ddi_BddPartRead(itpPart,j);
+              Ddi_BddAndAcc(newItp,p_j);
+            }
+            Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+              printf("\nGFP itp part [%d] - reached size: %d\n", p++, Ddi_BddSize(newItp));
+            }
+            Ddi_AigOptByMonotoneCoreAcc(newItp,
+              myFromAndTr, NULL, 0, -1.0);
+            Ddi_BddOrAcc(itp,newItp);
+            Ddi_Free(newItp);
+            newItp = Ddi_BddMakeConstAig(ddm, 0);
+          }
+        }
+        Ddi_Free(newItp);
+      }
+      Ddi_Free(itpPart);
+      Ddi_Free(itpPartDisj);
+    }
+    else{     
     //      Ddi_BddSetAig(fromAndTr);
-    Ddi_AigOptByMonotoneCoreAcc(itp, myFromAndTr, NULL, 0, -1.0);
+      Ddi_AigOptByMonotoneCoreAcc(itp, myFromAndTr, NULL, 0, -1.0);
+    }
     Ddi_BddNotAcc(itp);
     Ddi_MgrSetVerbosity(ddm,verbosity);
+
 
     if (itp==NULL) {
       again=0;
@@ -17625,7 +17751,7 @@ itpStrengthenReachedGfp(
 	size1 = Ddi_BddSize(aux);
 	Ddi_Free(aux);
       }
-      if (size1 >= growRatio * size0 && !useItp) {
+      if (i>0 && (size1 >= growRatio * size0 && !useItp)) {
         again = 0;
       }
       else {

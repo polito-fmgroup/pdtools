@@ -4918,7 +4918,8 @@ aigInterpolantByGenClausesIntern(
 
     //    printf("JJ: %d\n",jj);
     if (!useRand) {
-      Sat = Ddi_SatSolve(solver,NULL,50);
+      int tl = Ddi_MgrReadAigSatTimeLimit(ddm);
+      Sat = Ddi_SatSolve(solver,NULL,tl);
       if (Sat<0) {
 	Sat = 0;
 	jj = maxIter;
