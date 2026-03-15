@@ -65335,6 +65335,32 @@ struct Checker : public ProofTraverser {
       oneConstId=1;
       rootCustomHandling=0;
     }
+
+    void checkerOpen(int nACl) {
+      nAClauses = nACl;
+      nAClausesRemapped = -1;
+      nLclToGblVars = 0;
+      dontCareOpt = 0;
+      zeroConstId=0;
+      oneConstId=1;
+      rootCustomHandling = 0;
+      if (ddiMgr->settings.aig.itpMem>2) {
+        useRemapped = 1;
+      }
+    }
+    
+    void checkerClose(void) {
+      for (int i = 0; i < nodes.size(); i++) {
+        bAig_RecursiveDeref(ddiMgr->aig.mgr,nodes[i].aig);
+        nodes[i].aig=bAig_NULL;
+        Ddi_Free(nodes[i].orClause);
+        //    Ddi_Free(trav.nodes[i].cube);
+        nodes[i].isOdc = 0;
+        nodes[i].optimized = 0;
+        nodes[i].AClause = 0;
+        nodes[i].isLiteral = 0;
+      }
+    }
     
     inline ClauseId nodeId (const ClauseId id) {
       //Pdtutil_Assert(id>=0,"positive id required");
@@ -84798,6 +84824,7 @@ proof22toChecker(
   vec<Lit> cl;
   vec<int> chain;
 
+  travP->checkerOpen(nACl);
   travP->nAClauses = nACl;
   assert(nACl>=0);
   
@@ -84832,6 +84859,9 @@ proof22toChecker(
     cl.copyTo(travP->clauses[j]);
     travP->isRoot[j] = (char)1;
     travP->isCore[j] = (char)1;
+    if (remapClauseIds!=NULL) {
+      remapClauseIds[i] = nCl; // check this !!
+    }
     nCl++;
   }
   if (remapClauseIds!=NULL) {
@@ -85192,6 +85222,87 @@ Minisat22NnfAbstrPba(
   return fAbstr;
 }
 
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+static int
+moveAVarsToGbl(
+  void    *Svoid,
+  Ddi_Mgr_t *ddm,
+  vec<int>& saveCnfIds,
+  vec<bAigEdge_t>& saveAuxChars,
+  vec<char>& saveAuxCharVal,
+  float aRatio
+)
+{
+  Minisat22Solver* S22 = (Minisat22Solver *)Svoid;
+  Minisat::ProofPdt& proofPdt = S22->proofPdt;
+  Minisat::vec<int> remapAuxv;
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  char name[100];
+  int nSolverVars = S22->nVars(), nSV0 = nSolverVars; 
+
+  remapAuxv.clear();
+  remapAuxv.growTo(nSolverVars,var_Undef);
+
+  // count B vars
+  int a2gLimit = 0;
+  for (int v=0; v<nSV0; v++) {
+    if (proofPdt.Avar(v)) {
+      a2gLimit++;
+    }
+  }
+  a2gLimit *= aRatio;
+  
+  // save old 
+  int aCnt=0;
+  for (int v=0; v<nSV0; v++) {
+    bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
+    int cnfId = DdiAig2CnfId(bmgr,baig);
+    char auxc = (char) 0;
+    if (proofPdt.Global(v)) {
+      if (bAig_isVarNode(bmgr,baig)) {
+        Ddi_Var_t *vv = Ddi_VarFromBaig(ddm,baig);
+      }
+      else {
+        Pdtutil_Assert(0,"internal baiog node is global");
+      }
+    }
+    DdiCnfSetActive(ddm,cnfId,1);
+    if (proofPdt.Global(v)) {
+      DdiCnfSetActive(ddm,cnfId,3);
+      auxc = 3;
+    }
+    else if (proofPdt.Avar(v)) {
+      if (aCnt++ < a2gLimit) {
+        DdiCnfSetActive(ddm,cnfId,3);
+        auxc = 3;
+      }
+      else {
+        DdiCnfSetActive(ddm,cnfId,2);
+        auxc = 0;
+      }
+    }
+    else {
+      // B var
+      auxc = 1;
+    }
+    saveAuxChars.push(baig);
+    char oldc = nodeAuxChar(bmgr,baig);
+    saveAuxCharVal.push(oldc);
+    saveCnfIds.push(cnfId);
+    nodeAuxChar(bmgr,baig) = auxc;
+
+    if ((cnfId)>nSolverVars)
+      nSolverVars = cnfId;
+  }
+
+  return nSolverVars;
+}
+
  
 /**Function********************************************************************
   Synopsis    [Convert a DDI AIG to a monolitic BDD]
@@ -85205,7 +85316,6 @@ remapProofVars(
   Ddi_Mgr_t *ddm,
   Ddi_Vararray_t *auxV,
   Ddi_Bddarray_t *auxF,
-  Minisat::vec<int>& remapAuxv,
   vec<int>& saveCnfIds,
   vec<bAigEdge_t>& saveAuxChars,
   vec<char>& saveAuxCharVal
@@ -85213,6 +85323,7 @@ remapProofVars(
 {
   Minisat22Solver* S22 = (Minisat22Solver *)Svoid;
   Minisat::ProofPdt& proofPdt = S22->proofPdt;
+  Minisat::vec<int> remapAuxv;
   bAig_Manager_t *bmgr = ddm->aig.mgr;
   char name[100];
   int nSolverVars = S22->nVars(), nSV0 = nSolverVars; 
@@ -85269,7 +85380,36 @@ remapProofVars(
     if ((cnfId)>nSolverVars)
       nSolverVars = cnfId;
   }
+
+  S22->remapProofVars(remapAuxv);
+
   return nSolverVars;
+}
+
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+static void
+reverseProof(
+  void    *Svoid,
+  Ddi_Mgr_t *ddm
+)
+{
+  Minisat22Solver* S22 = (Minisat22Solver *)Svoid;
+  Minisat::ProofPdt& proofPdt = S22->proofPdt;
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+
+  S22->proofReverseAB();
+  for (int v=0; v<S22->nVars(); v++) {
+    if (!S22->proofPdt.Global(v)) {
+      bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
+      int isA = S22->proofPdt.Avar(v);
+      nodeAuxChar(bmgr,baig) = isA ? 0 : 1;
+    }
+  }
 }
 
 /**Function********************************************************************
@@ -85329,7 +85469,6 @@ getAuxProof22(
   int added = S22->proofMoveNodesToA(0.7);
 
   Minisat::vec<bool> isAvar, isGlobal;
-  Minisat::vec<int> remapAuxv;
   vec<int> saveCnfIds;
   vec<bAigEdge_t> saveAuxChars;
   vec<char> saveAuxCharVal;
@@ -85338,18 +85477,16 @@ getAuxProof22(
   Ddi_Vararray_t *auxV = Ddi_VararrayAlloc(ddm,0);
   Ddi_Bddarray_t *auxF = Ddi_BddarrayAlloc(ddm,0);
 
+  int nAClCore;
+  int reverse = 1; // need to be checked: not working yet
+
   int nSolverVars = remapProofVars(S22,ddm,auxV,auxF,
-        remapAuxv,saveCnfIds,saveAuxChars,saveAuxCharVal);
+        saveCnfIds,saveAuxChars,saveAuxCharVal);
   //  S22->printProof(&isAvar,&isGlobl);
 
-
-  Checker trav(ddm,nSolverVars);
-  int nAClCore;
-  int reverse = 0; // need to be checked: not working yet
-  if (reverse)
-    S22->proofReverseAB();
-
-  S22->remapProofVars(remapAuxv);
+  if (reverse) {
+    reverseProof(S22,ddm);
+  }
 
   // S22->proofClassifyNodes(nSolverACl);
   //S22->printProof(&isAvar,&isGlobal);
@@ -85357,11 +85494,16 @@ getAuxProof22(
 		pivots1, NULL);
 
   Ddi_Bdd_t *itp=NULL;
+  Checker trav(ddm,nSolverVars);
+
   if (nAClCore==clauses1.size()) {
     // A is zero - No B clauses needed for unsat
     itp = Ddi_BddMakeConstAig(ddm, 0);
     Ddi_Free(auxF);
     Ddi_Free(auxV);
+    if (reverse) {
+      reverseProof(S22,ddm);
+    }
     return (itp);
   }
   else if (nAClCore==0) {
@@ -85369,6 +85511,9 @@ getAuxProof22(
     itp = Ddi_BddMakeConstAig(ddm, 1);
     Ddi_Free(auxF);
     Ddi_Free(auxV);
+    if (reverse) {
+      reverseProof(S22,ddm);
+    }
     return (itp);
   }
   else {
@@ -85377,40 +85522,13 @@ getAuxProof22(
     proof22toChecker(clauses1,proofNodes1,pivots1,NULL,
                  &trav,nAClCore,NULL);
 
-
-    trav.nAClauses = nAClCore;
-    trav.nAClausesRemapped = -1;
-    //  trav.proofSize = S.proof->last();
-    trav.nLclToGblVars = 0;
-    trav.dontCareOpt = 0;
-    trav.zeroConstId=0;
-    trav.oneConstId=1;
     ddm->stats.aig.itpPartialExist=0;
-    trav.rootCustomHandling = 0;
-    if (ddm->settings.aig.itpMem>2) {
-      trav.useRemapped = 1;
-    }
-    if (reverse) {
-      for (int v=0; v<S22->nVars(); v++) {
-        if (!S22->proofPdt.Global(v)) {
-          bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
-          int isA = S22->proofPdt.Avar(v);
-          nodeAuxChar(bmgr,baig) = isA ? 0 : 1;
-        }
-      }
-    }
     
     trav.done22();
     trav.genitp();
 
     if (reverse) {
-      for (int v=0; v<S22->nVars(); v++) {
-        if (!S22->proofPdt.Global(v)) {
-          bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
-          int isA = S22->proofPdt.Avar(v);
-          nodeAuxChar(bmgr,baig) = isA ? 1 : 0;
-        }
-      }
+      reverseProof(S22,ddm);
     }
 
     itp = Ddi_BddMakeFromBaig(ddm, trav.nodes.last().aig);
@@ -85582,16 +85700,7 @@ getAuxProof22(
 	 (int)S22check.conflicts);
   }
 
-  for (int i = 0; i < trav.nodes.size(); i++) {
-    bAig_RecursiveDeref(ddm->aig.mgr,trav.nodes[i].aig);
-    trav.nodes[i].aig=bAig_NULL;
-    Ddi_Free(trav.nodes[i].orClause);
-    //    Ddi_Free(trav.nodes[i].cube);
-    trav.nodes[i].isOdc = 0;
-    trav.nodes[i].optimized = 0;
-    trav.nodes[i].AClause = 0;
-    trav.nodes[i].isLiteral = 0;
-  }
+  trav.checkerClose();
 
   for (int i=0; i<saveCnfIds.size(); i++) {
     int cnfId = saveCnfIds[i];
@@ -85661,19 +85770,7 @@ getAuxProof22(
      proof22toChecker(clauses2,proofNodes2,pivots2,NULL,
                       &trav2,nAClCore,NULL);
      
-     
-     trav2.nAClauses = nAClCore;
-     trav2.nAClausesRemapped = -1;
-     //  trav.proofSize = S.proof->last();
-     trav2.nLclToGblVars = 0;
-     trav2.dontCareOpt = 0;
-     trav2.zeroConstId=0;
-     trav2.oneConstId=1;
      ddm->stats.aig.itpPartialExist=0;
-     trav2.rootCustomHandling = 0;
-     if (ddm->settings.aig.itpMem>2) {
-       trav2.useRemapped = 1;
-     }
      
      if (useItp) {
        bAig_array_t *visitedNodes = bAigArrayAlloc();
@@ -85735,16 +85832,8 @@ getAuxProof22(
        Ddi_BddSetAig(trav2.nodes.last().orClause);
        Ddi_BddOrAcc(itp2,trav2.nodes.last().orClause);
      }
-     for (int i = 0; i < trav2.nodes.size(); i++) {
-       bAig_RecursiveDeref(ddm->aig.mgr,trav2.nodes[i].aig);
-       trav2.nodes[i].aig=bAig_NULL;
-       Ddi_Free(trav2.nodes[i].orClause);
-       //    Ddi_Free(trav.nodes[i].cube);
-       trav2.nodes[i].isOdc = 0;
-       trav2.nodes[i].optimized = 0;
-       trav2.nodes[i].AClause = 0;
-       trav2.nodes[i].isLiteral = 0;
-     }
+
+     trav2.checkerClose();
      
      if (useBClauses>1) { // check this....
        Ddi_BddAndAcc(itp2,itp);
@@ -85808,6 +85897,120 @@ getAuxProof22(
   Ddi_Free(auxF);
   Ddi_Free(auxV);
   return auxItp;
+}
+
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+static Ddi_Bdd_t *
+getBClungItp22(
+  void    *Svoid,
+  Ddi_Mgr_t *ddm
+)
+{
+  Minisat22Solver* S22 = (Minisat22Solver *)Svoid;
+
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  long cpuTime=0, startTime=0;
+  int nAClausesCore = 0;
+  Ddi_Bdd_t *auxItp=NULL;
+  
+  Minisat::vec< Minisat::vec<int> > proofNodes1;
+  Minisat::vec< Minisat::vec<Minisat::Lit> > pivots1;
+  Minisat::vec< Minisat::vec<Minisat::Lit> > clauses1;
+
+  int nACl1;
+  int useBClausesCovered = 1;
+  Minisat::vec< Minisat::vec<Minisat::Lit> > rootClauses;
+  Minisat::vec< Minisat::vec<Minisat::Lit> > coveredBClauses;
+
+  Minisat::vec<bool> isAvar, isGlobal;
+  vec<int> saveCnfIds;
+  vec<bAigEdge_t> saveAuxChars;
+  vec<char> saveAuxCharVal;
+
+  Ddi_Vararray_t *auxV = Ddi_VararrayAlloc(ddm,0);
+  Ddi_Bddarray_t *auxF = Ddi_BddarrayAlloc(ddm,0);
+
+  int nAClCore;
+  Ddi_Bdd_t *itp=NULL;
+
+  reverseProof(S22,ddm);
+#if 0
+  reverseProof(S22,ddm);
+#else
+
+  S22->getProof(clauses1, nAClCore, proofNodes1,
+		pivots1, NULL);
+
+  if (nAClCore==clauses1.size()) {
+    // A is zero - No B clauses needed for unsat
+    itp = Ddi_BddMakeConstAig(ddm, 0);
+    Ddi_Free(auxF);
+    Ddi_Free(auxV);
+    reverseProof(S22,ddm);
+    return (itp);
+  }
+  else if (nAClCore==0) {
+    // B is zero - No A clauses needed for unsat
+    itp = Ddi_BddMakeConstAig(ddm, 1);
+    Ddi_Free(auxF);
+    Ddi_Free(auxV);
+    reverseProof(S22,ddm);
+    return (itp);
+  }
+
+  //Minisat::vec< Minisat::vec<Minisat::Lit> > clauses1; 
+  int nSolverVars = moveAVarsToGbl(S22,ddm,
+         saveCnfIds,saveAuxChars,saveAuxCharVal,0.5);
+  //  S22->printProof(&isAvar,&isGlobl);
+  Checker trav(ddm,nSolverVars);
+      
+  proof22toChecker(clauses1,proofNodes1,pivots1,NULL,
+                   &trav,nAClCore,NULL);
+
+  ddm->stats.aig.itpPartialExist=0;
+    
+  trav.done22();
+  trav.genitp();
+
+  itp = Ddi_BddMakeFromBaig(ddm, trav.nodes.last().aig);
+
+  if (trav.nodes.last().orClause != NULL) {
+    Ddi_BddSetAig(trav.nodes.last().orClause);
+    Ddi_BddOrAcc(itp,trav.nodes.last().orClause);
+  }
+  Ddi_AigStructRedRemAcc (itp,NULL);
+  Ddi_NnfClustSimplifyAcc(itp,0);
+
+  //  Ddi_AigOptByFoCntTop(itp, NULL, 0);
+  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {
+    printf("B CLUNG ITP SIZE: %d\n\n",
+         Ddi_BddSize(itp));
+  }
+
+  Ddi_BddNotAcc(itp);
+  
+  trav.checkerClose();
+
+  for (int i=0; i<saveCnfIds.size(); i++) {
+    int cnfId = saveCnfIds[i];
+    DdiCnfSetActive(ddm,cnfId,0);
+  }
+  for (int i=0; i<saveAuxChars.size(); i++) {
+    bAigEdge_t baig = saveAuxChars[i];
+    nodeAuxChar(bmgr,baig) = saveAuxCharVal[i];
+  }
+  reverseProof(S22,ddm);
+
+#endif
+  
+  Ddi_Free(auxF);
+  Ddi_Free(auxV);
+  return itp;
 }
 
 
@@ -85874,19 +86077,17 @@ getAuxNewProof22(
   }
 
   Minisat::vec<bool> isAvar, isGlobal;
-  Minisat::vec<int> remapAuxv;
   vec<int> saveCnfIds;
   vec<bAigEdge_t> saveAuxChars;
   vec<char> saveAuxCharVal;
 
-  //  remapAuxv.growTo(S22aux->nVars());
   // get global vars
   int nSolverVars = S22aux->nVars();
 
   Ddi_Vararray_t *auxV = Ddi_VararrayAlloc(ddm,0);
   Ddi_Bddarray_t *auxF = Ddi_BddarrayAlloc(ddm,0);
 
-  remapProofVars(S22aux,ddm,auxV,auxF,remapAuxv,
+  remapProofVars(S22aux,ddm,auxV,auxF,
                  saveCnfIds,saveAuxChars,saveAuxCharVal);
 
   Checker trav(ddm,nSolverVars);
@@ -85896,7 +86097,7 @@ getAuxNewProof22(
   Minisat::vec< Minisat::vec<Minisat::Lit> > pivots1;
   Minisat::vec< Minisat::vec<Minisat::Lit> > clauses1;
 
-  S22aux->remapProofVars(remapAuxv);
+
   assert(0); // need to check parameter true below
   S22aux->proofClassifyNodes(nSolverACl,true);
   //  S22aux->printProof(&isAvar,&isGlobal);
@@ -85907,19 +86108,9 @@ getAuxNewProof22(
   proof22toChecker(clauses1,proofNodes1,pivots1,NULL,
                    &trav,nAClCore,NULL);
 
+  trav.checkerOpen(nAClCore);
 
-  trav.nAClauses = nAClCore;
-  trav.nAClausesRemapped = -1;
-  //  trav.proofSize = S.proof->last();
-  trav.nLclToGblVars = 0;
-  trav.dontCareOpt = 0;
-  trav.zeroConstId=0;
-  trav.oneConstId=1;
   ddm->stats.aig.itpPartialExist=0;
-  trav.rootCustomHandling = 0;
-  if (ddm->settings.aig.itpMem>2) {
-    trav.useRemapped = 1;
-  }
   
 
   trav.done22();
@@ -86045,7 +86236,53 @@ markProofVars(
   }
  
 }
- 
+
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+static void
+markVarsAuxChar(
+  struct Checker *travP,
+  Ddi_Bdd_t *a,
+  Ddi_Varset_t *globalvars
+)
+{
+  bAig_array_t *aigNodes = bAigArrayAlloc();
+  
+  Ddi_PostOrderBddAigVisitIntern(a,aigNodes,-1);
+  Ddi_PostOrderAigClearVisitedIntern(travP->bMgr,aigNodes);
+  for (int i=0; i<aigNodes->num; i++) {
+    bAigEdge_t baig = aigNodes->nodes[i];
+    int cnfId = DdiAig2CnfId(travP->bMgr,baig);
+    if (DdiCnfReadActive(travP->ddiMgr,cnfId)==1) {
+      // if cnfActive==0 aig node NOT used in cnf clauses
+      DdiCnfSetActive(travP->ddiMgr,cnfId,2);
+    }
+  }
+  //  printf("Global vars: ");
+  if (globalvars!=NULL) {
+    Ddi_Vararray_t *vA = Ddi_VararrayMakeFromVarset(globalvars,1);
+    for (int i=0; i<Ddi_VararrayNum(vA); i++) {
+      Ddi_Var_t *v = Ddi_VararrayRead(vA,i);
+      bAigEdge_t varIndex = Ddi_VarToBaig(v);
+      int cnfId = DdiAig2CnfId(travP->bMgr,varIndex);
+      //      printf(" %d", cnfId-1);
+      if (DdiCnfReadActive(travP->ddiMgr,cnfId)>0) {
+        DdiCnfSetActive(travP->ddiMgr,cnfId,3);
+      }
+    }
+    Ddi_Free(vA);
+  }
+  //  printf("\n");
+  
+  bAigArrayFree(aigNodes);
+}
+  
+
+
 /**Function********************************************************************
   Synopsis    [Convert a DDI AIG to a monolitic BDD]
   Description [Convert a DDI AIG to a monolitic BDD]
@@ -86078,6 +86315,7 @@ getProof22(
   int i, j, nCl;
   int doPartialRerunSolver = 0;
   int doPartialOnSameProof = computeAuxItp;
+  int doBClungItp = 1;
   Ddi_Bdd_t *auxItp=NULL;
   
   Minisat::SimpSolver S22aux;
@@ -86129,6 +86367,7 @@ getProof22(
   int constItp = S22->getProof(clauses, nAClausesCore, proofNodes,
 			       pivots, topResClP);
 
+  Ddi_Bdd_t *bClungItp=NULL;
   if (clauses.size()==0) {
     doPartialOnSameProof = doPartialOnSameProof = 0;
     assert(constItp>=0);
@@ -86137,6 +86376,10 @@ getProof22(
   if (auxItp==NULL && clauses.size()>100) {
     if (doPartialOnSameProof) {
       auxItp = getAuxProof22(S22,S22care,c,ddm);
+    }
+
+    if (doBClungItp) {
+      bClungItp = getBClungItp22(S22,ddm);
     }
 
     if (doPartialRerunSolver) {
@@ -86154,37 +86397,9 @@ getProof22(
     }
   
     nCl = nAClausesCore;
-    
-    bAig_array_t *aigNodes = bAigArrayAlloc();
-  
-    Ddi_PostOrderBddAigVisitIntern(a,aigNodes,-1);
-    Ddi_PostOrderAigClearVisitedIntern(travP->bMgr,aigNodes);
-    for (i=0; i<aigNodes->num; i++) {
-      bAigEdge_t baig = aigNodes->nodes[i];
-      int cnfId = DdiAig2CnfId(travP->bMgr,baig);
-      if (DdiCnfReadActive(travP->ddiMgr,cnfId)==1) {
-        // if cnfActive==0 aig node NOT used in cnf clauses
-        DdiCnfSetActive(travP->ddiMgr,cnfId,2);
-      }
-    }
-    //  printf("Global vars: ");
-    if (globalvars!=NULL) {
-      Ddi_Vararray_t *vA = Ddi_VararrayMakeFromVarset(globalvars,1);
-      for (i=0; i<Ddi_VararrayNum(vA); i++) {
-        Ddi_Var_t *v = Ddi_VararrayRead(vA,i);
-        bAigEdge_t varIndex = Ddi_VarToBaig(v);
-        int cnfId = DdiAig2CnfId(travP->bMgr,varIndex);
-        //      printf(" %d", cnfId-1);
-        if (DdiCnfReadActive(travP->ddiMgr,cnfId)>0) {
-          DdiCnfSetActive(travP->ddiMgr,cnfId,3);
-        }
-      }
-      Ddi_Free(vA);
-    }
-    //  printf("\n");
 
-    bAigArrayFree(aigNodes);
-
+    markVarsAuxChar(travP,a,globalvars);
+                        
     if ((nAClausesCore < 0)) {
       remapClauseIds = Pdtutil_Alloc(int,clauses.size());
       for (i=0; i<clauses.size(); i++) {
