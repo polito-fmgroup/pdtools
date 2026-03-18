@@ -860,6 +860,26 @@ EXTERN int Ddi_AigSingleInterpolantLogicSynthesisCompaction(Ddi_Mgr_t *ddm, char
 EXTERN Ddi_Bdd_t * Ddi_AigSatAndWithInterpolant(Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Varset_t *globalVars, Ddi_Varset_t *domainVars, Ddi_Bdd_t *optCare, Ddi_Bdd_t *prevItp, Ddi_Bdd_t *constrCube, Ddi_Bddarray_t *implArray, int *psat, int itpPart, int itpOdc, float timeLimit);
 EXTERN Ddi_Bdd_t * Ddi_AigSatAndWithInterpolantIncr(Ddi_IncrSatMgr_t *incrSat, Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Varset_t *globalVars, Ddi_Varset_t *domainVars, Ddi_Bdd_t *optCare, Ddi_Bdd_t *prevItp, Ddi_Bdd_t *constrCube, Ddi_Bddarray_t *implArray, int *psat, int itpPart, int itpOdc, float timeLimit);
 EXTERN Ddi_Bdd_t * Ddi_AigSat22AndWithInterpolant(Ddi_IncrSatMgr_t *incrSat, Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Bdd_t *bSplit, Ddi_Varset_t *globalVars, Ddi_Varset_t *domainVars, Ddi_Vararray_t **TfPiVars, int tfPiNum, Ddi_Bdd_t *optCare, Ddi_Bdd_t *prevItp, int *psat, int itpPart, int itpOdc, int tryRevItp, float timeLimit);
+EXTERN Ddi_Bdd_t *
+Ddi_AigSat22AndWithInterpolantAndClung (
+  Ddi_IncrSatMgr_t *incrSat, 
+  Ddi_Bdd_t *a,
+  Ddi_Bdd_t *b,
+  Ddi_Bdd_t *bAbstr,
+  Ddi_Varset_t *globalVars,
+  Ddi_Varset_t *domainVars,
+  Ddi_Vararray_t **tfPiVars,
+  int tfPiNum,
+  Ddi_Bdd_t *optCare,
+  Ddi_Bdd_t *prevItp, // *itpPlus, 
+  Ddi_Bdd_t *clungItp, 
+  float clungItpRatio,
+  int *psat,
+  int itpPart,
+  int itpOdc,
+  int tryRevItp,
+  float timeLimit
+);
 EXTERN Ddi_Bdd_t * Ddi_AigSat22AndWithInterpolantPart(Ddi_IncrSatMgr_t *incrSat, Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Varset_t *globalVars, Ddi_Varset_t *domainVars, Ddi_Bdd_t *optCare, Ddi_Bdd_t *prevItp, int *psat, int itpPart, int itpOdc, float timeLimit);
 EXTERN Ddi_Bdd_t *Ddi_AigSat22AndWithInterpolantPartNnfA (Ddi_IncrSatMgr_t *incrSat, Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Bddarray_t *bwdRings, Ddi_Bdd_t *prevA, Ddi_Varset_t *globalVars, Ddi_Varset_t *domainVars, Ddi_Vararray_t *globalVarsA, Ddi_Vararray_t **tfPiVars, int tfPiNum, Ddi_Bdd_t *optCare, Ddi_Bdd_t *itpPlus, int *psat, int itpPart, int itpOdc, float timeLimit);
 EXTERN Ddi_Bdd_t *Ddi_AigSatAndWithAigCore (Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Bdd_t *optCare, int useMonotone, int *psat, float timeLimit);

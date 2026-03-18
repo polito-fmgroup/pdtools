@@ -244,6 +244,8 @@ Trav_MgrInit(
   travMgr->settings.aig.igrFwdBwd = 0;
   travMgr->settings.aig.igrConeSubsetPiRatio = 0.5;
   travMgr->settings.aig.igrConeSplitRatio = 1.0;
+  travMgr->settings.aig.igrClungItpRatio = -1.0;
+  travMgr->settings.aig.igrClungItpTh = 100000;
 
   /* pdr */
   travMgr->settings.aig.pdrFwdEq = 0;
@@ -4939,6 +4941,12 @@ Trav_MgrSetOptionItem(
     case Pdt_TravIgrConeSplitRatio_c:
       travMgr->settings.aig.igrConeSplitRatio = optItem.optData.fnum;
       break;
+    case Pdt_TravIgrClungItpRatio_c:
+      travMgr->settings.aig.igrClungItpRatio = optItem.optData.fnum;
+      break;
+    case Pdt_TravIgrClungItpTh_c:
+      travMgr->settings.aig.igrClungItpTh = optItem.optData.inum;
+      break;
     case Pdt_TravIgrMaxIter_c:
       travMgr->settings.aig.igrMaxIter = optItem.optData.inum;
       break;
@@ -5540,6 +5548,12 @@ Trav_MgrReadOption(
       break;
     case Pdt_TravIgrConeSplitRatio_c:
       *(float *)optRet = travMgr->settings.aig.igrConeSplitRatio;
+      break;
+    case Pdt_TravIgrClungItpRatio_c:
+      *(float *)optRet = travMgr->settings.aig.igrClungItpRatio;
+      break;
+    case Pdt_TravIgrClungItpTh_c:
+      *(int *)optRet = travMgr->settings.aig.igrClungItpTh;
       break;
     case Pdt_TravIgrMaxIter_c:
       *(int *)optRet = travMgr->settings.aig.igrMaxIter;

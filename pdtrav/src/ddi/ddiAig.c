@@ -502,11 +502,11 @@ static int MinisatClauses2Solvers(Solver& S, Solver& S2, Ddi_Bdd_t *f, Ddi_Bdd_t
 static void bAigArrayMinisatClausesWithNum(Ddi_Mgr_t *ddm, Solver&    S, bAig_array_t *visitedNodes, int i0, int N);
 static void bAigArrayMinisatClauses(Ddi_Mgr_t *ddm, Solver&    S, bAig_array_t *visitedNodes, int i0);
 static void MinisatInterpolant(Solver& S, Ddi_Mgr_t *ddm, int nAClauses, int reverseItp, Ddi_Bdd_t **interpolantP, Ddi_Bdd_t **interpolantOptP, Ddi_Bdd_t *care,  Ddi_Bddarray_t *partitionLits, vec<vec<Lit> > *partitionClausesP, int nSuppVars, int itpOdc);
-static Ddi_Bdd_t *getProof22(void *Svoid, struct Checker *travP, Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Bdd_t *c, int nAClauses, Ddi_Varset_t *globalvars,int computeAuxItp);
+static Ddi_Bdd_t *getProof22(void *Svoid, struct Checker *travP, Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Bdd_t *c, int nAClauses, Ddi_Varset_t *globalvars,int computeAuxItp, Ddi_Bdd_t **clungItpP, float clungItpRatio);
 static Ddi_Bdd_t *Minisat22InterpolantUndefTopLits (void *Svoid, Ddi_Mgr_t *ddm, int maxn);
 static bool
 Minisat22InterpolantUndef (void    *Svoid, Ddi_Mgr_t *ddm, Ddi_Bdd_t *a, Ddi_Varset_t *globalvars, int reverseItp, Ddi_Bdd_t **interpolantP, Ddi_Bdd_t *care, int nSuppVars, int itpOdc, int genProof, int nACl, int useB);
-static bool Minisat22Interpolant(void *S22, Ddi_Mgr_t *ddm, Ddi_Bdd_t *a, Ddi_Bdd_t *b, int nAClauses, Ddi_Varset_t *globalvars, int reverseItp, Ddi_Bdd_t **interpolantP, Ddi_Bdd_t **interpolantOptP, Ddi_Bdd_t *care, int nSuppVars, int itpOdc, int genProof);
+static bool Minisat22Interpolant(void *S22, Ddi_Mgr_t *ddm, Ddi_Bdd_t *a, Ddi_Bdd_t *b, int nAClauses, Ddi_Varset_t *globalvars, int reverseItp, Ddi_Bdd_t **interpolantP, Ddi_Bdd_t **interpolantOptP, Ddi_Bdd_t *care, int nSuppVars, int itpOdc, int genProof, float clungItpRatio);
 static Ddi_Bdd_t *aigSat22NnfSubset (Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Bdd_t *optCare, int *psat, float timeLimit);
 static int MinisatCore (Solver& S, Ddi_Mgr_t *ddm, int nAClauses, vec<Var>& coreVars, vec<vec<Lit> >& coreClauses, int doFinalClean);
 static int MinisatCoreWithResolution (Solver& S, Ddi_Mgr_t *ddm, Ddi_Bdd_t *a, int nAClauses, vec<Lit> *assumps, int nAssumpsA, vec<Var>& coreVars, vec<vec<Lit> >& coreClauses, int doResolutionB, int doFinalClean);
@@ -77231,6 +77231,28 @@ Ddi_AigSingleInterpolantCompaction(
   SideEffects []
   SeeAlso     [Ddi_BddMakeFromCU]
 ******************************************************************************/
+static void
+setVararrayAuxChar(
+  Ddi_Vararray_t *vA,
+  int val
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(vA);
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  for (int i=0; i<Ddi_VararrayNum(vA); i++) {
+    Ddi_Var_t *v = Ddi_VararrayRead(vA,i);
+    bAigEdge_t varIndex = Ddi_VarToBaig(v);
+    Pdtutil_Assert(varIndex != bAig_NULL,"NULL variable");
+    nodeAuxChar(bmgr,varIndex) = (char) val;
+  }
+}
+
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
 static int
 bAigSetAuxCharForInterpolant(
   Ddi_Bdd_t *f,
@@ -83191,8 +83213,8 @@ Ddi_AigSat22AndWithInterpolantPartNnf0 (
   SideEffects []
   SeeAlso     []
 ******************************************************************************/
-Ddi_Bdd_t *
-Ddi_AigSat22AndWithInterpolant (
+static Ddi_Bdd_t *
+aigSat22AndWithInterpolantIntern (
   Ddi_IncrSatMgr_t *incrSat, 
   Ddi_Bdd_t *a,
   Ddi_Bdd_t *b,
@@ -83203,6 +83225,8 @@ Ddi_AigSat22AndWithInterpolant (
   int tfPiNum,
   Ddi_Bdd_t *optCare,
   Ddi_Bdd_t *prevItp, // *itpPlus, 
+  Ddi_Bdd_t *clungItp,
+  float clungItpRatio,
   int *psat,
   int itpPart,
   int itpOdc,
@@ -84214,12 +84238,7 @@ Ddi_AigSat22AndWithInterpolant (
     return NULL;
   }
 
-  for (i=0; i<Ddi_VararrayNum(vA); i++) {
-    Ddi_Var_t *v = Ddi_VararrayRead(vA,i);
-    bAigEdge_t varIndex = Ddi_VarToBaig(v);
-    Pdtutil_Assert(varIndex != bAig_NULL,"NULL variable");
-    nodeAuxChar(bmgr,varIndex) = 3;
-  }
+  setVararrayAuxChar(vA,3);
 
   if (noOK) {
     success = false;
@@ -84241,7 +84260,13 @@ Ddi_AigSat22AndWithInterpolant (
     success = Minisat22Interpolant ((void *)S22, ddm, a2, b2,
                                     nACl, globalVars, 
 				    0, &interpolant, &interpolantOpt,
-				    myCare, nSuppVars,itpOdc,1);
+				    myCare, nSuppVars,itpOdc,1,clungItpRatio);
+    if (clungItpRatio > 0.0) {
+      if (interpolant!=NULL && interpolantOpt!=NULL) {
+        Ddi_DataCopy(clungItp,interpolantOpt);
+        Ddi_Free(interpolantOpt);
+      }
+    }
     Ddi_Free(myCare);
     if (0 && interpolant != NULL && Ddi_BddIsOne(interpolant)) {
       // problem! Force a fix with old minisat
@@ -84260,7 +84285,7 @@ Ddi_AigSat22AndWithInterpolant (
       Minisat22Interpolant ((void *)S22, ddm, a2, b2, 0, globalVars, 1,
                           &reverseInterpolant,
                           &interpolantOpt,
-			    optCare, nSuppVars,itpOdc,0);
+			    optCare, nSuppVars,itpOdc,0,-1.0);
     }
     if (tryRevItp && interpolant!=NULL) {
       int sizeR = Ddi_BddSize(reverseInterpolant);
@@ -84324,12 +84349,7 @@ Ddi_AigSat22AndWithInterpolant (
     delete S22b;
   }
 
-  for (i=0; i<Ddi_VararrayNum(vA); i++) {
-    Ddi_Var_t *v = Ddi_VararrayRead(vA,i);
-    bAigEdge_t varIndex = Ddi_VarToBaig(v);
-    Pdtutil_Assert(varIndex != bAig_NULL,"NULL variable");
-    nodeAuxChar(bmgr,varIndex) = 0;
-  }
+  setVararrayAuxChar(vA,0);
 
   Ddi_Free(vA);
 
@@ -84800,7 +84820,83 @@ Ddi_AigSat22AndWithInterpolant (
   return(interpolant);
 }
 
-
+/**Function********************************************************************
+  Synopsis    [Satisfiability Check on a&b with interpolant generation]
+  Description [Satisfiability Check on a&b with interpolant generation.
+               Sat solver is called on conjunction of a and b. If problem is
+               Satisfiable ((psat=1), counterexample is returned. Otherwise,
+               (*psat=0) interpolant (based on McMillan CAV2003 paper),
+               is built and returned.
+               This routine assumes that common variables of a and b parameters
+               are passed (as variable set) on globalVars parameter).
+              ]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bdd_t *
+Ddi_AigSat22AndWithInterpolant (
+  Ddi_IncrSatMgr_t *incrSat, 
+  Ddi_Bdd_t *a,
+  Ddi_Bdd_t *b,
+  Ddi_Bdd_t *bAbstr,
+  Ddi_Varset_t *globalVars,
+  Ddi_Varset_t *domainVars,
+  Ddi_Vararray_t **tfPiVars,
+  int tfPiNum,
+  Ddi_Bdd_t *optCare,
+  Ddi_Bdd_t *prevItp, // *itpPlus, 
+  int *psat,
+  int itpPart,
+  int itpOdc,
+  int tryRevItp,
+  float timeLimit
+)
+{
+  return
+    aigSat22AndWithInterpolantIntern (
+      incrSat,a,b,bAbstr,globalVars,domainVars,tfPiVars,tfPiNum,
+      optCare,prevItp,NULL,-1.0,psat,itpPart,itpOdc,tryRevItp,timeLimit);
+}
+ 
+/**Function********************************************************************
+  Synopsis    [Satisfiability Check on a&b with interpolant generation]
+  Description [Satisfiability Check on a&b with interpolant generation.
+               Sat solver is called on conjunction of a and b. If problem is
+               Satisfiable ((psat=1), counterexample is returned. Otherwise,
+               (*psat=0) interpolant (based on McMillan CAV2003 paper),
+               is built and returned.
+               This routine assumes that common variables of a and b parameters
+               are passed (as variable set) on globalVars parameter).
+              ]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bdd_t *
+Ddi_AigSat22AndWithInterpolantAndClung (
+  Ddi_IncrSatMgr_t *incrSat, 
+  Ddi_Bdd_t *a,
+  Ddi_Bdd_t *b,
+  Ddi_Bdd_t *bAbstr,
+  Ddi_Varset_t *globalVars,
+  Ddi_Varset_t *domainVars,
+  Ddi_Vararray_t **tfPiVars,
+  int tfPiNum,
+  Ddi_Bdd_t *optCare,
+  Ddi_Bdd_t *prevItp, // *itpPlus, 
+  Ddi_Bdd_t *clungItp, 
+  float clungItpRatio,
+  int *psat,
+  int itpPart,
+  int itpOdc,
+  int tryRevItp,
+  float timeLimit
+)
+{
+  return
+    aigSat22AndWithInterpolantIntern (
+      incrSat,a,b,bAbstr,globalVars,domainVars,tfPiVars,tfPiNum,
+      optCare,prevItp,clungItp,clungItpRatio,psat,itpPart,itpOdc,tryRevItp,timeLimit);
+}
  
 /**Function********************************************************************
   Synopsis    [Convert a DDI AIG to a monolitic BDD]
@@ -85249,13 +85345,16 @@ moveAVarsToGbl(
   remapAuxv.growTo(nSolverVars,var_Undef);
 
   // count B vars
-  int a2gLimit = 0;
+  int a2gLimit = 0, a2gLimit1 = 0, a2gLimit2 = 0;
   for (int v=0; v<nSV0; v++) {
     if (proofPdt.Avar(v)) {
       a2gLimit++;
     }
   }
-  a2gLimit *= aRatio;
+  //  a2gLimit *= aRatio;
+  a2gLimit1 = a2gLimit2 = 2*a2gLimit/3;
+  //  a2gLimit1 *= aRatio;
+  a2gLimit2 /= aRatio;
   
   // save old 
   int aCnt=0;
@@ -85268,7 +85367,8 @@ moveAVarsToGbl(
         Ddi_Var_t *vv = Ddi_VarFromBaig(ddm,baig);
       }
       else {
-        Pdtutil_Assert(0,"internal baiog node is global");
+        // accepted
+        // Pdtutil_Assert(0,"internal baig node is global");
       }
     }
     DdiCnfSetActive(ddm,cnfId,1);
@@ -85277,7 +85377,7 @@ moveAVarsToGbl(
       auxc = 3;
     }
     else if (proofPdt.Avar(v)) {
-      if (aCnt++ < a2gLimit) {
+      if (aCnt > a2gLimit || (aCnt > a2gLimit1 && aCnt < a2gLimit2)) {
         DdiCnfSetActive(ddm,cnfId,3);
         auxc = 3;
       }
@@ -85285,6 +85385,7 @@ moveAVarsToGbl(
         DdiCnfSetActive(ddm,cnfId,2);
         auxc = 0;
       }
+      aCnt++;
     }
     else {
       // B var
@@ -85908,7 +86009,8 @@ getAuxProof22(
 static Ddi_Bdd_t *
 getBClungItp22(
   void    *Svoid,
-  Ddi_Mgr_t *ddm
+  Ddi_Mgr_t *ddm,
+  float clungItpRatio
 )
 {
   Minisat22Solver* S22 = (Minisat22Solver *)Svoid;
@@ -85965,7 +86067,7 @@ getBClungItp22(
 
   //Minisat::vec< Minisat::vec<Minisat::Lit> > clauses1; 
   int nSolverVars = moveAVarsToGbl(S22,ddm,
-         saveCnfIds,saveAuxChars,saveAuxCharVal,0.5);
+         saveCnfIds,saveAuxChars,saveAuxCharVal,clungItpRatio);
   //  S22->printProof(&isAvar,&isGlobl);
   Checker trav(ddm,nSolverVars);
       
@@ -86298,7 +86400,9 @@ getProof22(
   Ddi_Bdd_t *c,
   int nAClauses,
   Ddi_Varset_t *globalvars,
-  int computeAuxItp
+  int computeAuxItp,
+  Ddi_Bdd_t **clungItpP,
+  float clungItpRatio
 )
 {
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(a);
@@ -86315,7 +86419,7 @@ getProof22(
   int i, j, nCl;
   int doPartialRerunSolver = 0;
   int doPartialOnSameProof = computeAuxItp;
-  int doBClungItp = 1;
+  int doBClungItp = clungItpRatio>0.0 && clungItpP!=NULL;
   Ddi_Bdd_t *auxItp=NULL;
   
   Minisat::SimpSolver S22aux;
@@ -86367,7 +86471,6 @@ getProof22(
   int constItp = S22->getProof(clauses, nAClausesCore, proofNodes,
 			       pivots, topResClP);
 
-  Ddi_Bdd_t *bClungItp=NULL;
   if (clauses.size()==0) {
     doPartialOnSameProof = doPartialOnSameProof = 0;
     assert(constItp>=0);
@@ -86379,7 +86482,8 @@ getProof22(
     }
 
     if (doBClungItp) {
-      bClungItp = getBClungItp22(S22,ddm);
+      Ddi_Bdd_t *bClungItp = getBClungItp22(S22,ddm,clungItpRatio);
+      *clungItpP = bClungItp;
     }
 
     if (doPartialRerunSolver) {
@@ -86895,7 +86999,7 @@ Minisat22InterpolantUndef (
     fflush(dMgrO(ddm));
   }
 
-  getProof22((void *)S22,&trav,a,NULL,NULL,nACl,globalvars,0);
+  getProof22((void *)S22,&trav,a,NULL,NULL,nACl,globalvars,0,NULL,-1.0);
   trav.done22();
   trav.genitp();
   //  S.proof->deleteTemps();
@@ -87114,7 +87218,8 @@ Minisat22Interpolant (
   Ddi_Bdd_t *care,
   int nSuppVars,
   int itpOdc,
-  int genProof
+  int genProof,
+  float clungItpRatio
 )
 {
   Ddi_Bdd_t *interpolant=NULL;
@@ -87212,7 +87317,7 @@ Minisat22Interpolant (
   else if (!useMaxPivots) {
     auxItp =
       getProof22((void *)S22,&trav,a,NULL,care,nAClauses,globalvars,
-                 computeAuxItp);
+                 computeAuxItp,&interpolantOpt,clungItpRatio);
     if (auxItp!=NULL) {
       interpolant = auxItp;
       auxItp=NULL;
@@ -87237,7 +87342,7 @@ Minisat22Interpolant (
 
     auxItp =
       getProof22((void *)S22,&trav,a,b,NULL,nAClauses,globalvars,
-                 computeAuxItp);
+                 computeAuxItp,&interpolantOpt,clungItpRatio);
     /* use first cofactor */
     if (auxItp!=NULL &&
         (!compareWithStndardItp || Ddi_BddIsConstant(auxItp))) {

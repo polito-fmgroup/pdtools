@@ -26775,8 +26775,8 @@ itpImgGetCone(
                                       coneCare,step);
     }
     if (1 && (itpTravMgr->careForBwdCone != NULL)) {
-      Pdtutil_Assert(Ddi_BddIncluded(kCone,itpTravMgr->careForBwdCone),
-				     "error with careBwdForCone");
+      //      Pdtutil_Assert(Ddi_BddIncluded(kCone,itpTravMgr->careForBwdCone),
+      //			     "error with careBwdForCone");
       if (Ddi_BddSize(localCone)>100) {
 	Ddi_BddAndAcc(localCone,itpTravMgr->careForBwdCone);
       }
@@ -28553,45 +28553,25 @@ itpImgPart (
     }
     //    ddm->settings.aig.itpNoQuantify = 10000;
     //    ddm->settings.aig.itpNoQuantify = 10;
-    Ddi_Bdd_t *itpNew;
-    int recurPart=0;
-    if (recurPart) {
-      itpNew = itpImgPart (itpTravMgr,kCone,kConeRings,
-                         aNew,bNew,NULL,
-                         step,doSplit,globalVars,domainVars,
-                         careAig,
-			 itpPlus,toPlusCube,psat,itpPart,itpOdc,
-                         timeLimit);
-      if (itpNew!=NULL && itpPlus!=NULL) {
-        Ddi_BddAndAcc(itpNew,itpPlus);
-      }
+
+    float clungItpRatio = travMgr->settings.aig.igrClungItpRatio;
+    int clungItpTh = travMgr->settings.aig.igrClungItpTh;
+    Ddi_Bdd_t *clungItp=NULL;
+    if (clungItpRatio>0.0 && Ddi_BddSize(bNew)>clungItpTh) {
+      clungItp = Ddi_BddMakeConstAig(ddm,1);
     }
-    else {
-      itpNew = Ddi_AigSat22AndWithInterpolant(
+    else clungItpRatio = -1.0; // enforce disable
+
+    Ddi_Bdd_t *itpNew;
+    itpNew = Ddi_AigSat22AndWithInterpolantAndClung(
                                           itpTravMgr->incrSat,
                                           aNew,bNew,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
 					  careAig,prevTo,
+                                          clungItp,clungItpRatio,
 					  psat, itpPart, itpOdc, 
 					  0,timeLimit);
-    }
-    if (0 && tryPrevImgLearning &&
-        (itpTravMgr->careForBwdCone != NULL)
-        && !Ddi_BddIsConstant(itpTravMgr->careForBwdCone)) {
-      Ddi_BddAndAcc(bNew,itpTravMgr->careForBwdCone);
-      printf("Computing itpNew using extra learning: %d\n",
-             Ddi_BddSize(itpTravMgr->careForBwdCone));
-      Ddi_Bdd_t *itpNew2 = Ddi_AigSat22AndWithInterpolant(NULL,
-                                          aNew,bNew,NULL,
-					  globalVars, domainVars,
-					  tfPiVars,tfPiNum,
-					  careAig,NULL,
-					  psat, itpPart, itpOdc, 
-					  0,timeLimit);
-      printf("Computed itpNew using extra learning\n");
-      Ddi_Free(itpNew2);
-    }
 
     ddm->settings.aig.itpNoQuantify = 0;
     ddm->settings.aig.itpUseCare = 0;
@@ -28643,7 +28623,13 @@ itpImgPart (
 	     Ddi_BddSize(itpRef));
 	Ddi_Free(itpRef);
       }
+      if (clungItp!=NULL) {
+        Ddi_BddAndAcc(clungItp,itp);
+        Ddi_Free(itpTravMgr->careForBwdCone);
+        itpTravMgr->careForBwdCone = Ddi_BddNot(clungItp);
+      }
     }
+    Ddi_Free(clungItp);
     return itp;
   }
 
@@ -28917,13 +28903,26 @@ itpImgPart (
           Ddi_Free(b2Constr);
           Ddi_Free(constr);
         }
- 
-        itp = Ddi_AigSat22AndWithInterpolant(NULL,a,b2,NULL,
+
+        float clungItpRatio = travMgr->settings.aig.igrClungItpRatio;
+        int clungItpTh = travMgr->settings.aig.igrClungItpTh;
+        Ddi_Bdd_t *clungItp=NULL;
+        if (clungItpRatio>0.0 && Ddi_BddSize(b2)>clungItpTh) {
+          clungItp = Ddi_BddMakeConstAig(ddm,1);
+        }
+        else clungItpRatio = -1.0; // enforce disable
+        itp = Ddi_AigSat22AndWithInterpolantAndClung(NULL,a,b2,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
 					  optCare,prevTo,
-					  psat, itpPart, itpOdc, 
+                                          clungItp,clungItpRatio,
+                                          psat, itpPart, itpOdc, 
 					  0,timeLimit);
+        if (itp!=NULL && clungItp!=NULL) {
+          Ddi_Free(itpTravMgr->careForBwdCone);
+          itpTravMgr->careForBwdCone = Ddi_BddNot(clungItp);
+        }
+        Ddi_Free(clungItp);
       }
       ddm->settings.aig.itpTwice = tryTwice;
     }
@@ -33573,7 +33572,7 @@ itpImg(
 		    static int checkRing = 0 && sat;
 		    if (step>1 && checkRing && kConeRings) {
 		      int myend = step-1;
-		      int mystart = myend+Ddi_BddReadMark(localCone);;
+		      int mystart = myend+Ddi_BddReadMark(localCone);
 
 		      int chk2, chk3, chk = itpCheckConeAtRing(itpMgr,itpTravMgr->reached,NULL,
 						   myend,mystart-myend,2);

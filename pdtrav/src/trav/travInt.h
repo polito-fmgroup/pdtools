@@ -178,6 +178,8 @@ struct Trav_Settings_s {
     int igrConeSubsetSizeTh;
     float igrConeSubsetPiRatio;
     float igrConeSplitRatio;
+    float igrClungItpRatio;
+    int igrClungItpTh;
 
     int igrMaxIter;
     int igrMaxExact;

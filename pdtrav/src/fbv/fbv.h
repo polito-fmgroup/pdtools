@@ -371,6 +371,8 @@ typedef struct {
     int igrConeSubsetSizeTh;
     float igrConeSubsetPiRatio;
     float igrConeSplitRatio;
+    float igrClungItpRatio;
+    int igrClungItpTh;
 
     int igrGrowCone;            // command line parameter
     int igrGrowConeMaxK;        // command line parameter

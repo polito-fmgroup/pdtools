@@ -388,6 +388,8 @@ typedef enum {
   Pdt_TravIgrConeSubsetSizeTh_c,
   Pdt_TravIgrConeSubsetPiRatio_c,
   Pdt_TravIgrConeSplitRatio_c,
+  Pdt_TravIgrClungItpRatio_c,
+  Pdt_TravIgrClungItpTh_c,
 
   Pdt_TravIgrMaxIter_c,
   Pdt_TravIgrMaxExact_c,

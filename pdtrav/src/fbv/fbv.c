@@ -486,7 +486,11 @@ static char *help[] = {
   "-igrConeSubsetPiRatio <val>",
   "cratio of cone PIs used for subsetting (default: 0.5)", NULL,
   "-igrConeSplitRatio <val>",
-  "cratio of cone split (default: 1.0 - disabled)", NULL,
+  "ratio of cone split (default: 1.0 - disabled)", NULL,
+  "-igrClungItpRatio <val>",
+  "ratio of (cone) clung itp (default: -1.0 - disabled)", NULL,
+  "-igrClungItpTh <val>",
+  "threshold (cone size) for enabling clung itp (default: 100000)", NULL,
   "-igrSide <val>",
   "max refinement iterations for same (side) ring (default 0)", NULL,
   "-igrBwdRefine <val>",
@@ -5628,6 +5632,18 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-igrConeSplitRatio") == 0) {
       opt->trav.igrConeSplitRatio = atof(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-igrClungItpRatio") == 0) {
+      opt->trav.igrClungItpRatio = atof(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-igrClungItpTh") == 0) {
+      opt->trav.igrClungItpTh = atoi(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -20140,6 +20156,10 @@ FbvSetTravMgrOpt(
     opt->trav.igrConeSubsetPiRatio);
   Trav_MgrSetOption(travMgr, Pdt_TravIgrConeSplitRatio_c, fnum,
     opt->trav.igrConeSplitRatio);
+  Trav_MgrSetOption(travMgr, Pdt_TravIgrClungItpRatio_c, fnum,
+    opt->trav.igrClungItpRatio);
+  Trav_MgrSetOption(travMgr, Pdt_TravIgrClungItpTh_c, inum,
+    opt->trav.igrClungItpTh);
   Trav_MgrSetOption(travMgr, Pdt_TravIgrGrowConeMaxK_c, inum,
     opt->trav.igrGrowConeMaxK);
   Trav_MgrSetOption(travMgr, Pdt_TravIgrGrowConeMax_c, fnum,
@@ -22597,6 +22617,10 @@ travOpt2OptList(
     opt->trav.igrConeSubsetPiRatio);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravIgrConeSplitRatio_c, fnum,
     opt->trav.igrConeSplitRatio);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravIgrClungItpRatio_c, fnum,
+    opt->trav.igrClungItpRatio);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravIgrClungItpTh_c, inum,
+    opt->trav.igrClungItpTh);
 
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravIgrMaxIter_c, inum,
     opt->trav.igrMaxIter);
@@ -23027,6 +23051,8 @@ new_settings(
   opt->trav.igrConeSubsetSizeTh = 100000;
   opt->trav.igrConeSubsetPiRatio = 0.5;
   opt->trav.igrConeSplitRatio = 1.0;
+  opt->trav.igrClungItpRatio = -1.0;
+  opt->trav.igrClungItpTh = 100000;
 
 
   opt->trav.igrSide = 3;
