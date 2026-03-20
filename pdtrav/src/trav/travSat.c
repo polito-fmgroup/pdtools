@@ -28909,6 +28909,9 @@ itpImgPart (
         Ddi_Bdd_t *clungItp=NULL;
         if (clungItpRatio>0.0 && Ddi_BddSize(b2)>clungItpTh) {
           clungItp = Ddi_BddMakeConstAig(ddm,1);
+          Ddi_Bdd_t *partb2 = Ddi_AigPartitionTop(b2,0);
+          Ddi_DataCopy(b2,partb2);
+          Ddi_Free(partb2);
         }
         else clungItpRatio = -1.0; // enforce disable
         itp = Ddi_AigSat22AndWithInterpolantAndClung(NULL,a,b2,NULL,

@@ -85338,9 +85338,11 @@ moveAVarsToGbl(
   Minisat::ProofPdt& proofPdt = S22->proofPdt;
   Minisat::vec<int> remapAuxv;
   bAig_Manager_t *bmgr = ddm->aig.mgr;
+  Pdtutil_VerbLevel_e verbosity = Ddi_MgrReadVerbosity (ddm);
   char name[100];
   int nSolverVars = S22->nVars(), nSV0 = nSolverVars; 
-
+  int useLevels = 1;
+  
   remapAuxv.clear();
   remapAuxv.growTo(nSolverVars,var_Undef);
 
@@ -85355,9 +85357,14 @@ moveAVarsToGbl(
   a2gLimit1 = a2gLimit2 = 2*a2gLimit/3;
   //  a2gLimit1 *= aRatio;
   a2gLimit2 /= aRatio;
+
+  Minisat::vec<bool>moveToGbl;
+  if (useLevels) {
+    S22->resNodesLevels(moveToGbl,1,aRatio);
+  }
   
   // save old 
-  int aCnt=0;
+  int aCnt=0, moveCnt=0;
   for (int v=0; v<nSV0; v++) {
     bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
     int cnfId = DdiAig2CnfId(bmgr,baig);
@@ -85377,9 +85384,13 @@ moveAVarsToGbl(
       auxc = 3;
     }
     else if (proofPdt.Avar(v)) {
-      if (aCnt > a2gLimit || (aCnt > a2gLimit1 && aCnt < a2gLimit2)) {
+      bool move = (aCnt > a2gLimit ||
+                   (aCnt > a2gLimit1 && aCnt < a2gLimit2));
+      if (useLevels) move = moveToGbl[v];
+      if (move) {
         DdiCnfSetActive(ddm,cnfId,3);
         auxc = 3;
+        moveCnt++;
       }
       else {
         DdiCnfSetActive(ddm,cnfId,2);
@@ -85391,6 +85402,7 @@ moveAVarsToGbl(
       // B var
       auxc = 1;
     }
+
     saveAuxChars.push(baig);
     char oldc = nodeAuxChar(bmgr,baig);
     saveAuxCharVal.push(oldc);
@@ -85401,6 +85413,13 @@ moveAVarsToGbl(
       nSolverVars = cnfId;
   }
 
+  if (verbosity >= Pdtutil_VerbLevelUsrMin_c) {
+    if (useLevels)
+      printf("MOVING %d/%d A-vars to Gbl by level\n",moveCnt, aCnt);
+    else
+      printf("MOVING %d/%d A-vars to Gbl by ratio\n",moveCnt, aCnt);
+  }
+  
   return nSolverVars;
 }
 

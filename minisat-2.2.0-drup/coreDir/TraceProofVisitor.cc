@@ -805,6 +805,97 @@ namespace Minisat
     }    
   }
 
+  void Solver::resNodesLevels(vec<bool>& moveToGbl, int strategy,
+                              float ratio) {
+    vec<ResolutionNode>& resNodes = proofPdt.resNodes;
+    int nAdded=0;
+    int nNodes = resNodes.size();
+
+    moveToGbl.clear();
+    moveToGbl.growTo(nVars(),false);
+    vec<int>levelRes(nNodes,0);
+    vec<int>levelChain(nNodes,0);
+    vec<int>refCount(nNodes,0);
+
+    assert(proofPdt.isGlobal.size()>0);
+    int maxLevelChain=0, maxLevelRes=0;
+    
+    for (int i = 0; i < nNodes; i++) {
+      int maxl=0, maxchl=0;
+      int add = 1;
+      proofCode code_i = resNodes[i].getCode();
+      if (code_i!=proof_rootA && code_i!=proof_rootB) {
+        for(int j=0; j < resNodes[i].antecedents.size(); j++){
+          int antId = resNodes[i].antecedents[j].id;
+          int lmax_i = levelRes[antId] + add;
+          int lchmax_i = levelChain[antId] + 1;
+          assert (antId>=0 && antId<nNodes);
+          refCount[antId]++;
+          if ((j==0) || (lmax_i>maxl)) maxl = lmax_i;
+          if ((j==0) || (lchmax_i>maxchl)) maxchl = lchmax_i;
+        }
+      }
+      levelRes[i] = maxl;
+      levelChain[i] = maxchl;
+      if (maxl>maxLevelRes) maxLevelRes=maxl;
+      if (maxchl>maxLevelChain) maxLevelChain=maxchl;
+      //      printf("levelMax[%d] %d\n", i, maxl);
+    }
+
+    vec<int> cntByLevelRes(maxLevelRes+1,0);
+    vec<int> cntByLevelChain(maxLevelChain+1,0);
+    int cntRes=0, cntChain=0;
+    for (int i = 0; i < nNodes; i++) {
+      proofCode code_i = resNodes[i].getCode();
+      if (code_i!=proof_rootA && code_i!=proof_rootB) {
+        cntByLevelRes[levelRes[i]] += resNodes[i].pivots.size();
+        cntByLevelChain[levelChain[i]]++;
+        cntRes += resNodes[i].pivots.size();
+        cntChain++;
+      }
+    }
+
+    // find cut levels
+    int cutLevelRes=0;
+    for (int i=0, k=0; i<=maxLevelRes; i++) {
+      if (cntByLevelRes[i]>0) {
+        k+=cntByLevelRes[i];
+        if (k>cntRes*ratio) {
+          cutLevelRes=i;
+          break;
+        }
+      }
+    }
+    int cutLevelChain=0;
+    for (int i=0, k=0; i<=maxLevelChain; i++) {
+      if (cntByLevelChain[i]>0) {
+        k+=cntByLevelChain[i];
+        if (k>cntChain*ratio) {
+          cutLevelChain=i;
+          break;
+        }
+      }
+    }
+
+    // now mark variables
+    for (int i = 0; i < nNodes; i++) {
+      proofCode code_i = resNodes[i].getCode();
+      if (code_i==proof_rootA || code_i==proof_rootB) continue;
+      if (strategy == 1 && levelRes[i] < cutLevelRes) continue;
+      if (strategy == 2 && levelChain[i] < cutLevelChain) continue;
+
+      // convert A to G
+      vec<Lit>& pivots = resNodes[i].pivots;
+      for (int j=0; j<pivots.size(); j++) {
+        int v = var(pivots[j]);
+        if (!proofPdt.Global(v) && proofPdt.Avar(v)) {
+          moveToGbl[v] = true;
+        }
+      }
+    }
+
+  }
+  
   void Solver::proofReverseAB(void) {
     vec<ResolutionNode>& resNodes = proofPdt.resNodes;
     assert(proofPdt.status==proofPdt.labeled);

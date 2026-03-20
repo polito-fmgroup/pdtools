@@ -650,6 +650,7 @@ public:
   void proofSetupProofVars(void);
   void proofSetupVars(void);
   void proofReverseAB(void);
+  void resNodesLevels(vec<bool>& moveToGbl, int strategy,float ratio);
   int proofSize(void){
     return(proof.size());
   }
