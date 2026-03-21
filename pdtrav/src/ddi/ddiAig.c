@@ -85359,12 +85359,13 @@ moveAVarsToGbl(
   a2gLimit2 /= aRatio;
 
   Minisat::vec<bool>moveToGbl;
+  Minisat::vec<bool>moveToB;
   if (useLevels) {
-    S22->resNodesLevels(moveToGbl,1,aRatio);
+    S22->resNodesLevels(moveToGbl,moveToB,1,aRatio);
   }
   
   // save old 
-  int aCnt=0, moveCnt=0;
+  int aCnt=0, moveGblCnt=0, moveGBCnt=0, moveABCnt=0;
   for (int v=0; v<nSV0; v++) {
     bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
     int cnfId = DdiAig2CnfId(bmgr,baig);
@@ -85380,21 +85381,36 @@ moveAVarsToGbl(
     }
     DdiCnfSetActive(ddm,cnfId,1);
     if (proofPdt.Global(v)) {
-      DdiCnfSetActive(ddm,cnfId,3);
-      auxc = 3;
-    }
-    else if (proofPdt.Avar(v)) {
-      bool move = (aCnt > a2gLimit ||
-                   (aCnt > a2gLimit1 && aCnt < a2gLimit2));
-      if (useLevels) move = moveToGbl[v];
-      if (move) {
+      bool moveB = moveToB[v];
+      if (!moveB) {
         DdiCnfSetActive(ddm,cnfId,3);
         auxc = 3;
-        moveCnt++;
       }
       else {
+        auxc = 1;
+        moveGBCnt++;
+      }
+    }
+    else if (proofPdt.Avar(v)) {
+      bool moveG = (aCnt > a2gLimit ||
+                   (aCnt > a2gLimit1 && aCnt < a2gLimit2));
+      bool moveB = false;
+      if (useLevels) {
+        moveG = moveToGbl[v];
+        moveB = moveToB[v];
+      }
+      if (moveG) {
+        DdiCnfSetActive(ddm,cnfId,3);
+        auxc = 3;
+        moveGblCnt++;
+      }
+      else if (!moveB) {
         DdiCnfSetActive(ddm,cnfId,2);
         auxc = 0;
+      }
+      else {
+        auxc = 1;
+        moveABCnt++;
       }
       aCnt++;
     }
@@ -85414,10 +85430,12 @@ moveAVarsToGbl(
   }
 
   if (verbosity >= Pdtutil_VerbLevelUsrMin_c) {
-    if (useLevels)
-      printf("MOVING %d/%d A-vars to Gbl by level\n",moveCnt, aCnt);
+    if (useLevels) {
+      printf("MOVING %d/%d A-vars to Gbl by level\n",moveGblCnt, aCnt);
+      printf("MOVING %d G->B, %d A-B by level\n",moveGBCnt, moveABCnt);
+    }
     else
-      printf("MOVING %d/%d A-vars to Gbl by ratio\n",moveCnt, aCnt);
+      printf("MOVING %d/%d A-vars to Gbl by ratio\n",moveGblCnt, aCnt);
   }
   
   return nSolverVars;
@@ -86064,6 +86082,9 @@ getBClungItp22(
   reverseProof(S22,ddm);
 #else
 
+  int nSolverVars = moveAVarsToGbl(S22,ddm,
+         saveCnfIds,saveAuxChars,saveAuxCharVal,clungItpRatio);
+
   S22->getProof(clauses1, nAClCore, proofNodes1,
 		pivots1, NULL);
 
@@ -86085,8 +86106,6 @@ getBClungItp22(
   }
 
   //Minisat::vec< Minisat::vec<Minisat::Lit> > clauses1; 
-  int nSolverVars = moveAVarsToGbl(S22,ddm,
-         saveCnfIds,saveAuxChars,saveAuxCharVal,clungItpRatio);
   //  S22->printProof(&isAvar,&isGlobl);
   Checker trav(ddm,nSolverVars);
       

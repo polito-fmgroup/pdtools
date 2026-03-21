@@ -805,7 +805,9 @@ namespace Minisat
     }    
   }
 
-  void Solver::resNodesLevels(vec<bool>& moveToGbl, int strategy,
+  void Solver::resNodesLevels(vec<bool>& moveToGbl,
+                              vec<bool>& moveToB,
+                              int strategy,
                               float ratio) {
     vec<ResolutionNode>& resNodes = proofPdt.resNodes;
     int nAdded=0;
@@ -813,6 +815,8 @@ namespace Minisat
 
     moveToGbl.clear();
     moveToGbl.growTo(nVars(),false);
+    moveToB.clear();
+    moveToB.growTo(nVars(),false);
     vec<int>levelRes(nNodes,0);
     vec<int>levelChain(nNodes,0);
     vec<int>refCount(nNodes,0);
@@ -878,6 +882,7 @@ namespace Minisat
     }
 
     // now mark variables
+    vec<bool>keepGbl(nVars(),false);
     for (int i = 0; i < nNodes; i++) {
       proofCode code_i = resNodes[i].getCode();
       if (code_i==proof_rootA || code_i==proof_rootB) continue;
@@ -891,8 +896,71 @@ namespace Minisat
         if (!proofPdt.Global(v) && proofPdt.Avar(v)) {
           moveToGbl[v] = true;
         }
+        else if (proofPdt.Global(v)) {
+          keepGbl[v]=true;
+        }
       }
     }
+
+    // move A-clauses to B
+    for (int i = 0; i < nNodes; i++) {
+      proofCode code_i = resNodes[i].getCode();
+      if (code_i==proof_rootA) {
+        bool hasGbl=false;
+        vec<Lit>& c = resNodes[i].resolvents;
+        for (int j=0; j<c.size() && !hasGbl; j++) {
+          int v = var(c[j]);
+          if (keepGbl[v] || moveToGbl[v]) {
+            hasGbl = true;
+          }
+        }
+        if (!hasGbl) {
+          // move to B
+          resNodes[i].setCode(proof_rootB);
+          resNodes[i].setSavedCode(proof_rootA);
+        }
+      }
+    }    
+    // relabel vars
+    vec<bool>keepA(nVars(),false);
+    for (int i = 0; i < nNodes; i++) {
+      proofCode code_i = resNodes[i].getCode();
+      if (code_i==proof_rootA) {
+        vec<Lit>& c = resNodes[i].resolvents;
+        for (int j=0; j<c.size(); j++) {
+          int v = var(c[j]);
+          if (proofPdt.Global(v)) {
+            keepGbl[v]=true;
+          }
+          else {
+            assert(proofPdt.Avar(v));
+            keepA[v]=true;
+          }
+        }
+      }
+    }    
+    for (int i = 0; i < nNodes; i++) {
+      proofCode code_i = resNodes[i].getCode();
+      if (code_i==proof_rootB) {
+        vec<Lit>& c = resNodes[i].resolvents;
+        for (int j=0; j<c.size(); j++) {
+          int v = var(c[j]);
+          if (proofPdt.Global(v)) {
+            if (!keepGbl[v] && !keepA[v]) {
+              if (proofPdt.Avar(v)) {
+                moveToB[v]=true;
+              }
+            }
+          }
+          else if (proofPdt.Avar(v)) {
+            assert(proofPdt.getSavedCode()==proof_rootA);
+            moveToB[v]=true;
+            if (keepA[v])
+              moveToGbl[v]=true;
+          }
+        }
+      }
+    }    
 
   }
   

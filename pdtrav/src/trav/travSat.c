@@ -28908,7 +28908,7 @@ itpImgPart (
         int clungItpTh = travMgr->settings.aig.igrClungItpTh;
         Ddi_Bdd_t *clungItp=NULL;
         if (clungItpRatio>0.0 && Ddi_BddSize(b2)>clungItpTh) {
-          clungItp = Ddi_BddMakeConstAig(ddm,1);
+          clungItp = Ddi_BddMakeConstAig(ddm,0);
           Ddi_Bdd_t *partb2 = Ddi_AigPartitionTop(b2,0);
           Ddi_DataCopy(b2,partb2);
           Ddi_Free(partb2);
