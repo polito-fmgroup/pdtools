@@ -820,6 +820,125 @@ DdiAigArrayCopy (
   return(newa);
 }
 
+/**Function********************************************************************
+  Synopsis    [Copy Aig between managers]
+  Description [Copy Aig between managers]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bdd_t *
+Ddi_AigClauseArrayCopy (
+  Ddi_Mgr_t *ddm,
+  Ddi_Bdd_t *f
+)
+{
+  Ddi_Mgr_t *ddm0 = Ddi_ReadMgr(f);
+  Ddi_Bdd_t *newf;
+  bAigEdge_t baig0, baig;
+
+  bAig_array_t *visitedNodes;
+
+  bAig_Manager_t *bmgr0 = ddm0->aig.mgr;
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  int i, nRoots = Ddi_BddPartNum(f);
+
+  if (ddm0 == ddm) {
+    /* same menager, call dup */
+    return (Ddi_BddDup(f));
+  }
+
+  visitedNodes = bAigArrayAlloc();
+
+  for (i=0; i<nRoots; i++) {
+    Ddi_Bdd_t *f_i = Ddi_BddPartRead(f,i);
+    for (int j=0; j<Ddi_BddPartNum(f_i); j++) {
+      Ddi_Bdd_t *f_i_j = Ddi_BddPartRead(f_i,j);
+      bAigEdge_t fBaig = Ddi_BddToBaig(f_i_j);
+      if (!bAig_NodeIsConstant(fBaig)) {
+        postOrderAigVisitIntern(bmgr0,fBaig,visitedNodes,-1);
+      }
+    }
+  }
+  aigArrayClearVisitedIntern(bmgr0,visitedNodes);
+  aigArrayClearAuxAigIntern(bmgr0,visitedNodes);
+
+  newf = Ddi_BddMakePartConjVoid(ddm);
+
+  for (i=0; i<visitedNodes->num; i++) {
+    bAigEdge_t baig1, baig = visitedNodes->nodes[i];
+
+    Pdtutil_Assert(!bAig_NodeIsConstant(baig),"Constant baing in array");
+
+    if (bAig_isVarNode(bmgr0,baig)) {
+      /* take correspondent var */
+      char *name = bAig_NodeReadName(bmgr0,baig);
+      baig1 = bAig_VarNodeFromName(bmgr,name);
+      if (baig1 == bAig_NULL) {
+	int isAig = Ddi_VarIsAig(Ddi_VarFromName(ddm0,name));
+	Ddi_Var_t *v;
+	if (isAig) {
+	  v = Ddi_VarNewBaig(ddm,name);
+	}
+	else {
+	  v = Ddi_VarNew(ddm);
+	  Ddi_VarAttachName (v, name);
+	}
+	baig1 = bAig_VarNodeFromName(bmgr,name);
+      }
+    }
+    else {
+      bAigEdge_t right, left, r, l;
+      right = bAig_NodeReadIndexOfRightChild(bmgr0,baig);
+      left = bAig_NodeReadIndexOfLeftChild(bmgr0,baig);
+      r = bAig_NodeIsInverted(right) ?
+        bAig_Not(bAig_AuxAig1(bmgr0,right)) : bAig_AuxAig1(bmgr0,right);
+      l = bAig_NodeIsInverted(left) ?
+        bAig_Not(bAig_AuxAig1(bmgr0,left)) : bAig_AuxAig1(bmgr0,left);
+      /* this is the operation in the new manager */
+      baig1 = bAig_And(bmgr,r,l);
+    }
+    Pdtutil_Assert(baig1 != bAig_NULL,"NULL baig");
+    bAig_Ref(bmgr, baig1);
+    Pdtutil_Assert(bAig_AuxAig1(bmgr0,baig) == bAig_NULL, "wrong auxaig1");
+    bAig_AuxAig1(bmgr0,baig) = baig1;
+  }
+
+  for (i=0; i<nRoots; i++) {
+    Ddi_Bdd_t *f_i = Ddi_BddPartRead(f,i);
+    Ddi_Bdd_t *f1_i = Ddi_BddMakePartDisjVoid(ddm);
+    for (int j=0; j<Ddi_BddPartNum(f_i); j++) {
+      Ddi_Bdd_t *f_i_j = Ddi_BddPartRead(f_i,j);
+      bAigEdge_t fBaig = Ddi_BddToBaig(f_i_j);
+      bAigEdge_t fBaig1;
+      Ddi_Bdd_t *f1_i_j;
+      if (bAig_NodeIsConstant(fBaig)) {
+        /* constants are equal on both managers */
+        fBaig1 = fBaig;
+      }
+      else {
+        fBaig1 = bAig_NodeIsInverted(fBaig) ?
+                            bAig_Not(bAig_AuxAig1(bmgr0,fBaig)) :
+                                     bAig_AuxAig1(bmgr0,fBaig);
+      }
+      f1_i_j = Ddi_BddMakeFromBaig(ddm,fBaig1);
+      Ddi_BddPartInsertLast(f1_i,f1_i_j);
+      Ddi_Free(f1_i_j);
+    }
+    Ddi_BddPartInsertLast(newf,f1_i);
+    Ddi_Free(f1_i);
+  }
+
+  for (i=0; i<visitedNodes->num; i++) {
+    bAigEdge_t baig = visitedNodes->nodes[i];
+    bAig_RecursiveDeref(bmgr,bAig_AuxAig1(bmgr0,baig));
+    bAig_AuxAig1(bmgr0,baig) = bAig_NULL;
+  }
+
+  bAigArrayFree(visitedNodes);
+
+  return(newf);
+}
+
 
 /**Function********************************************************************
   Synopsis    [Convert a DDI AIG to the corresponding bAig Node]
@@ -46118,9 +46237,9 @@ aigSatAndWithAigCore (
     fprintf(dMgrO(ddm),"Solver stats: %ld/%ld vars/clauses\n",
       S->nVars(), S->nClauses());
     fprintf(dMgrO(ddm),
-      "Solver stats: %ld/%ld/%ld(%ld) dec./prop./confl.(small)\n",
-      (int)S->stats.decisions, (int)S->stats.propagations,
-       (int)S->stats.conflicts,(int)S->stats.smallconflicts);
+      "Solver stats: %ld/%g/%ld(%ld) dec./prop./confl.(small)\n",
+      (long int)S->stats.decisions, (long int)S->stats.propagations,
+       (long int)S->stats.conflicts,(long int)S->stats.smallconflicts);
     fprintf(dMgrO(ddm),"Solver stats: time = %s\n", util_print_time (cpuTime)));
 
   if (undefined) {
@@ -47221,9 +47340,9 @@ aigSatAndWithAigCoreNnfIntern (
     fprintf(dMgrO(ddm),"Solver stats: %ld/%ld vars/clauses\n",
       S->nVars(), S->nClauses());
     fprintf(dMgrO(ddm),
-      "Solver stats: %ld/%ld/%ld(%ld) dec./prop./confl.(small)\n",
-      (int)S->stats.decisions, (int)S->stats.propagations,
-       (int)S->stats.conflicts,(int)S->stats.smallconflicts);
+      "Solver stats: %ld/%.2E/%ld(%ld) dec./prop./confl.(small)\n",
+      (long int)S->stats.decisions, (float)S->stats.propagations,
+       (long int)S->stats.conflicts,(long int)S->stats.smallconflicts);
     fprintf(dMgrO(ddm),"Solver stats: time = %s\n", util_print_time (cpuTime)));
 
   if (undefined) {
@@ -47687,18 +47806,18 @@ aigSatAndWithAigCoreByRefinement (
     fprintf(dMgrO(ddm),"Concr Solver stats: %ld/%ld vars/clauses\n",
       SConcr->nVars(), SConcr->nClauses());
     fprintf(dMgrO(ddm),
-      "Concr Solver stats: %ld/%ld/%ld(%ld) dec./prop./confl.(small)\n",
-      (int)SConcr->stats.decisions, (int)SConcr->stats.propagations,
-       (int)SConcr->stats.conflicts,(int)SConcr->stats.smallconflicts);
+      "Concr Solver stats: %ld/%.2E/%ld(%ld) dec./prop./confl.(small)\n",
+      (long int)SConcr->stats.decisions, (float)SConcr->stats.propagations,
+       (long int)SConcr->stats.conflicts,(long int)SConcr->stats.smallconflicts);
     fprintf(dMgrO(ddm),"Solver stats: time = %s\n",
 	    util_print_time (cpuTimeConcr));
 
     fprintf(dMgrO(ddm),"Abstr Solver stats: %ld/%ld vars/clauses\n",
       SAbstr->nVars(), SAbstr->nClauses());
     fprintf(dMgrO(ddm),
-      "Abstr Solver stats: %ld/%ld/%ld(%ld) dec./prop./confl.(small)\n",
-      (int)SAbstr->stats.decisions, (int)SAbstr->stats.propagations,
-       (int)SAbstr->stats.conflicts,(int)SAbstr->stats.smallconflicts);
+      "Abstr Solver stats: %ld/%.2E/%ld(%ld) dec./prop./confl.(small)\n",
+      (long int)SAbstr->stats.decisions, (float)SAbstr->stats.propagations,
+       (long int)SAbstr->stats.conflicts,(long int)SAbstr->stats.smallconflicts);
     fprintf(dMgrO(ddm),"Solver stats: time = %s\n",
 	    util_print_time (cpuTimeAbstr));
   }
@@ -48058,9 +48177,9 @@ aigOdcSatSweep (
     fprintf(dMgrO(ddm),"Concr Solver stats: %ld/%ld vars/clauses\n",
       SConcr->nVars(), SConcr->nClauses());
     fprintf(dMgrO(ddm),
-      "Concr Solver stats: %ld/%ld/%ld(%ld) dec./prop./confl.(small)\n",
-      (int)SConcr->stats.decisions, (int)SConcr->stats.propagations,
-       (int)SConcr->stats.conflicts,(int)SConcr->stats.smallconflicts);
+      "Concr Solver stats: %ld/%.2E/%ld(%ld) dec./prop./confl.(small)\n",
+      (long int)SConcr->stats.decisions, (float)SConcr->stats.propagations,
+       (long int)SConcr->stats.conflicts,(long int)SConcr->stats.smallconflicts);
     fprintf(dMgrO(ddm),"Solver stats: time = %s\n",
 	    util_print_time (cpuTimeConcr));
 
@@ -48068,8 +48187,8 @@ aigOdcSatSweep (
       SAbstr->nVars(), SAbstr->nClauses());
     fprintf(dMgrO(ddm),
       "Abstr Solver stats: %ld/%ld/%ld(%ld) dec./prop./confl.(small)\n",
-      (int)SAbstr->stats.decisions, (int)SAbstr->stats.propagations,
-       (int)SAbstr->stats.conflicts,(int)SAbstr->stats.smallconflicts);
+      (long int)SAbstr->stats.decisions, (long int)SAbstr->stats.propagations,
+       (long int)SAbstr->stats.conflicts,(long int)SAbstr->stats.smallconflicts);
     fprintf(dMgrO(ddm),"Solver stats: time = %s\n",
 	    util_print_time (cpuTimeAbstr));
   }
@@ -48803,9 +48922,9 @@ Ddi_AigSatAndWithInterpolantIncr (
     fprintf(dMgrO(ddm),"Solver stats: %ld/%ld vars/clauses\n",
       S->nVars(), S->nClauses());
     fprintf(dMgrO(ddm),
-      "Solver stats: %ld/%ld/%ld(%ld) dec./prop./confl.(small)\n",
-      (int)S->stats.decisions, (int)S->stats.propagations,
-       (int)S->stats.conflicts,(int)S->stats.smallconflicts);
+      "Solver stats: %ld/%.2E/%ld(%ld) dec./prop./confl.(small)\n",
+      (long int)S->stats.decisions, (float)S->stats.propagations,
+       (long int)S->stats.conflicts,(long int)S->stats.smallconflicts);
     fprintf(dMgrO(ddm),
       "Solver stored decisions: %ld\n",
             (int)S->stats.storeddecisions);
@@ -51307,7 +51426,7 @@ Ddi_AigSatAndWithInterpolantSequence (
   cpuTime = util_cpu_time () - startTime;
 
   fprintf(dMgrO(ddm),"Solver stats: %ld dec.\n", S.stats.decisions);
-  fprintf(dMgrO(ddm),"Solver stats: %ld prop.\n", S.stats.propagations);
+  fprintf(dMgrO(ddm),"Solver stats: %g prop.\n", S.stats.propagations);
   fprintf(dMgrO(ddm),"Solver stats: %ld confl.\n", S.stats.conflicts);
   fprintf(dMgrO(ddm),"Solver stats: time = %s\n", util_print_time (cpuTime));
 
@@ -79422,12 +79541,12 @@ Ddi_IncrSatPrintStats
   if (S==NULL) {
     Solver *S0 = incrSat->S;
     fprintf(dMgrO(ddm),
-	 "Solver stats: %ld/%ld vars/clauses\n",
-	  S0->nVars(), S0->nClauses());
+	 "Solver stats: %ld/%ld/%ld vars/clauses/learnts\n",
+            S0->nVars(), S0->nClauses(), S0->nLearnts());
     fprintf(dMgrO(ddm),
-	 "Solver stats: %ld/%ld/%ld dec./prop./confl.\n",
-	 (int)S0->stats.decisions, (int)S0->stats.propagations,
-	 (int)S0->stats.conflicts);
+	 "Solver stats: %ld/%.2E/%ld dec./prop./confl.\n",
+	 (long int)S0->stats.decisions, (float)S0->stats.propagations,
+	 (long int)S0->stats.conflicts);
     return;
   }
   
@@ -79439,11 +79558,11 @@ Ddi_IncrSatPrintStats
   nVars -= nElim;
 #endif
   fprintf(dMgrO(ddm),
-	 "Solver 22 stats: %ld/%ld vars/clauses (elimv(v/cl): %d/%d)\n",
-	  nVars, S->nClauses(), nElim, nElimC);
+	 "Solver 22 stats: %ld/%ld/%ld vars/clauses/learnts (elimv(v/cl): %d/%d)\n",
+	  nVars, S->nClauses(), S->nLearnts(), nElim, nElimC);
   fprintf(dMgrO(ddm),
-	 "Solver 22 stats: %ld/%ld/%ld dec./prop./confl.\n",
-	 (int)S->decisions, (long int)S->propagations,
+	 "Solver 22 stats: %ld/%.2E/%ld dec./prop./confl.\n",
+	 (int)S->decisions, (float)S->propagations,
 	 (int)S->conflicts);
 
 }
@@ -79881,6 +80000,65 @@ static int getEquivFromClauses(
     }
   }
 
+}
+
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+Ddi_Bdd_t *
+Ddi_AigSatLearningToAigs (
+  Ddi_IncrSatMgr_t *mgr,
+  Ddi_Bdd_t *refAig
+)
+{
+  Ddi_Mgr_t *ddm = mgr->ddiMgr;
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  Minisat22Solver* S22 = (Minisat22Solver* )mgr->S22;
+
+  Pdtutil_Assert(S22!=NULL, "incr learning needs S22");
+  bAig_array_t *visitedNodes = bAigArrayAlloc();
+  Ddi_PostOrderBddAigVisitIntern(refAig,visitedNodes,-1);
+  postOrderAigClearVisitedIntern(bmgr,visitedNodes);
+  int n = visitedNodes->num; 
+  vec<bool> usedVar(S22->nVars(),false); 
+  for (int i=0; i<n; i++) {
+    bAigEdge_t baig = visitedNodes->nodes[i];
+    int fCnf = aig2CnfId(bmgr,baig);
+    Minisat::Var v22 = abs(fCnf)-1;
+    usedVar[v22] = true;
+  }
+  bAigArrayFree(visitedNodes);
+
+  Ddi_Bdd_t *learntAig = Ddi_BddMakePartConjVoid(ddm);
+  for (int i=0; i<S22->nLearnts(); i++) {
+    int j;
+    const Minisat::Clause& c = S22->getLearnedClause (i);
+    bool useClause = true;
+    for (j=0; j<c.size() && useClause; j++) {
+      int v = Minisat::var(c[j]);
+      if (!usedVar[v])
+        useClause = false;
+    }
+    if (useClause) {
+      Ddi_Bdd_t *clauseAig = Ddi_BddMakePartDisjVoid(ddm);
+      for (j=0; j<c.size(); j++) {
+        int v = Minisat::var(c[j]);
+        bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
+        int s = Minisat::sign(c[j]);
+        Ddi_Bdd_t *litAig = Ddi_BddMakeFromBaig(ddm, baig);
+        if (s) Ddi_BddNotAcc(litAig);
+        Ddi_BddPartInsertLast(clauseAig,litAig);
+        Ddi_Free(litAig);
+      }
+      Ddi_BddPartInsertLast(learntAig,clauseAig);
+      Ddi_Free(clauseAig);
+    }
+  }
+
+  return learntAig;
 }
 
  
@@ -83912,9 +84090,9 @@ aigSat22AndWithInterpolantIntern (
     fprintf(dMgrO(ddm),"Solver stats: %ld/%ld vars/clauses (elim v/cl:%d/%d)\n",
  	    S22->nVars(), S22->nClauses(), S22->eliminated_vars, S22->eliminated_clauses);
     fprintf(dMgrO(ddm),
-      "Solver stats: %ld/%ld/%ld dec./prop./confl.\n",
-      (int)S22->decisions, (int)S22->propagations,
-       (int)S22->conflicts);
+      "Solver stats: %ld/%.2E/%ld dec./prop./confl.\n",
+      (long int)S22->decisions, (float)S22->propagations,
+       (long int)S22->conflicts);
     fprintf(dMgrO(ddm),"Solver stats: time = %s\n", util_print_time (cpuTime)));
 
   if (0 && (cpuTime > 40000)) {
@@ -84326,8 +84504,8 @@ aigSat22AndWithInterpolantIntern (
       fprintf(dMgrO(ddm),"Solver2 split time 0 = %s)\n", 
 	    util_print_time(cpuTime));
       fprintf(dMgrO(ddm),
-	 "Solver 22 stats: %ld/%ld/%ld dec./prop./confl.\n",
-	 (int)S22b->decisions, (int)S22b->propagations,
+	 "Solver 22 stats: %ld/%.2E/%ld dec./prop./confl.\n",
+	 (int)S22b->decisions, (float)S22b->propagations,
 	 (int)S22b->conflicts);
 
       assumps22[na] = Minisat::mkLit(pivot,1);
@@ -84340,8 +84518,8 @@ aigSat22AndWithInterpolantIntern (
       fprintf(dMgrO(ddm),"Solver2 split time 1 = %s)\n", 
 	    util_print_time(cpuTime));
       fprintf(dMgrO(ddm),
-	 "Solver 22 stats: %ld/%ld/%ld dec./prop./confl.\n",
-	 (int)S22b->decisions, (int)S22b->propagations,
+	 "Solver 22 stats: %ld/%.2E/%ld dec./prop./confl.\n",
+	 (int)S22b->decisions, (float)S22b->propagations,
 	 (int)S22b->conflicts);
 
 
@@ -84637,7 +84815,7 @@ aigSat22AndWithInterpolantIntern (
 	sizeLast = Ddi_BddSize(interpolant);
 	// Pdtutil_Assert(Ddi_AigSat(interpolant),"ZERO interpolant");
       }
-    } while (interpolant != NULL && !itpPart && sizeLast < size0*0.9);
+    } while (interpolant != NULL && !itpPart && sizeLast < size0*0.7);
   }
 
 
@@ -85143,9 +85321,9 @@ Minisat22NnfAbstrPba(
     fprintf(dMgrO(ddm),"NNF PBA Solver time%s = %s)\n", 
             ret<0?" (undefined)":"", util_print_time(cpuTime));
     fprintf(dMgrO(ddm),
-          "NNF PBA Solver stats: %ld/%ld/%ld dec./prop./confl.\n",
-	 (int)S.decisions, (int)S.propagations,
-	 (int)S.conflicts);
+          "NNF PBA Solver stats: %ld/%.2E/%ld dec./prop./confl.\n",
+	 (long int)S.decisions, (float)S.propagations,
+	 (long int)S.conflicts);
   }
   //  assert (!ret);
   
@@ -85331,7 +85509,8 @@ moveAVarsToGbl(
   vec<int>& saveCnfIds,
   vec<bAigEdge_t>& saveAuxChars,
   vec<char>& saveAuxCharVal,
-  float aRatio
+  float aRatio,
+  float rRatio
 )
 {
   Minisat22Solver* S22 = (Minisat22Solver *)Svoid;
@@ -85342,6 +85521,7 @@ moveAVarsToGbl(
   char name[100];
   int nSolverVars = S22->nVars(), nSV0 = nSolverVars; 
   int useLevels = 1;
+  float lRatio = useLevels ? aRatio : 0.0;
   
   remapAuxv.clear();
   remapAuxv.growTo(nSolverVars,var_Undef);
@@ -85353,15 +85533,15 @@ moveAVarsToGbl(
       a2gLimit++;
     }
   }
-  //  a2gLimit *= aRatio;
+  a2gLimit *= aRatio;
   a2gLimit1 = a2gLimit2 = 2*a2gLimit/3;
   //  a2gLimit1 *= aRatio;
   a2gLimit2 /= aRatio;
 
   Minisat::vec<bool>moveToGbl;
   Minisat::vec<bool>moveToB;
-  if (useLevels) {
-    S22->resNodesLevels(moveToGbl,moveToB,1,aRatio);
+  if (1||useLevels) {
+    S22->resNodesLevels(moveToGbl,moveToB,1,lRatio,aRatio,rRatio);
   }
   
   // save old 
@@ -85392,10 +85572,10 @@ moveAVarsToGbl(
       }
     }
     else if (proofPdt.Avar(v)) {
-      bool moveG = (aCnt > a2gLimit ||
-                   (aCnt > a2gLimit1 && aCnt < a2gLimit2));
+      bool moveG = (aCnt > a2gLimit);
+      //      moveG |= (aCnt > a2gLimit1 && aCnt < a2gLimit2);
       bool moveB = false;
-      if (useLevels) {
+      if (1||useLevels) {
         moveG = moveToGbl[v];
         moveB = moveToB[v];
       }
@@ -85430,7 +85610,7 @@ moveAVarsToGbl(
   }
 
   if (verbosity >= Pdtutil_VerbLevelUsrMin_c) {
-    if (useLevels) {
+    if (1 || useLevels) {
       printf("MOVING %d/%d A-vars to Gbl by level\n",moveGblCnt, aCnt);
       printf("MOVING %d G->B, %d A-B by level\n",moveGBCnt, moveABCnt);
     }
@@ -86083,7 +86263,8 @@ getBClungItp22(
 #else
 
   int nSolverVars = moveAVarsToGbl(S22,ddm,
-         saveCnfIds,saveAuxChars,saveAuxCharVal,clungItpRatio);
+                                   saveCnfIds,saveAuxChars,
+                                   saveAuxCharVal,clungItpRatio,clungItpRatio);
 
   S22->getProof(clauses1, nAClCore, proofNodes1,
 		pivots1, NULL);
@@ -87317,8 +87498,8 @@ Minisat22Interpolant (
 
     cpuTime = util_cpu_time () - startTime;
     Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {
-      fprintf(dMgrO(ddm),"Solver Validation time = %s - prop:%d\n", 
-              util_print_time(cpuTime), S22->propagations);
+      fprintf(dMgrO(ddm),"Solver Validation time = %s - prop:%.2E\n", 
+              util_print_time(cpuTime), (float)S22->propagations);
     }
   }
 
@@ -87326,8 +87507,8 @@ Minisat22Interpolant (
   success = success && S22->replay(v);
   cpuTime = util_cpu_time () - startTime;
   Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelDevMin_c) {
-    fprintf(dMgrO(ddm),"Solver Replay time = %s - prop: %d\n", 
-            util_print_time(cpuTime), S22->propagations);
+    fprintf(dMgrO(ddm),"Solver Replay time = %s - prop: %.2E\n", 
+            util_print_time(cpuTime), (float)S22->propagations);
   }
   //S22->printCore();
 
@@ -87780,9 +87961,9 @@ aigSat22NnfSubset (
     fprintf(dMgrO(ddm),"Solver stats: %ld/%ld vars/clauses\n",
       S22->nVars(), S22->nClauses());
     fprintf(dMgrO(ddm),
-      "Solver stats: %ld/%ld/%ld dec./prop./confl.\n",
-      (int)S22->decisions, (int)S22->propagations,
-       (int)S22->conflicts);
+      "Solver stats: %ld/%.2E/%ld dec./prop./confl.\n",
+      (long int)S22->decisions, (float)S22->propagations,
+       (long int)S22->conflicts);
     fprintf(dMgrO(ddm),"Solver stats: time = %s\n", util_print_time (cpuTime)));
 
   if (undefined) {
@@ -87977,9 +88158,9 @@ aigSat22AndWithAigCore (
     fprintf(dMgrO(ddm),"Solver stats: %ld/%ld vars/clauses\n",
       S22->nVars(), S22->nClauses());
     fprintf(dMgrO(ddm),
-      "Solver stats: %ld/%ld/%ld dec./prop./confl.\n",
-      (int)S22->decisions, (int)S22->propagations,
-       (int)S22->conflicts);
+      "Solver stats: %ld/%.2E/%ld dec./prop./confl.\n",
+      (long int)S22->decisions, (float)S22->propagations,
+       (long int)S22->conflicts);
     fprintf(dMgrO(ddm),"Solver stats: time = %s\n", util_print_time (cpuTime)));
 
   if (undefined) {
@@ -88176,9 +88357,9 @@ aigSat22AndWithAigCoreByProof (
     fprintf(dMgrO(ddm),"NNF PBA Solver time = %s)\n", 
             util_print_time(cpuTime));
     fprintf(dMgrO(ddm),
-          "NNF PBA Solver stats: %ld/%ld/%ld dec./prop./confl.\n",
-	 (int)S22->decisions, (int)S22->propagations,
-	 (int)S22->conflicts);
+          "NNF PBA Solver stats: %ld/%.2E/%ld dec./prop./confl.\n",
+	 (long int)S22->decisions, (float)S22->propagations,
+	 (long int)S22->conflicts);
   }
 
   if (ret<0) {

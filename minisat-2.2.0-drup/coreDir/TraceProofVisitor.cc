@@ -808,7 +808,7 @@ namespace Minisat
   void Solver::resNodesLevels(vec<bool>& moveToGbl,
                               vec<bool>& moveToB,
                               int strategy,
-                              float ratio) {
+                              float lRatio, float aRatio, float rRatio) {
     vec<ResolutionNode>& resNodes = proofPdt.resNodes;
     int nAdded=0;
     int nNodes = resNodes.size();
@@ -822,7 +822,7 @@ namespace Minisat
     vec<int>refCount(nNodes,0);
 
     assert(proofPdt.isGlobal.size()>0);
-    int maxLevelChain=0, maxLevelRes=0;
+    int maxLevelChain=0, maxLevelRes=0, maxRefCount=0;
     
     for (int i = 0; i < nNodes; i++) {
       int maxl=0, maxchl=0;
@@ -846,9 +846,15 @@ namespace Minisat
       //      printf("levelMax[%d] %d\n", i, maxl);
     }
 
+    for (int i = 0; i < nNodes; i++) {
+      if (i==0 || refCount[i] > maxRefCount)
+        maxRefCount = refCount[i];
+    }
+
     vec<int> cntByLevelRes(maxLevelRes+1,0);
     vec<int> cntByLevelChain(maxLevelChain+1,0);
-    int cntRes=0, cntChain=0;
+    vec<int> cntByRef(maxRefCount+1,0);
+    int cntRes=0, cntChain=0, cntRef=0;
     for (int i = 0; i < nNodes; i++) {
       proofCode code_i = resNodes[i].getCode();
       if (code_i!=proof_rootA && code_i!=proof_rootB) {
@@ -857,6 +863,8 @@ namespace Minisat
         cntRes += resNodes[i].pivots.size();
         cntChain++;
       }
+      cntByRef[refCount[i]]++;
+      cntRef++;
     }
 
     // find cut levels
@@ -864,7 +872,7 @@ namespace Minisat
     for (int i=0, k=0; i<=maxLevelRes; i++) {
       if (cntByLevelRes[i]>0) {
         k+=cntByLevelRes[i];
-        if (k>cntRes*ratio) {
+        if (k>cntRes*lRatio) {
           cutLevelRes=i;
           break;
         }
@@ -874,14 +882,57 @@ namespace Minisat
     for (int i=0, k=0; i<=maxLevelChain; i++) {
       if (cntByLevelChain[i]>0) {
         k+=cntByLevelChain[i];
-        if (k>cntChain*ratio) {
+        if (k>cntChain*lRatio) {
           cutLevelChain=i;
           break;
         }
       }
     }
+    // find cut ref
+    int cutRef=0;
+    for (int i=0, k=0; i<=maxRefCount; i++) {
+      if (cntByRef[i]>0) {
+        k+=cntByRef[i];
+        if (k>cntRef*rRatio) {
+          cutRef=i;
+          break;
+        }
+      }
+    }
+    // enable vars in highly referenced resolution clauses
+    bool enRefFilter = rRatio > 0.1;
+    vec<bool>enByRef(nVars(),false); 
 
+    for (int i = 0; i < nNodes; i++) {
+      if (cntByRef[i] < cutRef) continue;
+      vec<Lit>& c = resNodes[i].resolvents;
+      for (int j=0; j<c.size(); j++) {
+        int v = var(c[j]);
+        enByRef[i]=true;
+      }
+    }    
+
+    int a2gLimit = 0;
+    for (int v=0; v<nVars(); v++) {
+      if (proofPdt.Avar(v)) {
+        a2gLimit++;
+      }
+    }
+    a2gLimit *= aRatio;
+    int cnt=0, cntDis=0, cntEn=0;
+    vec<bool>enMoveToGbl(nVars(),false);
+    for (int v=0; v<nVars(); v++) {
+      if (proofPdt.Avar(v)) {
+        if (enRefFilter ? enByRef[v] : cnt++ > a2gLimit) {
+          enMoveToGbl[v] = true, cntEn++;
+        }
+        else cntDis++;
+      }
+    }
+    printf("\nTotal A: %d - enabled: %d - disabled: %d\n\n", cnt, cntEn, cntDis);
+    
     // now mark variables
+
     vec<bool>keepGbl(nVars(),false);
     for (int i = 0; i < nNodes; i++) {
       proofCode code_i = resNodes[i].getCode();
@@ -891,12 +942,17 @@ namespace Minisat
 
       // convert A to G
       vec<Lit>& pivots = resNodes[i].pivots;
+      bool moved=false;
       for (int j=0; j<pivots.size(); j++) {
         int v = var(pivots[j]);
-        if (!proofPdt.Global(v) && proofPdt.Avar(v)) {
-          moveToGbl[v] = true;
+        if (!proofPdt.Global(v) && proofPdt.Avar(v) && enMoveToGbl[v]) {
+          moveToGbl[v] = moved = true;
         }
-        else if (proofPdt.Global(v)) {
+      }
+      if (!moved && (lRatio < 0.1)) continue;
+      for (int j=0; j<pivots.size(); j++) {
+        int v = var(pivots[j]);
+        if (proofPdt.Global(v)) {
           keepGbl[v]=true;
         }
       }
@@ -953,7 +1009,7 @@ namespace Minisat
             }
           }
           else if (proofPdt.Avar(v)) {
-            assert(proofPdt.getSavedCode()==proof_rootA);
+            assert(resNodes[i].getSavedCode()==proof_rootA);
             moveToB[v]=true;
             if (keepA[v])
               moveToGbl[v]=true;

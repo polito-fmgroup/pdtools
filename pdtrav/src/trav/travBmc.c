@@ -1599,6 +1599,7 @@ Trav_TravSatBmcIncrVerif(
 	  Ddi_BddPartInsertLast(checkPart, target);
 	}
 #endif
+        Ddi_BddSetAig(checkPart);
 	if (abstrTarget != NULL) {
 	  abstrCheckPart = Ddi_BddDup(abstrTarget);
 	}

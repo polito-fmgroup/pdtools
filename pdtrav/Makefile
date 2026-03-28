@@ -42,8 +42,10 @@ endif
 
 ifdef DEBUG
 MINISAT22LIB = minisat22d
+LGL_DEBUG_FLAGS = CFLAGS="$(LGLDBGCFLAGS)"
 else
 MINISAT22LIB = minisat22
+LGL_DEBUG_FLAGS = 
 endif
 
 # Memory libraries
@@ -372,8 +374,8 @@ lgl:
 	else \
 	        (echo "Configuring lgl"; cd ${LGL_DIR}; ./configure.sh $(DEFINE_PDT32)) \
 	fi
-	${MAKE} -C ${LGL_DIR} liblgl.a
-#	${MAKE} CFLAGS="$(LGLDBGCFLAGS)" -C ${LGL_DIR} liblgl.a
+
+	${MAKE} $(LGL_DEBUG_FLAGS) -C ${LGL_DIR} liblgl.a
 
 minisat:
 	${MAKE} -C ${MINISAT_DIR} $(DEFINE_PDT32) libminisat.a

@@ -192,11 +192,11 @@ public:
   CRef getClauseCRef(int i) const    {return clauses[i];}
   const Clause& getClause(CRef cr) const    {return ca[cr];}
   const Clause& getClause2(CRef cr) const    {return ca[clauses[cr]];}
+  const Clause& getLearnedClause(int i) const    {return ca[learnts[i]];}
   const Lit& getAssign(int i) const    {return trail[i];}
   CRef getReason(Var x) const      {return reason(x);}
   CRef getLevel(Var x) const      {return level(x);}
   void printTrail(void);
-
   
   int maxPivot(int i){
     if (i>=maxPivots.size()) return -1;
@@ -652,7 +652,8 @@ public:
   void proofReverseAB(void);
   void resNodesLevels(vec<bool>& moveToGbl,
                       vec<bool>& moveToB,
-                      int strategy,float ratio);
+                      int strategy,
+                      float lRatio, float aRatio, float rRatio);
   int proofSize(void){
     return(proof.size());
   }

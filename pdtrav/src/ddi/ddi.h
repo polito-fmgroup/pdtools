@@ -790,6 +790,11 @@ Ddi_AigSatStopLearningIncremental
 (
   Ddi_IncrSatMgr_t *incrSat
 );
+EXTERN Ddi_Bdd_t *
+Ddi_AigSatLearningToAigs (
+  Ddi_IncrSatMgr_t *mgr,
+  Ddi_Bdd_t *refAig
+);
 EXTERN Ddi_Bdd_t *Ddi_AigSatMinisat22WithCexAndAbortIncremental(Ddi_IncrSatMgr_t *incrSat, Ddi_Bdd_t *f, Ddi_Vararray_t *filterVars, int asserted, float timeLimit, int *pAbort);
 Ddi_Bdd_t *
 Ddi_AigSatMinisat22WithCexAigAndAbortIncremental
@@ -1691,6 +1696,11 @@ EXTERN Ddi_Bddarray_t *Ddi_FindAigIte(Ddi_Bdd_t *f, int threshold);
 EXTERN Ddi_Bdd_t *Ddi_AigConstRed (Ddi_Bddarray_t *fA, Ddi_Bdd_t *constr, void *coreClauses, void *cnfMappedVars,int doRedRem, int maxGateWindow, int assertF, int checkOnlyRedPhase, void *nnfCoreMgrVoid, float timeLimit);
 EXTERN Ddi_Bdd_t *Ddi_AigDisjDecomp (Ddi_Bdd_t *f, int minp,int maxp);
 EXTERN Ddi_Bdd_t *Ddi_AigConjDecomp (Ddi_Bdd_t *f, int minp,int maxp);
+EXTERN Ddi_Bdd_t *
+Ddi_AigClauseArrayCopy (
+  Ddi_Mgr_t *ddm,
+  Ddi_Bdd_t *f
+);
 EXTERN Ddi_Bddarray_t *Ddi_AigDisjDecompRoots (Ddi_Bdd_t *f, Ddi_Var_t *pVar, Ddi_Var_t *cVar, int recurTh);
 EXTERN Ddi_Bdd_t *Ddi_ItpWeakenByRefinement (Ddi_Bdd_t *a,Ddi_Bdd_t *b,Ddi_Bdd_t *care);
 EXTERN void Ddi_AigArrayClearAuxInt(bAig_Manager_t *bmgr, bAig_array_t *visitedNodes);

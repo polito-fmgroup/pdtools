@@ -2738,7 +2738,8 @@ ArraySupp2 (
   Ddi_ArrayData_t *roots,*array;
   DdNode **data;
   DdNode *suppCU;
-  Ddi_Mgr_t *ddiMgr;  /* dd manager */
+  Ddi_Mgr_t *ddiMgr = f->common.mgr;
+;  /* dd manager */
   int nv, i, j;
   char *auxArray;
   Ddi_Generic_t *supp;
@@ -2755,18 +2756,23 @@ ArraySupp2 (
     return ArraySupp (array);
   }
 
+  /*
+   *  generate an array of AIGs or monolithic BDDs from CUDD BDD roots
+   */
+  roots = GenBddRoots(f);
+  if (DdiArrayRead(roots,0)->common.code==Ddi_Bdd_Aig_c) {
+    Ddi_Bddarray_t *rA = (Ddi_Bddarray_t *)DdiGenericAlloc(Ddi_Bddarray_c,ddiMgr);
+    rA->array = roots;
+    supp = (Ddi_Generic_t *)DdiAigArraySupp (rA);
+    Ddi_Free (rA);
+    return supp;
+  }
 
-  ddiMgr = f->common.mgr;
   nv = Ddi_MgrReadNumVars(ddiMgr);
   auxArray = Pdtutil_Alloc(char,nv);
   for (i=0; i<nv;i++) {
     auxArray[i] = (char)0;
   }
-
-  /*
-   *  generate an array of monolithic BDDs from CUDD BDD roots
-   */
-  roots = GenBddRoots(f);
 
   /*
    *  convert to CUDD array, call CUDD

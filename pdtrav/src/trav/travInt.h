@@ -819,6 +819,7 @@ struct TravItpTravMgr_s {
     int checkCompleteness;
   } settings;
   struct {
+    int coneSizeNoCare;
     int fwdUnrollSize;
     int step;
     int coneHit;

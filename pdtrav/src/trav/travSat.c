@@ -26774,6 +26774,7 @@ itpImgGetCone(
       itpImgConeSubsetTopAcc(itpTravMgr,localCone,kConeRings,
                                       coneCare,step);
     }
+    itpTravMgr->stats.coneSizeNoCare = Ddi_BddSize(localCone);
     if (1 && (itpTravMgr->careForBwdCone != NULL)) {
       //      Pdtutil_Assert(Ddi_BddIncluded(kCone,itpTravMgr->careForBwdCone),
       //			     "error with careBwdForCone");
@@ -28559,9 +28560,15 @@ itpImgPart (
     Ddi_Bdd_t *clungItp=NULL;
     if (clungItpRatio>0.0 && Ddi_BddSize(bNew)>clungItpTh) {
       clungItp = Ddi_BddMakeConstAig(ddm,1);
+
+      Pdtutil_Assert(itpTravMgr->stats.coneSizeNoCare>0,"missing cone size stat");
+      float scaleStep = (1-clungItpRatio)/Ddi_BddSize(bNew);
+      scaleStep *= itpTravMgr->stats.coneSizeNoCare;
+      clungItpRatio += scaleStep;
+      Pdtutil_Assert(clungItpRatio <=1.01,"wrong ratio");
     }
     else clungItpRatio = -1.0; // enforce disable
-
+    
     Ddi_Bdd_t *itpNew;
     itpNew = Ddi_AigSat22AndWithInterpolantAndClung(
                                           itpTravMgr->incrSat,
@@ -28623,7 +28630,7 @@ itpImgPart (
 	     Ddi_BddSize(itpRef));
 	Ddi_Free(itpRef);
       }
-      if (clungItp!=NULL) {
+      if (clungItp!=NULL /*&& Ddi_BddSize(clungItp)<2000000*/) {
         Ddi_BddAndAcc(clungItp,itp);
         Ddi_Free(itpTravMgr->careForBwdCone);
         itpTravMgr->careForBwdCone = Ddi_BddNot(clungItp);
@@ -28912,6 +28919,11 @@ itpImgPart (
           Ddi_Bdd_t *partb2 = Ddi_AigPartitionTop(b2,0);
           Ddi_DataCopy(b2,partb2);
           Ddi_Free(partb2);
+          Pdtutil_Assert(itpTravMgr->stats.coneSizeNoCare>0,"missing cone size stat");
+          float scaleStep = (1-clungItpRatio)/Ddi_BddSize(b2);
+          scaleStep *= itpTravMgr->stats.coneSizeNoCare;
+          clungItpRatio = 1.0 - scaleStep;
+          Pdtutil_Assert(clungItpRatio <=1.01,"wrong ratio");
         }
         else clungItpRatio = -1.0; // enforce disable
         itp = Ddi_AigSat22AndWithInterpolantAndClung(NULL,a,b2,NULL,
@@ -28921,7 +28933,7 @@ itpImgPart (
                                           clungItp,clungItpRatio,
                                           psat, itpPart, itpOdc, 
 					  0,timeLimit);
-        if (itp!=NULL && clungItp!=NULL) {
+        if (itp!=NULL && clungItp!=NULL  && Ddi_BddSize(clungItp)<2000000) {
           Ddi_Free(itpTravMgr->careForBwdCone);
           itpTravMgr->careForBwdCone = Ddi_BddNot(clungItp);
         }
@@ -30493,6 +30505,85 @@ itpImgPart (
   return itpTot;
 }
 
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static int
+itpImgIncrLearn(
+  Trav_ItpTravMgr_t * itpTravMgr,
+  Ddi_IncrSatMgr_t *ddiS,
+  Ddi_Mgr_t *ddmDup,
+  Ddi_Bdd_t * fromAndNew,
+  Ddi_Bdd_t * cone,
+  Ddi_Bdd_t * care,
+  float itpTimeLimit,
+  int *pabort
+)
+{
+  Trav_Mgr_t *travMgr = itpTravMgr->travMgr;
+  Trav_ItpMgr_t *itpMgr = itpTravMgr->itpMgr;
+  Ddi_Mgr_t *ddm = Trav_MgrReadDdiMgrDefault(travMgr);
+  Pdtutil_VerbLevel_e verbosity = Trav_MgrReadVerbosity(travMgr);
+  int isSat=0;
+  
+  Ddi_Bdd_t *cex=NULL, *checkPart =
+    Ddi_AigPartitionTopWithXor(fromAndNew,0,1);
+  Ddi_BddSetPartConj(checkPart);
+  Ddi_BddPartInsertLast(checkPart, cone);
+  if (care!=NULL && !Ddi_BddIsOne(care)) {
+    Ddi_BddPartInsertLast(checkPart, care);
+  }
+  Ddi_BddSetFlattened(checkPart);
+  Ddi_Bdd_t *check2 = Ddi_BddCopy(ddmDup,checkPart);
+  if (!DdiAig2CnfIdIsOpen(ddmDup)) {
+    DdiAig2CnfIdInit(ddmDup);
+  }
+  Ddi_AigSatMinisatLoadClausesIncremental(ddiS, check2,NULL);
+  long time22 = util_cpu_time();
+  cex = Ddi_AigSatMinisat22WithCexAndAbortIncremental(ddiS,
+          check2, NULL, 0, itpTimeLimit, pabort);
+  if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
+    fprintf(tMgrO(travMgr),
+            "\n*** Incr Minisat time: %s ***\n",
+            util_print_time((util_cpu_time() - time22))
+    );
+    Ddi_IncrSatPrintStats(ddmDup,ddiS,0);
+  }
+  if (cex!=NULL) {
+    isSat=1;
+    Ddi_Free(cex);
+  }
+  else {
+    Ddi_Bdd_t *cone2 = Ddi_BddCopy(ddmDup,cone);
+    Ddi_Bdd_t *learntAigDup = Ddi_AigSatLearningToAigs (ddiS,cone2);
+    int size0 = Ddi_BddSize(cone);
+    Pdtutil_Assert(learntAigDup!=NULL,"missing learnt aig");
+    Ddi_Bdd_t *learntAig = Ddi_AigClauseArrayCopy (ddm,learntAigDup);
+    Ddi_BddSetAig(cone);
+    if (Ddi_BddIsPartConj(learntAig)) {
+      Ddi_BddPartInsertLast(learntAig,cone);
+      Ddi_DataCopy(cone,learntAig);
+    }
+    else
+      Ddi_BddAndAcc(cone, learntAig);
+    if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
+      fprintf(tMgrO(travMgr),
+            "*** Incr Minisat learntAig: %d - cone %d -> %d\n",
+              Ddi_BddSize(learntAig), size0, Ddi_BddSize(cone));
+    };
+    Ddi_Free(cone2);
+    Ddi_Free(learntAigDup);
+    Ddi_Free(learntAig);
+  }
+  Ddi_IncrSatMgrLockAig(ddiS,check2);
+  Ddi_Free(check2);
+  Ddi_Free(checkPart);
+
+  return isSat;
+}
 
 
 /**Function*******************************************************************
@@ -30648,7 +30739,7 @@ itpImg(
   if (useMinisat22>1) {
     //    ddiS = Ddi_IncrSatMgrAlloc(NULL, 1, 1, 0);
     ddmDup = Ddi_MgrDup(ddm);
-    ddiS = Ddi_IncrSatMgrAlloc(ddmDup, 0 /* minisat 1.4 */, 1, 0);
+    ddiS = Ddi_IncrSatMgrAlloc(ddmDup, 1 /* minisat 2.2 */, 0, 0);
     //    itpTravMgr->incrSat = ddiS;
   }
 
@@ -33507,7 +33598,7 @@ itpImg(
 					itpTravMgr->constrainSubstLits);
 		    }
 		  }
-#if 1
+
 		  int abort;
 		  if (1&&useMinisat22) {
 		    Ddi_Bdd_t *a=fromAndNew, *b=localCone, *c=itpCare;
@@ -33563,9 +33654,16 @@ itpImg(
                         Ddi_DataCopy(b,newCone);      
                         Ddi_Free(newCone);
                       }
-                    }                    
-                    Ddi_Bdd_t *to22 =
-		      itpImgPart(itpTravMgr,kCone,kConeRings,a,b,
+                    }
+                    Ddi_Bdd_t *to22 = NULL;
+                    int enIncrLearning = ddiS!=NULL;
+                    if (enIncrLearning) {
+                      int abort=0;
+                      isSat = itpImgIncrLearn(itpTravMgr,ddiS,ddmDup,fromAndNew,
+                                            localCone,c,itpTimeLimit,&abort);
+                    }
+                    if (!isSat)
+		      to22 = itpImgPart(itpTravMgr,kCone,kConeRings,a,b,
                         itpTravMgr->prevTo,step,doSplit,
 			nsvars, psvars,
 			/* careBwd DISABLED */ c, itpPlus, toPlusCube,
@@ -33713,69 +33811,6 @@ itpImg(
                     Ddi_Free(b2);
                     Ddi_Free(itpCare2);
                   }
-		  else if (ddiS != NULL) {
-		    Ddi_Bdd_t *cex;
-		    Ddi_Bdd_t *checkPart =
-		      Ddi_AigPartitionTopWithXor(fromAndNew,0,1);
-		    Ddi_BddSetPartConj(checkPart);
-		    Ddi_BddPartInsertLast(checkPart, localCone);
-		    if (itpCare!=NULL && !Ddi_BddIsOne(itpCare)) {
-		      Ddi_BddPartInsertLast(checkPart, itpCare);
-		    }
-		    // Ddi_AigSatMinisatLoadClausesIncremental(ddiS, checkPart);
-                    Ddi_BddSetFlattened(checkPart);
-		    Ddi_Bdd_t *check2 = Ddi_BddCopy(ddmDup,checkPart);
-		    //		    Ddi_BddSetAig(check2);
-		    if (!DdiAig2CnfIdIsOpen(ddmDup)) {
-		      DdiAig2CnfIdInit(ddmDup);
-		    }
-		    //		    DdiAig2CnfIdClose(ddmDup);
-		    //		    DdiAig2CnfIdInit(ddmDup);
-                    Ddi_AigSatMinisatLoadClausesIncremental(ddiS, check2,NULL);
-		    //		    DdiAig2CnfIdClose(ddmDup);
-		    //		    DdiAig2CnfIdInit(ddmDup);
-		    // Ddi_AigSatMinisatLoadClausesIncremental(ddiS, a2, b2);
-		    long time22 = util_cpu_time();
-#if 1
-                    cex = Ddi_AigSatMinisatWithCexAndAbortIncremental(ddiS,
-		      check2, NULL,
-                      (itpMgr->time_limit-util_cpu_time())/1000.0,
-                      &abort);
-#else 
-                    cex = Ddi_AigSatMinisat22WithCexAndAbortIncremental(ddiS,
-			   check2, NULL,0,
-			  (itpMgr->time_limit - util_cpu_time()) / 1000.0, &abort);
-#endif
-                    if (cex!=NULL) {
-			isSat=1;
-			// SAT
-                    }
-                    Ddi_Free(cex);
-		    fprintf(tMgrO(travMgr),
-			    "\n*** Incre Minisat time: %s ***\n",
-			    util_print_time((util_cpu_time() - time22))
-			    );
-		    Ddi_IncrSatPrintStats(ddmDup,ddiS,
-                                          0);
-
-		    //		    Ddi_IncrSatMgrQuit(ddiS);
-		    //		    ddiS = Ddi_IncrSatMgrAlloc(1, 1);
-
-		    if (save2==NULL) {
-		      save2 = Ddi_BddarrayAlloc(ddmDup,0);
-		    }
-		    //		    Ddi_BddSetAig(check2);
-		    Ddi_BddarrayInsertLast(save2,check2);
-#if 0
-		    fprintf(tMgrO(travMgr),
-			    "\n*** Incre DDIM aigs: %d ***\n",
-			    Ddi_BddarraySize(save2)
-			    );
-#endif
-		    Ddi_Free(check2);
-		    Ddi_Free(checkPart);
-		  }
-#endif
 		  if (!useMinisat22) {
                     Ddi_Bdd_t *myPrevTo = NULL;
                     if (enFromNew && (fromNewLevel == 1)) 
@@ -34936,9 +34971,9 @@ itpImg(
 
 
   if (useMinisat22>1) {
-    Ddi_IncrSatMgrQuit(ddiS);
     Ddi_Free(save2);
-    Ddi_MgrQuit(ddmDup);
+    Ddi_IncrSatMgrQuit(ddiS);
+    //    Ddi_MgrQuit(ddmDup); // done in SatMgrQuit
   }
 
   Ddi_Free(reached1);
@@ -41216,6 +41251,7 @@ itpTravMgrInit(
 
 
   itpTravMgr->stats.fwdUnrollSize = -1;
+  itpTravMgr->stats.coneSizeNoCare = -1;
   itpTravMgr->stats.step = 0;
   itpTravMgr->stats.coneHit = 0;
   itpTravMgr->stats.conePiConstrTf_i = 0;
