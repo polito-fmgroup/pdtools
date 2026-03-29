@@ -931,16 +931,28 @@ abcBddarrayToAig (
   }
   
   //Per ogni uscita della TR (next state) crea il corrispondente nodo di uscita nell'AIG di ABC
+
+
   for (i=0; i<Ddi_BddarrayNum(fA); i++) {
     Ddi_Bdd_t *f_i = Ddi_BddarrayRead(fA,i);
-    if (bAig_NodeIsConstant(Ddi_BddToBaig(f_i))) {
+    if (Ddi_BddIsPartConj(f_i)||Ddi_BddIsPartDisj(f_i)) {
+      for (int j=0; j<Ddi_BddPartNum(f_i); j++) {
+        Ddi_Bdd_t *f_i_j = Ddi_BddPartRead(f_i,j);
+        pObj = bAig_AuxPtr(bmgr,Ddi_BddToBaig(f_i_j));
+        if (Ddi_BddIsComplement(f_i_j)) pObj = Aig_Not(pObj);
+        Aig_ObjCreateCo( pAig, pObj);
+      }
+    }
+    else if (bAig_NodeIsConstant(Ddi_BddToBaig(f_i))) {
       pObj = Aig_ManConst0(pAig);
+      if (Ddi_BddIsComplement(f_i)) pObj = Aig_Not(pObj);
+      Aig_ObjCreateCo( pAig, pObj);
     }
     else {
       pObj = bAig_AuxPtr(bmgr,Ddi_BddToBaig(f_i));
+      if (Ddi_BddIsComplement(f_i)) pObj = Aig_Not(pObj);
+      Aig_ObjCreateCo( pAig, pObj);
     }
-    if (Ddi_BddIsComplement(f_i)) pObj = Aig_Not(pObj);
-    Aig_ObjCreateCo( pAig, pObj);
   }
 
   //Pulisce il manager di ABC

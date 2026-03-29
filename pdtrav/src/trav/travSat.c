@@ -30698,7 +30698,7 @@ itpImg(
   int chkSupp = 1;
   int chkRings = 0;
   int enFpChk = 1;
-  int useMinisat22 = 1; // ddm->settings.aig.itpDrup; // use 2 for true incremental SAT 
+  int useMinisat22 = 2; // ddm->settings.aig.itpDrup; // use 2 for true incremental SAT 
   Ddi_IncrSatMgr_t *ddiS = NULL;
   Ddi_Mgr_t *ddmDup=NULL;
   int step0 = step;
@@ -33660,7 +33660,7 @@ itpImg(
                     if (enIncrLearning) {
                       int abort=0;
                       isSat = itpImgIncrLearn(itpTravMgr,ddiS,ddmDup,fromAndNew,
-                                            localCone,c,itpTimeLimit,&abort);
+                                            b,c,itpTimeLimit,&abort);
                     }
                     if (!isSat)
 		      to22 = itpImgPart(itpTravMgr,kCone,kConeRings,a,b,

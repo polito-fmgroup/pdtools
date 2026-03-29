@@ -224,6 +224,8 @@ Ddi_BddToBaig(
 )
 {
   DdiConsistencyCheck(f,Ddi_Bdd_c);
+  if (f->common.code != Ddi_Bdd_Aig_c)
+    printf("AAAAACCC\n");
   Pdtutil_Assert(f->common.code == Ddi_Bdd_Aig_c,
     "converting to Baig a non AIG BDD !");
   return (DdiAigToBaig(f->data.aig));

@@ -75058,14 +75058,30 @@ genAigCnfInfo(
   if (roots!=NULL) {
     for (j=0; j<Ddi_BddarrayNum(roots); j++) {
       Ddi_Bdd_t *f_j = Ddi_BddarrayRead(roots,j);
-      bAigEdge_t fBaig = Ddi_BddToBaig(f_j);
-      int i = bAig_AuxInt(bmgr,fBaig);
-      if (bAig_NodeIsConstant(fBaig)) continue;
-      Pdtutil_Assert(i>=0&&i<visitedNodes->num,"wrong array index");
-      aigCnfInfo[i].isRoot=2;
-      if (!makeRel) {
-	aigCnfInfo[i].ref0 = Ddi_BddIsComplement(f_j);
-	aigCnfInfo[i].ref1 = !aigCnfInfo[i].ref0;
+      if (Ddi_BddIsPartDisj(f_j)) {
+        for (int k=0; k<Ddi_BddPartNum(f_j); k++) {
+          Ddi_Bdd_t *f_j_k = Ddi_BddPartRead(f_j,k);
+          bAigEdge_t fBaig = Ddi_BddToBaig(f_j_k);
+          int i = bAig_AuxInt(bmgr,fBaig);
+          if (bAig_NodeIsConstant(fBaig)) continue;
+          Pdtutil_Assert(i>=0&&i<visitedNodes->num,"wrong array index");
+          aigCnfInfo[i].isRoot=2;
+          if (!makeRel) {
+            aigCnfInfo[i].ref0 = Ddi_BddIsComplement(f_j_k);
+            aigCnfInfo[i].ref1 = !aigCnfInfo[i].ref0;
+          }
+        }
+      }
+      else {
+        bAigEdge_t fBaig = Ddi_BddToBaig(f_j);
+        int i = bAig_AuxInt(bmgr,fBaig);
+        if (bAig_NodeIsConstant(fBaig)) continue;
+        Pdtutil_Assert(i>=0&&i<visitedNodes->num,"wrong array index");
+        aigCnfInfo[i].isRoot=2;
+        if (!makeRel) {
+          aigCnfInfo[i].ref0 = Ddi_BddIsComplement(f_j);
+          aigCnfInfo[i].ref1 = !aigCnfInfo[i].ref0;
+        }
       }
     }
   }
@@ -78311,21 +78327,44 @@ MinisatClausesWithSuppFlow(
       int ii;
       for (ii=0; ii<Ddi_BddPartNum(g); ii++) {
         Ddi_Bdd_t *f_i = Ddi_BddPartRead(g,ii);
-        baig = f_i->data.aig->aigNode;
-	int currId = bAig_AuxInt(manager,baig);
-	Pdtutil_Assert(1 || currId>prevId,"wrong sharing in partitioned g");
-	prevId = currId;
-
-        gCnf = DdiAig2CnfIdSigned(ddm->aig.mgr,baig);
-	if (lgl) {
-	  LglClause1(lgl,gCnf);
-	}
-	else if (S22==NULL) {
-	  MinisatClause1(S,lits,gCnf);
-	}
-	else {
-	  Minisat22Clause1(S22,gCnf);
-	}
+        if (Ddi_BddIsPartDisj(f_i)) {
+          Pdtutil_Assert(lgl==NULL,"LGL not supported with disj part g");
+          int ii;
+          vec<Lit> partTargets;
+          partTargets.clear();
+          for (int j=0; j<Ddi_BddPartNum(f_i); j++) {
+            Ddi_Bdd_t *f_i_j = Ddi_BddPartRead(f_i,j);
+            baig = f_i_j->data.aig->aigNode;
+            fCnf = DdiAig2CnfIdSigned(ddm->aig.mgr,baig);
+            
+            while (abs(fCnf) > S.nVars()) S.newVar();
+            partTargets.push(MinisatLit(fCnf));
+            
+          }
+          if (S22==NULL) {
+            MinisatSolverAddClause(S,partTargets);
+          }
+          else {
+            Minisat22Clause(S22,partTargets);
+          }
+        }
+        else {
+          baig = f_i->data.aig->aigNode;
+          int currId = bAig_AuxInt(manager,baig);
+          Pdtutil_Assert(1 || currId>prevId,"wrong sharing in partitioned g");
+          prevId = currId;
+          
+          gCnf = DdiAig2CnfIdSigned(ddm->aig.mgr,baig);
+          if (lgl) {
+            LglClause1(lgl,gCnf);
+          }
+          else if (S22==NULL) {
+            MinisatClause1(S,lits,gCnf);
+          }
+          else {
+            Minisat22Clause1(S22,gCnf);
+          }
+        }
       }
     }
     else if (Ddi_BddIsPartDisj(g) && (genRelationG==0)) {
