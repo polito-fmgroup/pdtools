@@ -699,14 +699,15 @@ Ddi_BddMakeEq (
   DdiConsistencyCheck(subst,Ddi_Bddarray_c);
 
   eqBdd = Ddi_BddRelMakeFromArray (subst,vars);
-  eqBdd->common.info = Pdtutil_Alloc(Ddi_Info_t,1);
-  eqBdd->common.info->infoCode = Ddi_Info_Eq_c;
-  eqBdd->common.info->eq.mark = 0;
-  eqBdd->common.info->eq.vars = Ddi_VararrayDup(vars);
-  Ddi_Lock(eqBdd->common.info->eq.vars);
-  eqBdd->common.info->eq.subst = Ddi_BddarrayDup(subst);
-  Ddi_Lock(eqBdd->common.info->eq.subst);
-
+  Ddi_Info_t *p = Pdtutil_Alloc(Ddi_Info_t,1);
+  p->next = eqBdd->common.info;
+  p->infoCode = Ddi_Info_Eq_c;
+  eqBdd->common.info = p;
+  p->data.eq.vars = Ddi_VararrayDup(vars);
+  Ddi_Lock(p->data.eq.vars);
+  p->data.eq.subst = Ddi_BddarrayDup(subst);
+  Ddi_Lock(p->data.eq.subst);
+  
   return(eqBdd);
 }
 
@@ -776,43 +777,45 @@ Ddi_BddMakeCompose (
   if (cone!=NULL && !Ddi_BddIsZero(cone)) {
     Ddi_BddOrAcc(composedBdd,cone);
   }
-  composedBdd->common.info = Pdtutil_Alloc(Ddi_Info_t,1);
-  composedBdd->common.info->infoCode = Ddi_Info_Compose_c;
-  composedBdd->common.info->compose.mark = 0;
-  composedBdd->common.info->compose.f = Ddi_BddDup(f);
-  Ddi_Lock(composedBdd->common.info->compose.f);
+  
+  Ddi_Info_t *next=composedBdd->common.info;
+  Ddi_Info_t *p=composedBdd->common.info=Pdtutil_Alloc(Ddi_Info_t,1);
+  p->next = next;
+  p->infoCode = Ddi_Info_Compose_c;
+  p->data.compose.f = Ddi_BddDup(f);
+  Ddi_Lock(p->data.compose.f);
 
-  composedBdd->common.info->compose.care = NULL;
-  composedBdd->common.info->compose.constr = NULL;
-  composedBdd->common.info->compose.cone = NULL;
-  composedBdd->common.info->compose.vars = NULL;
-  composedBdd->common.info->compose.refVars = NULL;
+  p->data.compose.care = NULL;
+  p->data.compose.constr = NULL;
+  p->data.compose.cone = NULL;
+  p->data.compose.vars = NULL;
+  p->data.compose.refVars = NULL;
 
   if (care != NULL) {
-    composedBdd->common.info->compose.care = Ddi_BddDup(care);
-    Ddi_Lock(composedBdd->common.info->compose.care);
+    p->data.compose.care = Ddi_BddDup(care);
+    Ddi_Lock(p->data.compose.care);
   }
   if (constr != NULL) {
-    composedBdd->common.info->compose.constr = Ddi_BddDup(constr);
-    Ddi_Lock(composedBdd->common.info->compose.constr);
+    p->data.compose.constr = Ddi_BddDup(constr);
+    Ddi_Lock(p->data.compose.constr);
   }
   if (cone!=NULL) {
-    composedBdd->common.info->compose.cone = Ddi_BddDup(cone);
-    Ddi_Lock(composedBdd->common.info->compose.cone);
+    p->data.compose.cone = Ddi_BddDup(cone);
+    Ddi_Lock(p->data.compose.cone);
   }
   else {
-    composedBdd->common.info->compose.cone = NULL;
+    p->data.compose.cone = NULL;
   }
   if (vars != NULL) {
-    composedBdd->common.info->compose.vars = Ddi_VararrayDup(vars2);
-    Ddi_Lock(composedBdd->common.info->compose.vars);
+    p->data.compose.vars = Ddi_VararrayDup(vars2);
+    Ddi_Lock(p->data.compose.vars);
   }
   if (refv2!=NULL) {
-    composedBdd->common.info->compose.refVars = Ddi_VararrayDup(refv2);
-    Ddi_Lock(composedBdd->common.info->compose.refVars);
+    p->data.compose.refVars = Ddi_VararrayDup(refv2);
+    Ddi_Lock(p->data.compose.refVars);
   }
-  composedBdd->common.info->compose.subst = Ddi_BddarrayDup(subst2);
-  Ddi_Lock(composedBdd->common.info->compose.subst);
+  p->data.compose.subst = Ddi_BddarrayDup(subst2);
+  Ddi_Lock(p->data.compose.subst);
 
   Ddi_Free(refv2);
   Ddi_Free(vars2);
@@ -2163,16 +2166,17 @@ Ddi_BddCofactorAcc (
     return (DdiAigCofactorAcc(f,v,phase));
   }
 
-  if (f->common.info != NULL &&
-      f->common.info->infoCode == Ddi_Info_Eq_c) {
-    Ddi_Vararray_t *vars = Ddi_BddReadEqVars(f);
-    Ddi_Bddarray_t *subst = Ddi_BddReadEqSubst(f);
-    int i;
-    for (i=0;i<Ddi_VararrayNum(vars); i++) {
-      if (Ddi_VararrayRead(vars,i)==v) {
-	Ddi_VararrayRemove(vars,i);
-	Ddi_BddarrayRemove(subst,i);
-	break;
+  for (Ddi_Info_t *p=f->common.info; p!=NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Eq_c) {
+      Ddi_Vararray_t *vars = Ddi_BddReadEqVars(f);
+      Ddi_Bddarray_t *subst = Ddi_BddReadEqSubst(f);
+      int i;
+      for (i=0;i<Ddi_VararrayNum(vars); i++) {
+        if (Ddi_VararrayRead(vars,i)==v) {
+          Ddi_VararrayRemove(vars,i);
+          Ddi_BddarrayRemove(subst,i);
+          break;
+        }
       }
     }
   }
@@ -3985,26 +3989,19 @@ Ddi_BddWriteMark (
   int val
 )
 {
-  if (f->common.info == NULL) {
-    f->common.info = Pdtutil_Alloc(Ddi_Info_t, 1);
-    f->common.info->infoCode = Ddi_Info_Mark_c;
-    f->common.info->bdd.auxPtr = NULL;
+  Ddi_Info_t *pm=NULL;
+  for (Ddi_Info_t *p=f->common.info; p!=NULL&&pm==NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Mark_c)
+      pm = p;
   }
-  switch (f->common.info->infoCode) {
-  case Ddi_Info_Mark_c:
-    f->common.info->bdd.mark = val;
-    break;
-  case Ddi_Info_Compose_c:
-    f->common.info->compose.mark = val;
-    break;
-  case Ddi_Info_Eq_c:
-    f->common.info->eq.mark = val;
-    break;
-  case Ddi_Info_Var_c:
-  default:
-    Pdtutil_Assert(0,"illegal mark write");
+  if (pm == NULL) {
+    pm = Pdtutil_Alloc(Ddi_Info_t, 1);
+    pm->next=f->common.info;
+    f->common.info=pm;
+    pm->infoCode = Ddi_Info_Mark_c;
+    pm->data.bdd.auxPtr = NULL;
   }
-
+  pm->data.bdd.mark = val;
 }
 
 /**Function********************************************************************
@@ -4018,20 +4015,45 @@ Ddi_BddReadMark (
 )
 {
   Pdtutil_Assert(f->common.info != NULL,"bdd info required");
-  switch (f->common.info->infoCode) {
-  case Ddi_Info_Mark_c:
-    return (f->common.info->bdd.mark);
-    break;
-  case Ddi_Info_Compose_c:
-    return (f->common.info->compose.mark);
-    break;
-  case Ddi_Info_Eq_c:
-    return (f->common.info->eq.mark);
-    break;
-  case Ddi_Info_Var_c:
-  default:
-    Pdtutil_Assert(0,"illegal mark read");
+  for (Ddi_Info_t *p=f->common.info; p!=NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Mark_c)
+      return p->data.bdd.mark;
   }
+  Pdtutil_Assert(0,"illegal mark read");
+}
+
+/**Function********************************************************************
+  Synopsis    [Return the reference baigs of attached causes
+  SideEffects [none]
+  SeeAlso     []
+******************************************************************************/
+bAig_array_t *
+Ddi_BddReadClausesBaigs (
+  Ddi_Bdd_t *f 
+)
+{
+  for (Ddi_Info_t *p=f->common.info; p!=NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Clauses_c)
+      return p->data.clauses.baigs;
+  }
+  return NULL;
+}
+
+/**Function********************************************************************
+  Synopsis    [Return the reference baigs of attached causes
+  SideEffects [none]
+  SeeAlso     []
+******************************************************************************/
+void *
+Ddi_BddReadClausesInt (
+  Ddi_Bdd_t *f 
+)
+{
+  for (Ddi_Info_t *p=f->common.info; p!=NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Clauses_c)
+      return (void *)p->data.clauses.clausesInt;
+  }
+  return NULL;
 }
 
 /**Function********************************************************************
@@ -4045,7 +4067,11 @@ Ddi_BddReadEqVars (
 )
 {
   Pdtutil_Assert(f->common.info != NULL,"bdd info required");
-  return (f->common.info->eq.vars);
+  for (Ddi_Info_t *p=f->common.info; p!=NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Eq_c)
+      return p->data.eq.vars;
+  }
+  Pdtutil_Assert(0,"illegal eq vars read");
 }
 
 /**Function********************************************************************
@@ -4059,8 +4085,11 @@ Ddi_BddReadEqSubst (
 )
 {
   if (f->common.info==NULL) return NULL;
-  if (f->common.info->infoCode != Ddi_Info_Eq_c) return NULL;
-  return (f->common.info->eq.subst);
+  for (Ddi_Info_t *p=f->common.info; p!=NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Eq_c)
+      return p->data.eq.subst;
+  }
+  Pdtutil_Assert(0,"illegal eq subst read");
 }
 
 /**Function********************************************************************
@@ -4074,7 +4103,12 @@ Ddi_BddReadComposeVars (
 )
 {
   Pdtutil_Assert(f->common.info != NULL,"bdd info required");
-  return (f->common.info->compose.vars);
+  if (f->common.info==NULL) return NULL;
+  for (Ddi_Info_t *p=f->common.info; p!=NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Compose_c)
+      return p->data.compose.vars;
+  }
+  return NULL;
 }
 /**Function********************************************************************
   Synopsis    [Return the var array of an equivalence function
@@ -4087,7 +4121,12 @@ Ddi_BddReadComposeRefVars (
 )
 {
   Pdtutil_Assert(f->common.info != NULL,"bdd info required");
-  return (f->common.info->compose.refVars);
+  if (f->common.info==NULL) return NULL;
+  for (Ddi_Info_t *p=f->common.info; p!=NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Compose_c)
+      return p->data.compose.refVars;
+  }
+  return NULL;
 }
 
 /**Function********************************************************************
@@ -4101,8 +4140,11 @@ Ddi_BddReadComposeF (
 )
 {
   if (f->common.info==NULL) return NULL;
-  if (f->common.info->infoCode != Ddi_Info_Compose_c) return NULL;
-  return (f->common.info->compose.f);
+  for (Ddi_Info_t *p=f->common.info; p!=NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Compose_c)
+      return p->data.compose.f;
+  }
+  return NULL;
 }
 
 /**Function********************************************************************
@@ -4116,8 +4158,11 @@ Ddi_BddReadComposeCare (
 )
 {
   if (f->common.info==NULL) return NULL;
-  if (f->common.info->infoCode != Ddi_Info_Compose_c) return NULL;
-  return (f->common.info->compose.care);
+  for (Ddi_Info_t *p=f->common.info; p!=NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Compose_c)
+      return p->data.compose.care;
+  }
+  return NULL;
 }
 
 /**Function********************************************************************
@@ -4131,8 +4176,11 @@ Ddi_BddReadComposeConstr (
 )
 {
   if (f->common.info==NULL) return NULL;
-  if (f->common.info->infoCode != Ddi_Info_Compose_c) return NULL;
-  return (f->common.info->compose.constr);
+  for (Ddi_Info_t *p=f->common.info; p!=NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Compose_c)
+      return p->data.compose.constr;
+  }
+  return NULL;
 }
 
 /**Function********************************************************************
@@ -4146,8 +4194,11 @@ Ddi_BddReadComposeCone (
 )
 {
   if (f->common.info==NULL) return NULL;
-  if (f->common.info->infoCode != Ddi_Info_Compose_c) return NULL;
-  return (f->common.info->compose.cone);
+  for (Ddi_Info_t *p=f->common.info; p!=NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Compose_c)
+      return p->data.compose.cone;
+  }
+  return NULL;
 }
 
 /**Function********************************************************************
@@ -4161,7 +4212,11 @@ Ddi_BddReadComposeSubst (
 )
 {
   Pdtutil_Assert(f->common.info != NULL,"bdd info required");
-  return (f->common.info->compose.subst);
+  for (Ddi_Info_t *p=f->common.info; p!=NULL; p=p->next) {
+    if (p->infoCode == Ddi_Info_Compose_c)
+      return p->data.compose.subst;
+  }
+  return NULL;
 }
 
 /**Function********************************************************************

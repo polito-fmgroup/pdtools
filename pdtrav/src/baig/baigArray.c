@@ -199,6 +199,7 @@ bAigArrayDup(
   return aigArray2;
 }
 
+
 /**Function********************************************************************
   Synopsis    [Alloc Aig Array]
   Description [Alloc Aig Array]

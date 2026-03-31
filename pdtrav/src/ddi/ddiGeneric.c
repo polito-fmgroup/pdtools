@@ -27,6 +27,7 @@
 ******************************************************************************/
 
 #include "ddiInt.h"
+#include "baigInt.h"
 
 /*---------------------------------------------------------------------------*/
 /* Constant declarations                                                     */
@@ -305,8 +306,9 @@ DdiGenericAlloc (
     r->Var.data.index = -1;
     r->common.info = Pdtutil_Alloc(Ddi_Info_t, 1);
     r->common.info->infoCode = Ddi_Info_Var_c;
-    r->common.info->var.activity = 0.0;
-    r->common.info->var.mark = 0;
+    r->common.info->next = NULL;
+    r->common.info->data.var.activity = 0.0;
+    r->common.info->data.var.mark = 0;
     break;
   case Ddi_Varset_c:
     r->Varset.data.cu.bdd = NULL;
@@ -376,13 +378,13 @@ DdiTraceNodeAlloc (
 
 void
 DdiGenericFree (
-  Ddi_Generic_t *f    /* block to be freed */
-)
+                Ddi_Generic_t *f    /* block to be freed */
+                )
 {
   Ddi_Mgr_t *ddiMgr;  /* dd manager */
 
   if (f == NULL) {
-     /* this may happen with NULL entries in freed arrays */
+    /* this may happen with NULL entries in freed arrays */
     return;
   }
 
@@ -394,30 +396,35 @@ DdiGenericFree (
 
   GenericFreeIntern(f);
 
-  if (f->common.info != NULL) {
-    if (f->common.info->infoCode == Ddi_Info_Eq_c) {
-      Ddi_Unlock(f->common.info->eq.vars);
-      Ddi_Free(f->common.info->eq.vars);
-      Ddi_Unlock(f->common.info->eq.subst);
-      Ddi_Free(f->common.info->eq.subst);
+  for (Ddi_Info_t *next=NULL, *p=f->common.info; p!=NULL; p=next) {
+    if (p->infoCode == Ddi_Info_Eq_c) {
+      Ddi_Unlock(p->data.eq.vars);
+      Ddi_Free(p->data.eq.vars);
+      Ddi_Unlock(p->data.eq.subst);
+      Ddi_Free(p->data.eq.subst);
     }
-    else if (f->common.info->infoCode == Ddi_Info_Compose_c) {
-      Ddi_Unlock(f->common.info->compose.f);
-      Ddi_Free(f->common.info->compose.f);
-      Ddi_Unlock(f->common.info->compose.care);
-      Ddi_Free(f->common.info->compose.care);
-      Ddi_Unlock(f->common.info->compose.constr);
-      Ddi_Free(f->common.info->compose.constr);
-      Ddi_Unlock(f->common.info->compose.cone);
-      Ddi_Free(f->common.info->compose.cone);
-      Ddi_Unlock(f->common.info->compose.refVars);
-      Ddi_Free(f->common.info->compose.refVars);
-      Ddi_Unlock(f->common.info->compose.vars);
-      Ddi_Free(f->common.info->compose.vars);
-      Ddi_Unlock(f->common.info->compose.subst);
-      Ddi_Free(f->common.info->compose.subst);
+    else if (p->infoCode == Ddi_Info_Clauses_c) {
+      bAigArrayFree(p->data.clauses.baigs);
+      delete p->data.clauses.clausesInt;
     }
-    Pdtutil_Free(f->common.info);
+    else if (p->infoCode == Ddi_Info_Compose_c) {
+      Ddi_Unlock(p->data.compose.f);
+      Ddi_Free(p->data.compose.f);
+      Ddi_Unlock(p->data.compose.care);
+      Ddi_Free(p->data.compose.care);
+      Ddi_Unlock(p->data.compose.constr);
+      Ddi_Free(p->data.compose.constr);
+      Ddi_Unlock(p->data.compose.cone);
+      Ddi_Free(p->data.compose.cone);
+      Ddi_Unlock(p->data.compose.refVars);
+      Ddi_Free(p->data.compose.refVars);
+      Ddi_Unlock(p->data.compose.vars);
+      Ddi_Free(p->data.compose.vars);
+      Ddi_Unlock(p->data.compose.subst);
+      Ddi_Free(p->data.compose.subst);
+    }
+    next=p->next;
+    Pdtutil_Free(p);
   }
   if (ddiMgr->freeNum > DDI_GARBAGE_THRESHOLD) {
     DdiMgrGarbageCollect(ddiMgr);
@@ -477,6 +484,76 @@ DdiGenericDup (
 
   return(r);
 }
+
+
+/**Function********************************************************************
+  Synopsis    [Alloc Aig Array]
+  Description [Alloc Aig Array]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static bAig_array_t *
+bAigArrayCopy(
+  Ddi_Mgr_t *ddm0,
+  Ddi_Mgr_t *ddm,
+  bAig_array_t *aigArray
+)
+{
+  int n = aigArray->num;
+  bAig_Manager_t *bmgr0 = ddm0->aig.mgr;
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  bAig_array_t *newa = bAigArrayAlloc();
+
+  for (int i=0; i<aigArray->num; i++) {
+    bAigEdge_t baig1, baig = aigArray->nodes[i];
+
+    Pdtutil_Assert(!bAig_NodeIsConstant(baig),"Constant baing in array");
+
+    if (bAig_isVarNode(bmgr0,baig)) {
+      /* take correspondent var */
+      char *name = bAig_NodeReadName(bmgr0,baig);
+      baig1 = bAig_VarNodeFromName(bmgr,name);
+      if (baig1 == bAig_NULL) {
+	int isAig = Ddi_VarIsAig(Ddi_VarFromName(ddm0,name));
+	Ddi_Var_t *v;
+	if (isAig) {
+	  v = Ddi_VarNewBaig(ddm,name);
+	}
+	else {
+	  v = Ddi_VarNew(ddm);
+	  Ddi_VarAttachName (v, name);
+	}
+	baig1 = bAig_VarNodeFromName(bmgr,name);
+      }
+    }
+    else {
+      bAigEdge_t right, left, r, l;
+      right = bAig_NodeReadIndexOfRightChild(bmgr0,baig);
+      left = bAig_NodeReadIndexOfLeftChild(bmgr0,baig);
+      r = bAig_NodeIsInverted(right) ?
+        bAig_Not(bAig_AuxAig1(bmgr0,right)) : bAig_AuxAig1(bmgr0,right);
+      l = bAig_NodeIsInverted(left) ?
+        bAig_Not(bAig_AuxAig1(bmgr0,left)) : bAig_AuxAig1(bmgr0,left);
+      /* this is the operation in the new manager */
+      baig1 = bAig_And(bmgr,r,l);
+    }
+    Pdtutil_Assert(baig1 != bAig_NULL,"NULL baig");
+    bAig_Ref(bmgr, baig1);
+    Pdtutil_Assert(bAig_AuxAig1(bmgr0,baig) == bAig_NULL, "wrong auxaig1");
+    bAig_AuxAig1(bmgr0,baig) = baig1;
+    bAigArrayWriteLast(newa,baig1);
+  }
+
+  for (int i=0; i<aigArray->num; i++) {
+    bAigEdge_t baig = aigArray->nodes[i];
+    bAig_RecursiveDeref(bmgr,bAig_AuxAig1(bmgr0,baig));
+    bAig_AuxAig1(bmgr0,baig) = bAig_NULL;
+  }
+
+  return(newa);
+}
+
+
 
 /**Function********************************************************************
   Synopsis     [Copy a DDI node to a destination manager]
@@ -632,6 +709,63 @@ DdiGenericCopy (
   default:
     Pdtutil_Assert (0, "Wrong DDI node type");
   }
+
+  Ddi_Info_t **pnext2 = &(r->common.info);
+  for (Ddi_Info_t *next=NULL, *p=f->common.info;
+       p!=NULL; p=p->next, pnext2=&((*pnext2)->next)) {
+    Ddi_Info_t *pDup = Pdtutil_Alloc(Ddi_Info_t, 1);
+    *pDup = *p;
+    pDup->next=NULL;
+    *pnext2 = pDup;
+    if (p->infoCode == Ddi_Info_Eq_c) {
+      pDup->data.eq.vars = Ddi_VararrayCopy(ddiMgr,p->data.eq.vars);
+      Ddi_Lock(pDup->data.eq.vars);
+      pDup->data.eq.subst = Ddi_BddarrayCopy(ddiMgr,p->data.eq.subst);
+      Ddi_Lock(pDup->data.eq.subst);
+    }
+    else if (p->infoCode == Ddi_Info_Clauses_c) {
+      pDup->data.clauses.baigs = bAigArrayCopy(ddiMgr0,ddiMgr,pDup->data.clauses.baigs);
+      pDup->data.clauses.clausesInt = new vec<vec<int>>;
+      vec<vec<int>>& v = *p->data.clauses.clausesInt;
+      for (int i=0; i<v.size(); i++) {
+        pDup->data.clauses.clausesInt->push();
+        v[i].copyTo(pDup->data.clauses.clausesInt->last());
+      }
+    }
+    else if (p->infoCode == Ddi_Info_Compose_c) {
+      pDup->data.compose.f = Ddi_BddCopy(ddiMgr,p->data.compose.f);
+      Ddi_Lock(pDup->data.compose.f);
+      if (p->data.compose.care!=NULL) {
+        pDup->data.compose.care = Ddi_BddCopy(ddiMgr,p->data.compose.care);
+        Ddi_Lock(pDup->data.compose.care);
+      }
+      if (p->data.compose.constr!=NULL) {
+        pDup->data.compose.constr = Ddi_BddCopy(ddiMgr,p->data.compose.constr);
+        Ddi_Lock(pDup->data.compose.constr);
+      }
+      pDup->data.compose.cone = NULL;
+      if (p->data.compose.cone!=NULL) {
+	pDup->data.compose.cone =
+	  Ddi_BddCopy(ddiMgr,p->data.compose.cone);
+	Ddi_Lock(pDup->data.compose.cone);
+      }
+      pDup->data.compose.refVars = NULL;
+      if (p->data.compose.refVars!=NULL) {
+	pDup->data.compose.refVars =
+	  Ddi_VararrayCopy(ddiMgr,p->data.compose.refVars);
+	Ddi_Lock(pDup->data.compose.refVars);
+      }
+      if (p->data.compose.vars!=NULL) {
+        pDup->data.compose.vars = 
+          Ddi_VararrayCopy(ddiMgr,p->data.compose.vars);
+        Ddi_Lock(pDup->data.compose.vars);
+      }
+      pDup->data.compose.subst = 
+        Ddi_BddarrayCopy(ddiMgr,p->data.compose.subst);
+      Ddi_Lock(pDup->data.compose.subst);
+    }
+  }
+
 
   return(r);
 }
@@ -2640,46 +2774,59 @@ GenericDupIntern (
     Pdtutil_Assert (0, "Wrong DDI node type");
   }
 
-  if (f->common.info != NULL) {
-    r->common.info = Pdtutil_Alloc(Ddi_Info_t, 1);
-    *r->common.info = *f->common.info;
-    if (f->common.info->infoCode == Ddi_Info_Eq_c) {
-      r->common.info->eq.vars = Ddi_VararrayDup(f->common.info->eq.vars);
-      Ddi_Lock(r->common.info->eq.vars);
-      r->common.info->eq.subst = Ddi_BddarrayDup(f->common.info->eq.subst);
-      Ddi_Lock(r->common.info->eq.subst);
+  Ddi_Info_t **pnext2 = &(r->common.info);
+  for (Ddi_Info_t *p=f->common.info;
+       p!=NULL; p=p->next, pnext2=&((*pnext2)->next)) {
+    Ddi_Info_t *pDup = Pdtutil_Alloc(Ddi_Info_t, 1);
+    *pDup = *p;
+    pDup->next=NULL;
+    *pnext2 = pDup;
+    if (p->infoCode == Ddi_Info_Eq_c) {
+      pDup->data.eq.vars = Ddi_VararrayDup(p->data.eq.vars);
+      Ddi_Lock(pDup->data.eq.vars);
+      pDup->data.eq.subst = Ddi_BddarrayDup(p->data.eq.subst);
+      Ddi_Lock(pDup->data.eq.subst);
     }
-    if (f->common.info->infoCode == Ddi_Info_Compose_c) {
-      r->common.info->compose.f = Ddi_BddDup(f->common.info->compose.f);
-      Ddi_Lock(r->common.info->compose.f);
-      if (f->common.info->compose.care!=NULL) {
-        r->common.info->compose.care = Ddi_BddDup(f->common.info->compose.care);
-        Ddi_Lock(r->common.info->compose.care);
+    else if (p->infoCode == Ddi_Info_Clauses_c) {
+      pDup->data.clauses.baigs = bAigArrayDup(p->data.clauses.baigs);
+      pDup->data.clauses.clausesInt = new vec<vec<int>>;
+      vec<vec<int>>& v = *p->data.clauses.clausesInt;
+      for (int i=0; i<v.size(); i++) {
+        pDup->data.clauses.clausesInt->push();
+        v[i].copyTo(pDup->data.clauses.clausesInt->last());
       }
-      if (f->common.info->compose.constr!=NULL) {
-        r->common.info->compose.constr = Ddi_BddDup(f->common.info->compose.constr);
-        Ddi_Lock(r->common.info->compose.constr);
+    }
+    else if (p->infoCode == Ddi_Info_Compose_c) {
+      pDup->data.compose.f = Ddi_BddDup(p->data.compose.f);
+      Ddi_Lock(pDup->data.compose.f);
+      if (p->data.compose.care!=NULL) {
+        pDup->data.compose.care = Ddi_BddDup(p->data.compose.care);
+        Ddi_Lock(pDup->data.compose.care);
       }
-      r->common.info->compose.cone = NULL;
-      if (f->common.info->compose.cone!=NULL) {
-	r->common.info->compose.cone =
-	  Ddi_BddDup(f->common.info->compose.cone);
-	Ddi_Lock(r->common.info->compose.cone);
+      if (p->data.compose.constr!=NULL) {
+        pDup->data.compose.constr = Ddi_BddDup(p->data.compose.constr);
+        Ddi_Lock(pDup->data.compose.constr);
       }
-      r->common.info->compose.refVars = NULL;
-      if (f->common.info->compose.refVars!=NULL) {
-	r->common.info->compose.refVars =
-	  Ddi_VararrayDup(f->common.info->compose.refVars);
-	Ddi_Lock(r->common.info->compose.refVars);
+      pDup->data.compose.cone = NULL;
+      if (p->data.compose.cone!=NULL) {
+	pDup->data.compose.cone =
+	  Ddi_BddDup(p->data.compose.cone);
+	Ddi_Lock(pDup->data.compose.cone);
       }
-      if (f->common.info->compose.vars!=NULL) {
-        r->common.info->compose.vars = 
-          Ddi_VararrayDup(f->common.info->compose.vars);
-        Ddi_Lock(r->common.info->compose.vars);
+      pDup->data.compose.refVars = NULL;
+      if (p->data.compose.refVars!=NULL) {
+	pDup->data.compose.refVars =
+	  Ddi_VararrayDup(p->data.compose.refVars);
+	Ddi_Lock(pDup->data.compose.refVars);
       }
-      r->common.info->compose.subst = 
-        Ddi_BddarrayDup(f->common.info->compose.subst);
-      Ddi_Lock(r->common.info->compose.subst);
+      if (p->data.compose.vars!=NULL) {
+        pDup->data.compose.vars = 
+          Ddi_VararrayDup(p->data.compose.vars);
+        Ddi_Lock(pDup->data.compose.vars);
+      }
+      pDup->data.compose.subst = 
+        Ddi_BddarrayDup(p->data.compose.subst);
+      Ddi_Lock(pDup->data.compose.subst);
     }
   }
 

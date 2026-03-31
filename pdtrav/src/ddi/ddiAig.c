@@ -820,6 +820,7 @@ DdiAigArrayCopy (
   return(newa);
 }
 
+
 /**Function********************************************************************
   Synopsis    [Copy Aig between managers]
   Description [Copy Aig between managers]
@@ -43539,7 +43540,7 @@ Ddi_AigCustCustomCombinationalCircuit (
 }
 #endif
 
-/* #if 0 */
+#if 0 
 /* /\**Function******************************************************************* */
 /*   Synopsis    [] */
 /*   Description [] */
@@ -43717,7 +43718,7 @@ Ddi_AigCustCustomCombinationalCircuit (
 /*   Ddi_Free(benchArray); */
 /*   return 0; */
 /* } */
-/* #endif */
+#endif
 
 
 
@@ -48767,7 +48768,7 @@ Ddi_AigSatAndWithInterpolantIncr (
     Ddi_Var_t *v = Ddi_VararrayRead(vATot,i);
     bAigEdge_t varIndex = Ddi_VarToBaig(v);
     int vCnf = aig2CnfId(bmgr,varIndex);
-    double act = v->common.info->var.activity;
+    double act = v->common.info->data.var.activity;
     S->varBumpActivityExternal(MinisatLit(vCnf),act);
     Pdtutil_Assert(varIndex != bAig_NULL,"NULL variable");
   }
@@ -48908,8 +48909,8 @@ Ddi_AigSatAndWithInterpolantIncr (
     double act = S->varReadActivityExternal(MinisatLit(vCnf))/1000.0;
     if (1) {
       if (act > 1000) act = 1000;
-      v->common.info->var.activity += act;
-      v->common.info->var.activity = act;
+      v->common.info->data.var.activity += act;
+      v->common.info->data.var.activity = act;
       //if (v->common.info->var.activity > 1000)
       //  v->common.info->var.activity = 1000;
     }
@@ -53094,7 +53095,7 @@ Ddi_AigAbstrVarsForInterpolant (
     Ddi_Var_t *v = Ddi_VararrayRead(abVars,i);
     bAigEdge_t varIndex = Ddi_VarToBaig(v);
     int vCnf = aig2CnfId(bmgr,varIndex);
-    double act = v->common.info->var.activity;
+    double act = v->common.info->data.var.activity;
     S.varBumpActivityExternal(MinisatLit(vCnf),act);
     Pdtutil_Assert(varIndex != bAig_NULL,"NULL variable");
   }
@@ -53161,7 +53162,7 @@ Ddi_AigAbstrVarsForInterpolant (
     double act = S.varReadActivityExternal(MinisatLit(vCnf)) / 1000.0;
     if (1) {
       //      if (act > 1000) act = 1000;
-      v->common.info->var.activity += act;
+      v->common.info->data.var.activity += act;
       //      if (v->common.info->var.activity > 1000)
       //  v->common.info->var.activity = 1000;
     }
@@ -78376,8 +78377,6 @@ MinisatClausesWithSuppFlow(
         Ddi_Bdd_t *f_i = Ddi_BddPartRead(g,ii);
         baig = f_i->data.aig->aigNode;
         fCnf = DdiAig2CnfIdSigned(ddm->aig.mgr,baig);
-
-        while (abs(fCnf) > S.nVars()) S.newVar();
         partTargets.push(MinisatLit(fCnf));
 
       }
@@ -78387,6 +78386,31 @@ MinisatClausesWithSuppFlow(
       else {
         Minisat22Clause(S22,partTargets);
       }
+    }
+
+    bAig_array_t *baigs = Ddi_BddReadClausesBaigs(g);
+    if (baigs!=NULL) {
+      vec<vec<int>> *clausesInt = (vec<vec<int>> *) Ddi_BddReadClausesInt(g);
+      vec<vec<int>>& v = *clausesInt;
+      for (int i=0; i<v.size(); i++) {
+        int ii;
+        vec<Lit> partTargets;
+        vec<int>& cInt = v[i];
+        partTargets.clear();
+        for (int j=0; j<cInt.size(); j++) {
+          int id = abs(cInt[j])-1;
+          Pdtutil_Assert(id>=0&&id<baigs->num,"wrong clauseInt lit");
+          baig = cInt[j]<0 ? bAig_Not(baigs->nodes[id]) : baigs->nodes[id];
+          fCnf = DdiAig2CnfIdSigned(ddm->aig.mgr,baig); 
+          partTargets.push(MinisatLit(fCnf));          
+        }
+        if (S22==NULL) {
+          MinisatSolverAddClause(S,partTargets);
+        }
+        else {
+          Minisat22Clause(S22,partTargets);
+        }
+      }      
     }
 
   }
@@ -80047,7 +80071,7 @@ static int getEquivFromClauses(
   SideEffects []
   SeeAlso     [Ddi_BddMakeFromCU]
 ******************************************************************************/
-Ddi_Bdd_t *
+int
 Ddi_AigSatLearningToAigs (
   Ddi_IncrSatMgr_t *mgr,
   Ddi_Bdd_t *refAig
@@ -80069,7 +80093,61 @@ Ddi_AigSatLearningToAigs (
     Minisat::Var v22 = abs(fCnf)-1;
     usedVar[v22] = true;
   }
-  bAigArrayFree(visitedNodes);
+
+  for (int i=0; i<visitedNodes->num; i++) {
+    bAigEdge_t baig;
+    baig = visitedNodes->nodes[i];
+    bAig_AuxInt(bmgr,baig) = i+1;
+  }
+
+  vec<vec<int>> *learntClauses = new vec<vec<int>>;
+  learntClauses->clear();
+  vec<int> cInt;
+
+  int nLits=0;
+  for (int i=0; i<S22->nLearnts(); i++) {
+    int j;
+    const Minisat::Clause& c = S22->getLearnedClause (i);
+    bool useClause = true;
+    for (j=0; j<c.size() && useClause; j++) {
+      int v = Minisat::var(c[j]);
+      if (!usedVar[v])
+        useClause = false;
+    }
+    if (useClause) {
+      cInt.clear();
+      for (j=0; j<c.size(); j++) {
+        int v = Minisat::var(c[j]);
+        bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
+        int s = Minisat::sign(c[j]);
+        int litInt = bAig_AuxInt(bmgr,baig);
+        Pdtutil_Assert(litInt>0,"wrong baig int");
+        if (s) litInt = -litInt;
+        cInt.push(litInt);
+        nLits++;
+      }
+      learntClauses->push();
+      cInt.copyTo(learntClauses->last());
+    }
+  }
+
+  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+    printf("Learnt %d clauses, %d literals (avg: %.1f)\n",
+           learntClauses->size(), nLits,
+           (float)nLits/learntClauses->size()); 
+  }
+  
+  Ddi_Info_t *p = Pdtutil_Alloc(Ddi_Info_t,1);
+  p->next = refAig->common.info;
+  p->infoCode = Ddi_Info_Clauses_c;
+  refAig->common.info = p;
+  p->data.clauses.baigs = visitedNodes;
+  p->data.clauses.clausesInt = learntClauses;
+
+  aigArrayClearAuxAigIntern(bmgr,visitedNodes);
+
+  return learntClauses->size();
+#if 0  
 
   Ddi_Bdd_t *learntAig = Ddi_BddMakePartConjVoid(ddm);
   for (int i=0; i<S22->nLearnts(); i++) {
@@ -80096,8 +80174,9 @@ Ddi_AigSatLearningToAigs (
       Ddi_Free(clauseAig);
     }
   }
-
   return learntAig;
+#endif
+  
 }
 
  
@@ -89478,4 +89557,5 @@ sat22ConstrainIntern(
 
   return newfAig;
 }
+
 

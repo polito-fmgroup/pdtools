@@ -159,6 +159,7 @@ typedef enum {
   Ddi_Info_Mark_c,
   Ddi_Info_Eq_c,
   Ddi_Info_Compose_c,
+  Ddi_Info_Clauses_c,
   Ddi_Null_Null_c
 }
 Ddi_Info_e;
@@ -272,7 +273,7 @@ typedef struct Ddi_Mgr_t Ddi_Mgr_t;
 typedef struct DdNode Ddi_BddNode;
 typedef struct DdNode Ddi_CuddNode;
 
-typedef union  Ddi_Info_t Ddi_Info_t;
+typedef struct Ddi_Info_t Ddi_Info_t;
 typedef union  Ddi_Generic_t Ddi_Generic_t;
 
 typedef struct Ddi_GenericArray_t Ddi_GenericArray_t;
@@ -790,7 +791,7 @@ Ddi_AigSatStopLearningIncremental
 (
   Ddi_IncrSatMgr_t *incrSat
 );
-EXTERN Ddi_Bdd_t *
+EXTERN int
 Ddi_AigSatLearningToAigs (
   Ddi_IncrSatMgr_t *mgr,
   Ddi_Bdd_t *refAig
@@ -1042,6 +1043,8 @@ EXTERN Ddi_Bdd_t * Ddi_BddMakeClustered(Ddi_Bdd_t *f, int threshold);
 EXTERN Ddi_Bdd_t * Ddi_BddSetClustered(Ddi_Bdd_t *f, int threshold);
 EXTERN void Ddi_BddWriteMark (Ddi_Bdd_t *f, int val);
 EXTERN int Ddi_BddReadMark (Ddi_Bdd_t *f);
+EXTERN bAig_array_t *Ddi_BddReadClausesBaigs (Ddi_Bdd_t *f );
+EXTERN void *Ddi_BddReadClausesInt (Ddi_Bdd_t *f);
 EXTERN Ddi_Vararray_t *Ddi_BddReadEqVars (Ddi_Bdd_t *f);
 EXTERN Ddi_Bddarray_t *Ddi_BddReadEqSubst (Ddi_Bdd_t *f);
 EXTERN Ddi_Bdd_t *Ddi_BddReadComposeF (Ddi_Bdd_t *f);

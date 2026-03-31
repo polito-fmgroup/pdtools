@@ -582,35 +582,47 @@ struct Ddi_Mgr_t {
  Synopsis  [Ddi Node Extra Info]
  Description [Ddi Node Extra Info]
 ******************************************************************************/
-union Ddi_Info_t {
+struct Ddi_Info_t {
   Ddi_Info_e infoCode;
-  struct {
-    Ddi_Info_e infoCode;
-    int mark;
-    double activity;
-  } var;
-  struct {
-    Ddi_Info_e infoCode;
-    int mark;
-    void *auxPtr;
-  } bdd;
-  struct {
-    Ddi_Info_e infoCode;
-    int mark;
-    Ddi_Vararray_t *vars;
-    Ddi_Bddarray_t *subst;
-  } eq;
-  struct {
-    Ddi_Info_e infoCode;
-    int mark;
-    Ddi_Bdd_t *f;
-    Ddi_Bdd_t *care;
-    Ddi_Bdd_t *constr;
-    Ddi_Bdd_t *cone;
-    Ddi_Vararray_t *refVars;
-    Ddi_Vararray_t *vars;
-    Ddi_Bddarray_t *subst;
-  } compose;
+  struct Ddi_Info_t *next;
+  union {
+    struct {
+      int mark;
+      double activity;
+    } var;
+    struct {
+      int mark;
+      void *auxPtr;
+    } bdd;
+    struct {
+      Ddi_Vararray_t *vars;
+      Ddi_Bddarray_t *subst;
+    } eq;
+    struct {
+      Ddi_Bdd_t *f;
+      Ddi_Bdd_t *care;
+      Ddi_Bdd_t *constr;
+      Ddi_Bdd_t *cone;
+      Ddi_Vararray_t *refVars;
+      Ddi_Vararray_t *vars;
+      Ddi_Bddarray_t *subst;
+    } compose;
+    struct {
+      bAig_array_t *baigs;
+      vec<vec<int>> *clausesInt;
+    } clauses;
+  } data;
+};
+  
+/**Struct*********************************************************************
+ Synopsis  [Baig clause array description]
+ Description [Baig clause array description]
+******************************************************************************/
+
+struct Ddi_BaigClauseArray_t {
+  bAig_Manager_t *mgr;
+  bAig_array_t *baigs;
+  vec<vec<int>> *clauses;
 };
 
 /**Struct*********************************************************************
@@ -655,7 +667,7 @@ struct Ddi_Common_t {
   Ddi_Mgr_t               *mgr;   /* the manager */
   char                    *name;  /* optional name, useful for debug */
   union Ddi_Generic_t     *next;  /* pointer for linked lists */
-  union Ddi_Info_t        *info;  /* pointer to info block */
+  struct Ddi_Info_t       *info;  /* pointer to info block */
   union Ddi_Generic_t     *supp;  /* support */
   int                     size; /* integer id: set for debug purposes */
   int                     nodeid; /* integer id: set for debug purposes */

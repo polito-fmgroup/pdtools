@@ -30558,11 +30558,15 @@ itpImgIncrLearn(
   }
   else {
     Ddi_Bdd_t *cone2 = Ddi_BddCopy(ddmDup,cone);
-    Ddi_Bdd_t *learntAigDup = Ddi_AigSatLearningToAigs (ddiS,cone2);
+    int nl = Ddi_AigSatLearningToAigs (ddiS,cone2);
     int size0 = Ddi_BddSize(cone);
-    Pdtutil_Assert(learntAigDup!=NULL,"missing learnt aig");
-    Ddi_Bdd_t *learntAig = Ddi_AigClauseArrayCopy (ddm,learntAigDup);
+    //    Pdtutil_Assert(learntAigDup!=NULL,"missing learnt aig");
     Ddi_BddSetAig(cone);
+    Ddi_Bdd_t *coneWithLearnt = Ddi_BddCopy(ddm,cone2);
+    Ddi_DataCopy(cone,coneWithLearnt);
+    Ddi_Free(coneWithLearnt);
+#if 0
+    Ddi_Bdd_t *learntAig = Ddi_AigClauseArrayCopy (ddm,learntAigDup);
     if (Ddi_BddIsPartConj(learntAig)) {
       Ddi_BddPartInsertLast(learntAig,cone);
       Ddi_DataCopy(cone,learntAig);
@@ -30574,9 +30578,18 @@ itpImgIncrLearn(
             "*** Incr Minisat learntAig: %d - cone %d -> %d\n",
               Ddi_BddSize(learntAig), size0, Ddi_BddSize(cone));
     };
-    Ddi_Free(cone2);
     Ddi_Free(learntAigDup);
     Ddi_Free(learntAig);
+#endif
+    Ddi_Free(cone2);
+    int assumeNotFrom=0;
+    if (assumeNotFrom) {
+      Ddi_Bdd_t *constr2 = Ddi_BddCopy(ddmDup,itpTravMgr->from0);
+      Ddi_BddNotAcc(constr2);
+      Ddi_AigSatMinisatLoadClausesIncrementalAsserted(ddiS, constr2);
+      Ddi_IncrSatMgrLockAig(ddiS,constr2);
+      Ddi_Free(constr2);
+    }
   }
   Ddi_IncrSatMgrLockAig(ddiS,check2);
   Ddi_Free(check2);

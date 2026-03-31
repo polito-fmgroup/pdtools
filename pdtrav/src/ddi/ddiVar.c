@@ -640,7 +640,7 @@ Ddi_VarReadMark (
 )
 {
   Pdtutil_Assert(v->common.info != NULL,"var info required");
-  return (v->common.info->var.mark);
+  return (v->common.info->data.var.mark);
 }
 
 /**Function********************************************************************
@@ -655,8 +655,8 @@ Ddi_VarWriteMark (
 )
 {
   Pdtutil_Assert(v->common.info != NULL,"var info required");
-  v->common.info->infoCode = Ddi_Info_Var_c;
-  v->common.info->var.mark = val;
+  Pdtutil_Assert(v->common.info->infoCode == Ddi_Info_Var_c,"wrong info code");
+  v->common.info->data.var.mark = val;
 }
 
 /**Function********************************************************************
@@ -671,8 +671,8 @@ Ddi_VarIncrMark (
 )
 {
   Pdtutil_Assert(v->common.info != NULL,"var info required");
-  v->common.info->infoCode = Ddi_Info_Var_c;
-  v->common.info->var.mark += val;
+  Pdtutil_Assert(v->common.info->infoCode == Ddi_Info_Var_c,"wrong info code");
+  v->common.info->data.var.mark += val;
 }
 
 

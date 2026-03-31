@@ -141,7 +141,6 @@ typedef struct bAig_array_t {
         (bAigEdge_t) ((node) ^ (bAigInvertBit))  \
 )
 
-
 #define bAigArrayFree(aigArray) {\
   bAigArrayFreeIntern(aigArray);\
   aigArray = NULL;\
