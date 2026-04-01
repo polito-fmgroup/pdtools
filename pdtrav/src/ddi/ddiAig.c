@@ -77662,6 +77662,35 @@ MinisatClausesWithSuppFlow(
       Ddi_Vararray_t *pIs = incrementalSat ? NULL:Ddi_BddarraySuppVararray(fA);
       Ddi_Bddarray_t *fA2 = Ddi_BddarrayDup(fA);
       Ddi_BddarrayAppend(fA2,sharedAigs);
+      if (1 && (g!=NULL)) {
+        bAig_array_t *clausesBaigs = Ddi_BddReadClausesBaigs(g);
+        if (clausesBaigs!=NULL) {
+          vec<bool> usedPos(clausesBaigs->num,false);
+          vec<bool> usedNeg(clausesBaigs->num,false);
+          vec<vec<int>> *clausesInt = (vec<vec<int>> *) Ddi_BddReadClausesInt(g);
+          vec<vec<int>>& v = *clausesInt;
+          for (int i=0; i<v.size(); i++) {
+            int ii;
+            vec<int>& cInt = v[i];
+            for (int j=0; j<cInt.size(); j++) {
+              int id = abs(cInt[j])-1;
+              Pdtutil_Assert(id>=0&&id<clausesBaigs->num,"wrong clauseInt lit");
+              if (cInt[j]<0) usedNeg[id]=true;
+              else usedPos[id]=true;
+            }
+          }
+          for (int j=0; j<clausesBaigs->num; j++) {
+            if (usedPos[j]||usedNeg[j]) {
+              baig = clausesBaigs->nodes[j];
+              Ddi_Bdd_t *aig = Ddi_BddMakeFromBaig(ddm, baig);
+              if (usedPos[j]) Ddi_BddarrayInsertLast(fA2,aig);
+              Ddi_BddNotAcc(aig);
+              if (usedNeg[j]) Ddi_BddarrayInsertLast(fA2,aig);
+              Ddi_Free(aig);
+            }
+          }
+        }
+      }
       Ddi_AbcLock ();
       aigAbcInfo = Ddi_BddarrayToAbcCnfInfo (fA2, pIs, visitedNodes);
       Ddi_Free(pIs);
@@ -78336,8 +78365,7 @@ MinisatClausesWithSuppFlow(
           for (int j=0; j<Ddi_BddPartNum(f_i); j++) {
             Ddi_Bdd_t *f_i_j = Ddi_BddPartRead(f_i,j);
             baig = f_i_j->data.aig->aigNode;
-            fCnf = DdiAig2CnfIdSigned(ddm->aig.mgr,baig);
-            
+            fCnf = DdiAig2CnfIdSigned(ddm->aig.mgr,baig);            
             while (abs(fCnf) > S.nVars()) S.newVar();
             partTargets.push(MinisatLit(fCnf));
             
@@ -80144,7 +80172,7 @@ Ddi_AigSatLearningToAigs (
   p->data.clauses.baigs = visitedNodes;
   p->data.clauses.clausesInt = learntClauses;
 
-  aigArrayClearAuxAigIntern(bmgr,visitedNodes);
+  aigArrayClearAuxIntIntern(bmgr,visitedNodes);
 
   return learntClauses->size();
 #if 0  
