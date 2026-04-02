@@ -1323,6 +1323,7 @@ Ddi_MgrDup (
     }
   }
 
+  Pdtutil_Free(dd2->settings.aig.satSolver);
   dd2->settings = dd->settings;
   dd2->settings.aig.satSolver = NULL;
   Ddi_MgrSetOption(dd2,Pdt_DdiSatSolver_c,pchar,Ddi_MgrReadSatSolver(dd));

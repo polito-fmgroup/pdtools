@@ -375,54 +375,67 @@ Fsm_MgrQuit(
 
   /* init */
   Pdtutil_Free(fsmMgr->init.name);
+  Pdtutil_Free(fsmMgr->init.string);
   Ddi_Free(fsmMgr->init.bdd);
 
   /* tr */
   Pdtutil_Free(fsmMgr->tr.name);
+  Pdtutil_Free(fsmMgr->tr.string);
   Ddi_Free(fsmMgr->tr.bdd);
 
   /* from */
   Pdtutil_Free(fsmMgr->from.name);
+  Pdtutil_Free(fsmMgr->from.string);
   Ddi_Free(fsmMgr->from.bdd);
 
   /* reached */
   Pdtutil_Free(fsmMgr->reached.name);
+  Pdtutil_Free(fsmMgr->reached.string);
   Ddi_Free(fsmMgr->reached.bdd);
 
   /* constraint */
   Pdtutil_Free(fsmMgr->constraint.name);
+  Pdtutil_Free(fsmMgr->constraint.string);
   Ddi_Free(fsmMgr->constraint.bdd);
 
   /* justice */
   Pdtutil_Free(fsmMgr->justice.name);
+  Pdtutil_Free(fsmMgr->justice.string);
   Ddi_Free(fsmMgr->justice.bdd);
 
   /* fairness */
   Pdtutil_Free(fsmMgr->fairness.name);
+  Pdtutil_Free(fsmMgr->fairness.string);
   Ddi_Free(fsmMgr->fairness.bdd);
 
   /* cex */
   Pdtutil_Free(fsmMgr->cex.name);
+  Pdtutil_Free(fsmMgr->cex.string);
   Ddi_Free(fsmMgr->cex.bdd);
 
   /* init stub constraint */
   Pdtutil_Free(fsmMgr->initStubConstraint.name);
+  Pdtutil_Free(fsmMgr->initStubConstraint.string);
   Ddi_Free(fsmMgr->initStubConstraint.bdd);
 
   /* care */
   Pdtutil_Free(fsmMgr->care.name);
+  Pdtutil_Free(fsmMgr->care.string);
   Ddi_Free(fsmMgr->care.bdd);
 
   /* invarspec */
   Pdtutil_Free(fsmMgr->invarspec.name);
+  Pdtutil_Free(fsmMgr->invarspec.string);
   Ddi_Free(fsmMgr->invarspec.bdd);
 
   /* latch eq classes */
   Pdtutil_Free(fsmMgr->latchEqClasses.name);
+  Pdtutil_Free(fsmMgr->latchEqClasses.string);
   Ddi_Free(fsmMgr->latchEqClasses.bdd);
 
     /* constr invar */
   Pdtutil_Free(fsmMgr->constrInvar.name);
+  Pdtutil_Free(fsmMgr->constrInvar.string);
   Ddi_Free(fsmMgr->constrInvar.bdd);
 
   Ddi_Free(fsmMgr->retimedPis);

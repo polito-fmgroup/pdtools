@@ -504,6 +504,14 @@ typedef struct Ddi_IncrSatMgr_s Ddi_IncrSatMgr_t;
   Description [Free DDI node (compatible with all DDI handles).]
   SideEffects []
 ******************************************************************************/
+
+#define Ddi_InfoCopy(f/* dest node pointer */,g/* src node */)  \
+  DdiGenericInfoCopy((Ddi_Generic_t *)(f),(Ddi_Generic_t *)(g))
+/**Macro***********************************************************************
+  Synopsis    [Copy Data between DDI nodes.]
+  Description [Free DDI node (compatible with all DDI handles).]
+  SideEffects []
+******************************************************************************/
 #define Ddi_DataCopy(f/* dest node pointer */,g/* src node */)\
   DdiGenericDataCopy((Ddi_Generic_t *)(f),(Ddi_Generic_t *)(g))
 

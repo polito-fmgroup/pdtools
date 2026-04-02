@@ -58,7 +58,9 @@
 /*---------------------------------------------------------------------------*/
 
 static void GenericFreeIntern(Ddi_Generic_t *f);
+static void InfoFreeIntern(Ddi_Generic_t *f);
 static Ddi_Generic_t * GenericDupIntern(Ddi_Generic_t *r, Ddi_Generic_t *f);
+static Ddi_Info_t *InfoDupIntern (Ddi_Info_t *p);
 static Ddi_Generic_t * ArraySupp(Ddi_ArrayData_t *array);
 static Ddi_Generic_t * ArraySupp2(Ddi_Generic_t *f);
 static void ArrayOpIterate(Ddi_OpCode_e opcode, Ddi_ArrayData_t *array, Ddi_Generic_t *g, Ddi_Generic_t *h);
@@ -121,6 +123,7 @@ Ddi_GenericDup (
 {
   return(DdiGenericDup(f));
 }
+
 
 /**Function********************************************************************
   Synopsis    [Lock DDI node.]
@@ -378,8 +381,8 @@ DdiTraceNodeAlloc (
 
 void
 DdiGenericFree (
-                Ddi_Generic_t *f    /* block to be freed */
-                )
+  Ddi_Generic_t *f    /* block to be freed */
+)
 {
   Ddi_Mgr_t *ddiMgr;  /* dd manager */
 
@@ -394,38 +397,9 @@ DdiGenericFree (
     Pdtutil_Free(f->common.name);
   }
 
+  InfoFreeIntern(f);
   GenericFreeIntern(f);
 
-  for (Ddi_Info_t *next=NULL, *p=f->common.info; p!=NULL; p=next) {
-    if (p->infoCode == Ddi_Info_Eq_c) {
-      Ddi_Unlock(p->data.eq.vars);
-      Ddi_Free(p->data.eq.vars);
-      Ddi_Unlock(p->data.eq.subst);
-      Ddi_Free(p->data.eq.subst);
-    }
-    else if (p->infoCode == Ddi_Info_Clauses_c) {
-      bAigArrayFree(p->data.clauses.baigs);
-      delete p->data.clauses.clausesInt;
-    }
-    else if (p->infoCode == Ddi_Info_Compose_c) {
-      Ddi_Unlock(p->data.compose.f);
-      Ddi_Free(p->data.compose.f);
-      Ddi_Unlock(p->data.compose.care);
-      Ddi_Free(p->data.compose.care);
-      Ddi_Unlock(p->data.compose.constr);
-      Ddi_Free(p->data.compose.constr);
-      Ddi_Unlock(p->data.compose.cone);
-      Ddi_Free(p->data.compose.cone);
-      Ddi_Unlock(p->data.compose.refVars);
-      Ddi_Free(p->data.compose.refVars);
-      Ddi_Unlock(p->data.compose.vars);
-      Ddi_Free(p->data.compose.vars);
-      Ddi_Unlock(p->data.compose.subst);
-      Ddi_Free(p->data.compose.subst);
-    }
-    next=p->next;
-    Pdtutil_Free(p);
-  }
   if (ddiMgr->freeNum > DDI_GARBAGE_THRESHOLD) {
     DdiMgrGarbageCollect(ddiMgr);
   }
@@ -481,7 +455,9 @@ DdiGenericDup (
   r = DdiGenericAlloc (f->common.type, ddiMgr);
 
   GenericDupIntern(r,f);
-
+  InfoFreeIntern(r);
+  r->common.info = InfoDupIntern(f->common.info);
+  
   return(r);
 }
 
@@ -810,6 +786,29 @@ DdiGenericDataCopy (
     Ddi_Lock(d);
   }
 
+}
+
+/**Function********************************************************************
+  Synopsis     [Copy the content of a info list to another one]
+  Description  [Copy the content of a info list to another one]
+  SideEffects  []
+  SeeAlso      []
+******************************************************************************/
+
+void
+DdiGenericInfoCopy (
+  Ddi_Generic_t *d    /* destination */,
+  Ddi_Generic_t *s    /* source */
+)
+{
+  Ddi_Mgr_t *ddiMgr;  /* dd manager */
+  int locked=0;
+
+  ddiMgr = s->common.mgr;
+
+  InfoFreeIntern(d);
+
+  d->common.info = InfoDupIntern(s->common.info);
 }
 
 /**Function********************************************************************
@@ -2675,12 +2674,69 @@ GenericFreeIntern (
   default:
     Pdtutil_Assert (0, "Wrong DDI node type");
   }
-
+  
   ddiMgr->genericNum--;
   ddiMgr->freeNum++;
   ddiMgr->typeNum[f->common.type]--;
   f->common.status = Ddi_Free_c;
 
+}
+
+/**Function********************************************************************
+
+  Synopsis     [Frees a info list]
+  Description  [Frees a info list. Internal procedure]
+  SideEffects  [none]
+  SeeAlso      []
+******************************************************************************/
+static void
+InfoFreeIntern (
+  Ddi_Generic_t *f    /* block pointing to the list */
+)
+{
+  Ddi_Mgr_t *ddiMgr;  /* dd manager */
+
+  if (f == NULL) {
+     /* this may happen with NULL entries in freed arrays */
+    return;
+  }
+
+  ddiMgr = f->common.mgr;
+
+  Pdtutil_Assert (ddiMgr!=NULL, "DDI with NULL DDI manager");
+
+  for (Ddi_Info_t *next=NULL, *p=f->common.info; p!=NULL; p=next) {
+    if (p->infoCode == Ddi_Info_Eq_c) {
+      Ddi_Unlock(p->data.eq.vars);
+      Ddi_Free(p->data.eq.vars);
+      Ddi_Unlock(p->data.eq.subst);
+      Ddi_Free(p->data.eq.subst);
+    }
+    else if (p->infoCode == Ddi_Info_Clauses_c) {
+      bAigArrayFree(p->data.clauses.baigs);
+      delete p->data.clauses.clausesInt;
+    }
+    else if (p->infoCode == Ddi_Info_Compose_c) {
+      Ddi_Unlock(p->data.compose.f);
+      Ddi_Free(p->data.compose.f);
+      Ddi_Unlock(p->data.compose.care);
+      Ddi_Free(p->data.compose.care);
+      Ddi_Unlock(p->data.compose.constr);
+      Ddi_Free(p->data.compose.constr);
+      Ddi_Unlock(p->data.compose.cone);
+      Ddi_Free(p->data.compose.cone);
+      Ddi_Unlock(p->data.compose.refVars);
+      Ddi_Free(p->data.compose.refVars);
+      Ddi_Unlock(p->data.compose.vars);
+      Ddi_Free(p->data.compose.vars);
+      Ddi_Unlock(p->data.compose.subst);
+      Ddi_Free(p->data.compose.subst);
+    }
+    next=p->next;
+    Pdtutil_Free(p);
+  }
+  f->common.info=NULL;
+  
 }
 
 /**Function********************************************************************
@@ -2774,9 +2830,24 @@ GenericDupIntern (
     Pdtutil_Assert (0, "Wrong DDI node type");
   }
 
-  Ddi_Info_t **pnext2 = &(r->common.info);
-  for (Ddi_Info_t *p=f->common.info;
-       p!=NULL; p=p->next, pnext2=&((*pnext2)->next)) {
+  return(r);
+}
+
+/**Function********************************************************************
+  Synopsis     [Duplicate a DDI node]
+  Description  []
+  SideEffects  []
+  SeeAlso      []
+******************************************************************************/
+static Ddi_Info_t *
+InfoDupIntern (
+  Ddi_Info_t *p    /* source */
+)
+{
+  if (p==NULL) return NULL;
+  Ddi_Info_t *p2;  
+  Ddi_Info_t **pnext2 = &p2;
+  for (; p!=NULL; p=p->next, pnext2=&((*pnext2)->next)) {
     Ddi_Info_t *pDup = Pdtutil_Alloc(Ddi_Info_t, 1);
     *pDup = *p;
     pDup->next=NULL;
@@ -2830,7 +2901,7 @@ GenericDupIntern (
     }
   }
 
-  return(r);
+  return(p2);
 }
 
 

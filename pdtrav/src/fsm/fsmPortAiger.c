@@ -361,6 +361,7 @@ Fsm_MgrLoadAiger(
       r1 = bAig_Not(r1);
 
     r = bAig_And(bmgr, r0, r1);
+    assert(ni + nl + i + 1<=m);
     nodesArray[ni + nl + i + 1] = r;
     bAig_Ref(bmgr, r);
   }

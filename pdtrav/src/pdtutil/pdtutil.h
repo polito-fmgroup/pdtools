@@ -1005,7 +1005,8 @@ extern FILE *pdtResOut;
 ******************************************************************************/
 
 #define Pdtutil_Alloc(type,num) \
-    ((type *)Pdtutil_AllocCheck(ALLOC(type, num)))
+  ((type *)Pdtutil_AllocCheck(malloc(sizeof(type)* (num))))
+//    ((type *)Pdtutil_AllocCheck(ALLOC(type, num)))
 
 /**Macro***********************************************************************
 
@@ -1020,7 +1021,8 @@ extern FILE *pdtResOut;
 ******************************************************************************/
 
 #define Pdtutil_Realloc(type,obj,num) \
-    ((type *)Pdtutil_AllocCheck(REALLOC(type, obj, num)))
+  ((type *)Pdtutil_AllocCheck(realloc(obj, sizeof(type)*(num))))
+//    ((type *)Pdtutil_AllocCheck(REALLOC(type, obj, num)))
 
 /**Macro***********************************************************************
 

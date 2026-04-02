@@ -30564,6 +30564,7 @@ itpImgIncrLearn(
     Ddi_BddSetAig(cone);
     Ddi_Bdd_t *coneWithLearnt = Ddi_BddCopy(ddm,cone2);
     Ddi_DataCopy(cone,coneWithLearnt);
+    Ddi_InfoCopy(cone,coneWithLearnt);
     Ddi_Free(coneWithLearnt);
 #if 0
     Ddi_Bdd_t *learntAig = Ddi_AigClauseArrayCopy (ddm,learntAigDup);

@@ -1590,6 +1590,7 @@ EXTERN Ddi_Generic_t * DdiDeferredFree(Ddi_Generic_t *f);
 EXTERN Ddi_Generic_t * DdiGenericDup(Ddi_Generic_t *f);
 EXTERN Ddi_Generic_t * DdiGenericCopy(Ddi_Mgr_t *ddm, Ddi_Generic_t *f, Ddi_Vararray_t *varsOld, Ddi_Vararray_t *varsNew);
 EXTERN void DdiGenericDataCopy(Ddi_Generic_t *d, Ddi_Generic_t *s);
+EXTERN void DdiGenericInfoCopy(Ddi_Generic_t *d, Ddi_Generic_t *s);
 EXTERN Ddi_Generic_t * DdiGenericOp(Ddi_OpCode_e opcode, Ddi_OpType_e optype, Ddi_Generic_t *f, Ddi_Generic_t *g, Ddi_Generic_t *h);
 EXTERN int DdiGenericBddSize(Ddi_Generic_t *f, int bound);
 EXTERN Ddi_ArrayData_t * DdiGenBddRoots(Ddi_Generic_t *f);
