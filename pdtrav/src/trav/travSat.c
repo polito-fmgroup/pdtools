@@ -30583,7 +30583,7 @@ itpImgIncrLearn(
     Ddi_Free(learntAig);
 #endif
     Ddi_Free(cone2);
-    int assumeNotFrom=0;
+    int assumeNotFrom=itpTravMgr->prevTo!=NULL;
     if (assumeNotFrom) {
       Ddi_Bdd_t *constr2 = Ddi_BddCopy(ddmDup,itpTravMgr->from0);
       Ddi_BddNotAcc(constr2);
