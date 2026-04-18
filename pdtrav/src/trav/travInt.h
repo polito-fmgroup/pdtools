@@ -158,6 +158,7 @@ struct Trav_Settings_s {
     int itpRpm;
     int itpTimeLimit;
     int itpPeakAig;
+    int itpSolver;
     char *itpStoreRings;
 
     int igrSide;

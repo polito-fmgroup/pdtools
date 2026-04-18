@@ -224,6 +224,7 @@ Trav_MgrInit(
   travMgr->settings.aig.itpRpm = 0;
   travMgr->settings.aig.itpTimeLimit = 0;
   travMgr->settings.aig.itpPeakAig = 0;
+  travMgr->settings.aig.itpSolver = 0;
 
   /* igr */
   travMgr->settings.aig.igrSide = 1;
@@ -4888,6 +4889,9 @@ Trav_MgrSetOptionItem(
     case Pdt_TravItpPeakAig_c:
       travMgr->settings.aig.itpPeakAig = optItem.optData.inum;
       break;
+    case Pdt_TravItpSolver_c:
+      travMgr->settings.aig.itpSolver = optItem.optData.inum;
+      break;
 
       /* igr */
     case Pdt_TravIgrSide_c:
@@ -5495,6 +5499,9 @@ Trav_MgrReadOption(
       break;
     case Pdt_TravItpPeakAig_c:
       *(int *)optRet = travMgr->settings.aig.itpPeakAig;
+      break;
+    case Pdt_TravItpSolver_c:
+      *(int *)optRet = travMgr->settings.aig.itpSolver;
       break;
 
       /* igr */

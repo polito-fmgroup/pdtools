@@ -830,6 +830,8 @@ Ddi_AigSatMinisat22SubsetWithCexIncremental
 EXTERN Ddi_Bdd_t *Ddi_AigSatMinisat22WithCexRefinedIncremental(Ddi_IncrSatMgr_t *incrSat, Ddi_Bdd_t *f, Ddi_Vararray_t *filterVars, int asserted, float timeLimit, int *pAbort);
 EXTERN void Ddi_AigarrayLockTopClauses (Ddi_IncrSatMgr_t *incrSat, Ddi_Bddarray_t *fA);
 EXTERN void Ddi_AigLockTopClauses (Ddi_IncrSatMgr_t *incrSat, Ddi_Bdd_t *f);
+EXTERN void Ddi_AigarrayLockClauses (Ddi_IncrSatMgr_t *incrSat, Ddi_Bddarray_t *fA);
+EXTERN void Ddi_AigLockClauses (Ddi_IncrSatMgr_t *incrSat, Ddi_Bdd_t *f);
 EXTERN int Ddi_AigSatMinisatLoadBddarrayClausesIncremental(Ddi_IncrSatMgr_t *incrSat, Ddi_Bddarray_t *fA);
 EXTERN int Ddi_AigSatMinisatLoadClausesIncremental(Ddi_IncrSatMgr_t *incrSat, Ddi_Bdd_t *f, Ddi_Bdd_t *g);
 EXTERN int Ddi_AigSatMinisatLoadClausesIncrementalAsserted(Ddi_IncrSatMgr_t *incrSat, Ddi_Bdd_t *f);

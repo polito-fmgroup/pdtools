@@ -939,6 +939,7 @@ abcBddarrayToAig (
       for (int j=0; j<Ddi_BddPartNum(f_i); j++) {
         Ddi_Bdd_t *f_i_j = Ddi_BddPartRead(f_i,j);
         pObj = bAig_AuxPtr(bmgr,Ddi_BddToBaig(f_i_j));
+        Pdtutil_Assert(pObj!=NULL,"NULL pObj");
         if (Ddi_BddIsComplement(f_i_j)) pObj = Aig_Not(pObj);
         Aig_ObjCreateCo( pAig, pObj);
       }
@@ -950,6 +951,7 @@ abcBddarrayToAig (
     }
     else {
       pObj = bAig_AuxPtr(bmgr,Ddi_BddToBaig(f_i));
+      Pdtutil_Assert(pObj!=NULL,"NULL pObj");
       if (Ddi_BddIsComplement(f_i)) pObj = Aig_Not(pObj);
       Aig_ObjCreateCo( pAig, pObj);
     }

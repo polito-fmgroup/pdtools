@@ -6308,7 +6308,8 @@ Ddi_AigExistProjectByGenClauses(
 static void * lglNew (void * state, size_t bytes) {
   void * res;
   (void) state;
-  res = malloc (bytes);
+  //  res = malloc (bytes);
+  res = Pdtutil_Alloc(char,bytes);
   if (!res) exit(1);
   return res;
 }
@@ -6322,7 +6323,9 @@ static void * lglNew (void * state, size_t bytes) {
 
 static void lglDel (void * state, void * ptr, size_t bytes) {
   (void) state;
-  free (ptr);
+  (void) bytes;
+  Pdtutil_Free (ptr);
+  //  free (ptr);
 }
 
 /**Function********************************************************************
@@ -6335,7 +6338,8 @@ static void lglDel (void * state, void * ptr, size_t bytes) {
 static void * lglRsz (void * state, void * ptr, size_t o, size_t n) {
   void * res;
   (void) state;
-  res = realloc (ptr, n);
+  //  res = realloc (ptr, n);
+  res = Pdtutil_Realloc (char, ptr, n);
   if (!res) exit(1);
   return res;
 }
@@ -7368,6 +7372,9 @@ Ddi_IncrSatMgrQuitIntern(
   }
   if (mgr->ddiS!=NULL) {
     Ddi_SatSolverQuit(mgr->ddiS);
+  }
+  if (mgr->lgl!=NULL) {
+    lglrelease (mgr->lgl);
   }
   if (mgr->aigCnfMgr!=NULL) {
     DdiMinisatAigCnfMgrFree(mgr->aigCnfMgr);

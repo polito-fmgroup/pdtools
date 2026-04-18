@@ -546,6 +546,7 @@ typedef struct {
     int pdrTimeLimit;
     int itpTimeLimit;
     int itpPeakAig;
+    int itpSolver;
     int itpMemoryLimit;
     int itpBoundLimit;
     int indSteps;

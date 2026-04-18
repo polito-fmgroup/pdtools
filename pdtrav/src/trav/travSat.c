@@ -28088,6 +28088,7 @@ itpImgPart (
   if (tryIncrSat && itpTravMgr->incrSat==NULL) {
     Ddi_Mgr_t *ddmDup = Ddi_MgrDup(ddm);
     itpTravMgr->incrSat =
+      //      Ddi_IncrSatMgrAlloc(ddmDup, 1/*Minisat22*/, 0, 0);
       Ddi_IncrSatMgrAlloc(ddmDup, -1/*lgl*/, 0, 0);
     DdiAig2CnfIdInit(ddmDup);
   }
@@ -30515,7 +30516,6 @@ static int
 itpImgIncrLearn(
   Trav_ItpTravMgr_t * itpTravMgr,
   Ddi_IncrSatMgr_t *ddiS,
-  Ddi_Mgr_t *ddmDup,
   Ddi_Bdd_t * fromAndNew,
   Ddi_Bdd_t * cone,
   Ddi_Bdd_t * care,
@@ -30528,26 +30528,33 @@ itpImgIncrLearn(
   Ddi_Mgr_t *ddm = Trav_MgrReadDdiMgrDefault(travMgr);
   Pdtutil_VerbLevel_e verbosity = Trav_MgrReadVerbosity(travMgr);
   int isSat=0;
+  Ddi_Mgr_t *ddmDup = ddiS->ddiMgr;
   
   Ddi_Bdd_t *cex=NULL, *checkPart =
     Ddi_AigPartitionTopWithXor(fromAndNew,0,1);
   Ddi_BddSetPartConj(checkPart);
-  Ddi_BddPartInsertLast(checkPart, cone);
+  //  Ddi_BddPartInsertLast(checkPart, cone); // now done below
   if (care!=NULL && !Ddi_BddIsOne(care)) {
     Ddi_BddPartInsertLast(checkPart, care);
   }
   Ddi_BddSetFlattened(checkPart);
   Ddi_Bdd_t *check2 = Ddi_BddCopy(ddmDup,checkPart);
+  Ddi_Bdd_t *cone2 = Ddi_BddCopy(ddmDup,cone);
   if (!DdiAig2CnfIdIsOpen(ddmDup)) {
     DdiAig2CnfIdInit(ddmDup);
   }
+  Ddi_AigSatMinisatLoadClausesIncrementalAsserted(ddiS, cone2);
+  Ddi_IncrSatMgrLockAig(ddiS,cone2);
+  Ddi_AigLockClauses(ddiS,cone2);
   Ddi_AigSatMinisatLoadClausesIncremental(ddiS, check2,NULL);
+  Ddi_AigLockTopClauses(ddiS,check2);
   long time22 = util_cpu_time();
+  int useLgl = ddiS->lgl!=NULL;
   cex = Ddi_AigSatMinisat22WithCexAndAbortIncremental(ddiS,
           check2, NULL, 0, itpTimeLimit, pabort);
   if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
     fprintf(tMgrO(travMgr),
-            "\n*** Incr Minisat time: %s ***\n",
+            "\n*** Incr %s time: %s ***\n", useLgl?"LGL":"Minisat22",
             util_print_time((util_cpu_time() - time22))
     );
     Ddi_IncrSatPrintStats(ddmDup,ddiS,0);
@@ -30557,7 +30564,6 @@ itpImgIncrLearn(
     Ddi_Free(cex);
   }
   else {
-    Ddi_Bdd_t *cone2 = Ddi_BddCopy(ddmDup,cone);
     int nl = Ddi_AigSatLearningToAigs (ddiS,cone2);
     int size0 = Ddi_BddSize(cone);
     //    Pdtutil_Assert(learntAigDup!=NULL,"missing learnt aig");
@@ -30582,7 +30588,6 @@ itpImgIncrLearn(
     Ddi_Free(learntAigDup);
     Ddi_Free(learntAig);
 #endif
-    Ddi_Free(cone2);
     int assumeNotFrom=itpTravMgr->prevTo!=NULL;
     if (assumeNotFrom) {
       Ddi_Bdd_t *constr2 = Ddi_BddCopy(ddmDup,itpTravMgr->from0);
@@ -30592,7 +30597,8 @@ itpImgIncrLearn(
       Ddi_Free(constr2);
     }
   }
-  Ddi_IncrSatMgrLockAig(ddiS,check2);
+  //  Ddi_IncrSatMgrLockAig(ddiS,check2);
+  Ddi_Free(cone2);
   Ddi_Free(check2);
   Ddi_Free(checkPart);
 
@@ -30712,7 +30718,7 @@ itpImg(
   int chkSupp = 1;
   int chkRings = 0;
   int enFpChk = 1;
-  int useMinisat22 = 2; // ddm->settings.aig.itpDrup; // use 2 for true incremental SAT 
+  int useMinisat22 = 1; // ddm->settings.aig.itpDrup; // use 2 for true incremental SAT 
   Ddi_IncrSatMgr_t *ddiS = NULL;
   Ddi_Mgr_t *ddmDup=NULL;
   int step0 = step;
@@ -30730,6 +30736,10 @@ itpImg(
   int usePrevTo = 0;
   int abstrCareVarsWithDynAbstr = 1;
 
+  if (travMgr->settings.aig.itpSolver>0) {
+    useMinisat22 = travMgr->settings.aig.itpSolver;
+  }
+  
   if (fromNewLevel >= 10) {
     fromNewLevel = 0;
     usePrevTo = 1;
@@ -30751,9 +30761,13 @@ itpImg(
   }
 
   if (useMinisat22>1) {
+    int useLgl = useMinisat22>2;
     //    ddiS = Ddi_IncrSatMgrAlloc(NULL, 1, 1, 0);
     ddmDup = Ddi_MgrDup(ddm);
-    ddiS = Ddi_IncrSatMgrAlloc(ddmDup, 1 /* minisat 2.2 */, 0, 0);
+    if (useLgl)
+      ddiS = Ddi_IncrSatMgrAlloc(ddmDup, -1 /* lgl */, 0, 0);
+    else 
+      ddiS = Ddi_IncrSatMgrAlloc(ddmDup, 1 /* minisat 2.2 */, 0, 0);
     //    itpTravMgr->incrSat = ddiS;
   }
 
@@ -33673,7 +33687,7 @@ itpImg(
                     int enIncrLearning = ddiS!=NULL;
                     if (enIncrLearning) {
                       int abort=0;
-                      isSat = itpImgIncrLearn(itpTravMgr,ddiS,ddmDup,fromAndNew,
+                      isSat = itpImgIncrLearn(itpTravMgr,ddiS,fromAndNew,
                                             b,c,itpTimeLimit,&abort);
                     }
                     if (!isSat)

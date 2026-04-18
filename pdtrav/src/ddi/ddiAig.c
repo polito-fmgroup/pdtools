@@ -77940,7 +77940,6 @@ MinisatClausesWithSuppFlow(
                                           aig2CnfId(manager,right);
 	b = bAig_NodeIsInverted(left) ? -aig2CnfId(manager,left) :
                                          aig2CnfId(manager,left);
-
 	aigCnfInfo[j].isRoot = 2;
 
 	aigCnfInfo[j].ca->clear();
@@ -79512,6 +79511,72 @@ Ddi_AigarrayLockTopClauses
   SeeAlso     [Ddi_BddMakeFromCU]
 ******************************************************************************/
 void
+Ddi_AigarrayLockClauses
+(
+  Ddi_IncrSatMgr_t *incrSat,
+  Ddi_Bddarray_t *fA
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(fA);
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  int i;
+  bAig_array_t *visitedNodes = bAigArrayAlloc();
+
+  for (i=0; i<Ddi_BddarrayNum(fA); i++) {
+    Ddi_Bdd_t *f_i = Ddi_BddarrayRead(fA,i);
+    if (!Ddi_BddIsConstant(f_i)) {
+      Ddi_PostOrderBddAigVisitIntern(f_i,visitedNodes,-1);
+    }
+  }
+
+  postOrderAigClearVisitedIntern(bmgr,visitedNodes);
+
+  for (int i=0; i<visitedNodes->num; i++) {
+    bAigEdge_t baig;
+    baig = visitedNodes->nodes[i];
+    int fCnf = aig2CnfId(ddm->aig.mgr,baig);
+    if (incrSat->lgl!=NULL) 
+      lglfreeze(incrSat->lgl,abs(fCnf));
+    else if (incrSat->S22!=NULL) {
+      Minisat22FreezeCnfVar(incrSat->S22,abs(fCnf));
+    }
+  }
+  bAigArrayFree(visitedNodes);
+}
+
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+void
+Ddi_AigLockClauses
+(
+  Ddi_IncrSatMgr_t *incrSat,
+  Ddi_Bdd_t *f
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
+  Ddi_Bddarray_t *fA;
+  if (Ddi_BddIsPart(f)) {
+    fA = Ddi_BddarrayMakeFromBddRoots(f);
+  }
+  else {
+    fA = Ddi_BddarrayAlloc(ddm, 1);
+    Ddi_BddarrayWrite(fA,0,f);
+  }
+  Ddi_AigarrayLockClauses(incrSat,fA);
+  Ddi_Free(fA);
+}
+
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+void
 Ddi_AigLockTopClauses
 (
   Ddi_IncrSatMgr_t *incrSat,
@@ -79957,6 +80022,9 @@ static int getLglLearning(
   vec<Lit> cl;
   if (s==NULL) return 0;
 
+  int last_i=0;
+  learned.growTo(100);
+
   for (j=-2; j<MAXGLUE; j++) {
     if (j==-2) {
       if (learned123p==NULL) continue;
@@ -79968,6 +80036,7 @@ static int getLglLearning(
       doExport = 1;
       nLits = sCl->top-sCl->start;
       litArray = sCl->start;
+      continue; // skip
     }
     else {
       doExport = 1;
@@ -79980,8 +80049,11 @@ static int getLglLearning(
       if (l==0) {
         if (cl.size()>0) {
           if (cl.size()<=maxSize) {
-            learned.push();
-            cl.copyTo(learned.last());
+            if (learned.size()<=last_i)
+              learned.growTo(learned.size()*2);
+            //            learned.push();
+            //            cl.copyTo(learned.last());
+            cl.copyTo(learned[last_i++]);
             nClauses++;
           }
           cl.clear();
@@ -79996,6 +80068,7 @@ static int getLglLearning(
     }
     assert(cl.size()==0);
   }
+  learned.shrink(learned.size()-last_i);
   return nClauses;
 }
 
@@ -80108,17 +80181,28 @@ Ddi_AigSatLearningToAigs (
   Ddi_Mgr_t *ddm = mgr->ddiMgr;
   bAig_Manager_t *bmgr = ddm->aig.mgr;
   Minisat22Solver* S22 = (Minisat22Solver* )mgr->S22;
-
-  Pdtutil_Assert(S22!=NULL, "incr learning needs S22");
+  int nSolverVars = 0;
   bAig_array_t *visitedNodes = bAigArrayAlloc();
   Ddi_PostOrderBddAigVisitIntern(refAig,visitedNodes,-1);
   postOrderAigClearVisitedIntern(bmgr,visitedNodes);
+
+  if (mgr->lgl!=NULL) {
+    nSolverVars = lglmaxvar(mgr->lgl)+1;
+  }
+  else {
+    Pdtutil_Assert(S22!=NULL, "incr learning needs S22 or LGL");
+    nSolverVars = S22->nVars();
+  }
+
   int n = visitedNodes->num; 
-  vec<bool> usedVar(S22->nVars(),false); 
+  vec<bool> usedVar(nSolverVars,false); 
   for (int i=0; i<n; i++) {
     bAigEdge_t baig = visitedNodes->nodes[i];
     int fCnf = aig2CnfId(bmgr,baig);
-    Minisat::Var v22 = abs(fCnf)-1;
+    int v22 = abs(fCnf)-1;
+    if (v22>=nSolverVars) {
+      usedVar.growTo(v22+1,false);
+    }
     usedVar[v22] = true;
   }
 
@@ -80133,32 +80217,67 @@ Ddi_AigSatLearningToAigs (
   vec<int> cInt;
 
   int nLits=0;
-  for (int i=0; i<S22->nLearnts(); i++) {
-    int j;
-    const Minisat::Clause& c = S22->getLearnedClause (i);
-    bool useClause = true;
-    for (j=0; j<c.size() && useClause; j++) {
-      int v = Minisat::var(c[j]);
-      if (!usedVar[v])
-        useClause = false;
-    }
-    if (useClause) {
-      cInt.clear();
-      for (j=0; j<c.size(); j++) {
-        int v = Minisat::var(c[j]);
-        bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
-        int s = Minisat::sign(c[j]);
-        int litInt = bAig_AuxInt(bmgr,baig);
-        Pdtutil_Assert(litInt>0,"wrong baig int");
-        if (s) litInt = -litInt;
-        cInt.push(litInt);
-        nLits++;
+
+  if (mgr->lgl!=NULL) {
+    vec<vec<Lit> > learned;
+    learned.clear();
+    int maxSize = 10000; // just a big number
+    getLglLearning(ddm,mgr->lgl,mgr->lglLearned123,
+                   learned,maxSize);    
+    for (int i=0; i<learned.size() ; i++) {
+      int j;
+      const vec<Lit>& c = learned[i];
+      bool useClause = true;
+      for (j=0; j<c.size() && useClause; j++) {
+        int v = var(c[j]);
+        if (!usedVar[v])
+          useClause = false;
       }
-      learntClauses->push();
-      cInt.copyTo(learntClauses->last());
+      if (useClause) {
+        cInt.clear();
+        for (j=0; j<c.size(); j++) {
+          int v = var(c[j]);
+          bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
+          int s = sign(c[j]);
+          int litInt = bAig_AuxInt(bmgr,baig);
+          Pdtutil_Assert(litInt>0,"wrong baig int");
+          if (s) litInt = -litInt;
+          cInt.push(litInt);
+          nLits++;
+        }
+        learntClauses->push();
+        cInt.copyTo(learntClauses->last());
+      }
     }
   }
-
+  else {
+    for (int i=0; i<S22->nLearnts(); i++) {
+      int j;
+      const Minisat::Clause& c = S22->getLearnedClause (i);
+      bool useClause = true;
+      for (j=0; j<c.size() && useClause; j++) {
+        int v = Minisat::var(c[j]);
+        if (!usedVar[v])
+          useClause = false;
+      }
+      if (useClause) {
+        cInt.clear();
+        for (j=0; j<c.size(); j++) {
+          int v = Minisat::var(c[j]);
+          bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
+          int s = Minisat::sign(c[j]);
+          int litInt = bAig_AuxInt(bmgr,baig);
+          Pdtutil_Assert(litInt>0,"wrong baig int");
+          if (s) litInt = -litInt;
+          cInt.push(litInt);
+          nLits++;
+        }
+        learntClauses->push();
+        cInt.copyTo(learntClauses->last());
+      }
+    }
+  }
+  
   Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
     printf("Learnt %d clauses, %d literals (avg: %.1f)\n",
            learntClauses->size(), nLits,
@@ -80587,7 +80706,8 @@ Ddi_AigSatMinisat22WithCexAndAbortIncremental
       incrSat->implied =
         Ddi_AigSatImpliedLearningIncremental(incrSat,
               f,NULL/*auxImplDup*/,incrSat->refA,incrSat->eqA);
-    }    
+    }
+
     for (i=1; i<=lglmaxvar(incrSat->lgl); i++) {
       bAigEdge_t baig = ddm->cnf.cnf2aig[i];
       if (bAig_isVarNode(bmgr,baig)) continue;

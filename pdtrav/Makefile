@@ -30,7 +30,7 @@ default: LDFLAGS =
 static : LDFLAGS = -static
 sanitize : LDFLAGS = -fsanitize=address -static-libasan
 #sanitize : LDFLAGS = -fsanitize=leak -static-libasan
-sanitize : SANITIZER = -fsanitize=leak
+sanitize : SANITIZER = -fsanitize=address
 
 default: all
 static : all
@@ -44,10 +44,10 @@ endif
 
 ifdef DEBUG
 MINISAT22LIB = minisat22d
-LGL_DEBUG_FLAGS = CFLAGS="$(LGLDBGCFLAGS)"
+LGL_FLAGS = CFLAGS="$(LGLDBGCFLAGS)"
 else
 MINISAT22LIB = minisat22
-LGL_DEBUG_FLAGS = 
+LGL_FLAGS = CFLAGS="$(LGLNDBGCFLAGS)"
 endif
 
 # Memory libraries
@@ -75,6 +75,8 @@ CUDD_CC =	gcc
 
 #LGLDBGCFLAGS =	-Wall -g -DNLGLOG -DNDEBUG -DNCHKSOL -DNLGLDRUPLIG -DNLGLYALSAT -DNLGLFILES -DNLGLDEMA 
 LGLDBGCFLAGS =	-Wall -g -DNLGLOG -DNCHKSOL -DNLGLDRUPLIG -DNLGLYALSAT -DNLGLFILES -DNLGLDEMA 
+LGLNDBGCFLAGS =	-Wall -O6 -DNLGLOG -DNCHKSOL -DNLGLDRUPLIG -DNLGLYALSAT -DNLGLFILES -DNLGLDEMA 
+#LGLNDBGCFLAGS =	-Wall -O6 -ffloat-store -mtune=native -fPIE -pthread -malign-double -DNLGLOG -DNCHKSOL -DNLGLDRUPLIG -DNLGLYALSAT -DNLGLFILES -DNLGLDEMA
 
 
 ifdef PDT32
@@ -377,7 +379,7 @@ lgl:
 	        (echo "Configuring lgl"; cd ${LGL_DIR}; ./configure.sh $(DEFINE_PDT32)) \
 	fi
 
-	${MAKE} $(LGL_DEBUG_FLAGS) -C ${LGL_DIR} liblgl.a
+	${MAKE} $(LGL_FLAGS) -C ${LGL_DIR} liblgl.a
 
 minisat:
 	${MAKE} -C ${MINISAT_DIR} $(DEFINE_PDT32) libminisat.a

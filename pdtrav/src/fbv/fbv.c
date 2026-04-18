@@ -273,6 +273,8 @@ static char *help[] = {
   "enable portfolio engines (seconds)", NULL,
   "-itpPeakAig <num>",
   "Set itp/igr mc aig# limit (seconds)", NULL,
+  "-itpSolver <num>",
+  "Use 2 for minisat22, 3 for lgl (incremental) itp/igr", NULL,
   "-insertCutLatches <val>",
   "Find cut points and insert redundant latches", NULL,
   "-decompTimeLimit <time>",
@@ -6039,6 +6041,12 @@ FbvParseArgs(
       argc--;
     } else if (strcmp(argv[1], "-itpPeakAig") == 0) {
       opt->expt.itpPeakAig = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
+    } else if (strcmp(argv[1], "-itpSolver") == 0) {
+      opt->expt.itpSolver = atoi(argv[2]);
       argv++;
       argc--;
       argv++;
@@ -20131,6 +20139,7 @@ FbvSetTravMgrOpt(
   Trav_MgrSetOption(travMgr, Pdt_TravItpTimeLimit_c, inum,
     opt->expt.itpTimeLimit);
   Trav_MgrSetOption(travMgr, Pdt_TravItpPeakAig_c, inum, opt->expt.itpPeakAig);
+  Trav_MgrSetOption(travMgr, Pdt_TravItpSolver_c, inum, opt->expt.itpSolver);
 
   /* igr */
   Trav_MgrSetIgrSide(travMgr, opt->trav.igrSide);
@@ -22581,6 +22590,8 @@ travOpt2OptList(
     opt->expt.itpTimeLimit);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpPeakAig_c, inum,
     opt->expt.itpPeakAig);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpSolver_c, inum,
+    opt->expt.itpSolver);
 
   /* igr */
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravIgrSide_c, inum,
@@ -23163,6 +23174,7 @@ new_settings(
   opt->expt.pdrTimeLimit = -1;
   opt->expt.itpTimeLimit = -1;
   opt->expt.itpPeakAig = -1;
+  opt->expt.itpSolver = 0;
   opt->expt.itpMemoryLimit = -1;
   opt->expt.totTimeLimit = -1;
   opt->expt.totMemoryLimit = -1;
