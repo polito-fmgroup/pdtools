@@ -30529,7 +30529,7 @@ itpImgIncrLearn(
   Pdtutil_VerbLevel_e verbosity = Trav_MgrReadVerbosity(travMgr);
   int isSat=0;
   Ddi_Mgr_t *ddmDup = ddiS->ddiMgr;
-  int useFwdUnroll = 1;
+  int useFwdUnroll = 0;
 
 
   Ddi_Bdd_t *cex=NULL, *checkPart =NULL;
@@ -30560,7 +30560,7 @@ itpImgIncrLearn(
   }
   Ddi_AigSatMinisatLoadClausesIncrementalAsserted(ddiS, cone2);
   Ddi_IncrSatMgrLockAig(ddiS,cone2);
-  Ddi_AigLockClauses(ddiS,cone2);
+  Ddi_AigLockTopClauses(ddiS,cone2);
   Ddi_AigSatMinisatLoadClausesIncremental(ddiS, check2,NULL);
   Ddi_AigLockTopClauses(ddiS,check2);
   long time22 = util_cpu_time();
@@ -30755,7 +30755,7 @@ itpImg(
   if (travMgr->settings.aig.itpSolver>0) {
     useMinisat22 = travMgr->settings.aig.itpSolver;
     if (useMinisat22 > 1)
-      doIncrItp = 1;
+      doIncrItp = 0; // disable for now
   }
   
   if (fromNewLevel >= 10) {
