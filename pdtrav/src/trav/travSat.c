@@ -30529,9 +30529,24 @@ itpImgIncrLearn(
   Pdtutil_VerbLevel_e verbosity = Trav_MgrReadVerbosity(travMgr);
   int isSat=0;
   Ddi_Mgr_t *ddmDup = ddiS->ddiMgr;
-  
-  Ddi_Bdd_t *cex=NULL, *checkPart =
-    Ddi_AigPartitionTopWithXor(fromAndNew,0,1);
+  int useFwdUnroll = 1;
+
+
+  Ddi_Bdd_t *cex=NULL, *checkPart =NULL;
+  if (useFwdUnroll) {
+        /* use forward unroll */
+    int j;
+    int nState = Ddi_VararrayNum(itpMgr->ns);
+    checkPart = Ddi_BddMakePartConjVoid(ddm);
+    for (j = 0; j < nState; j++) {
+      Ddi_Bdd_t *tr_j = Ddi_BddDup(Ddi_BddarrayRead(itpMgr->nsLit, j));
+      Ddi_BddXnorAcc(tr_j, Ddi_BddarrayRead(itpTravMgr->fwdUnroll, j));
+      Ddi_BddPartInsertLast(checkPart, tr_j);
+      Ddi_Free(tr_j);
+    }
+  } else {  
+    checkPart = Ddi_AigPartitionTopWithXor(fromAndNew,0,1);
+  }
   Ddi_BddSetPartConj(checkPart);
   //  Ddi_BddPartInsertLast(checkPart, cone); // now done below
   if (care!=NULL && !Ddi_BddIsOne(care)) {
@@ -30735,9 +30750,12 @@ itpImg(
   int enConeSplit = 0 && (coneSplitRatio < 0.99);
   int usePrevTo = 0;
   int abstrCareVarsWithDynAbstr = 1;
+  int doIncrItp=0;
 
   if (travMgr->settings.aig.itpSolver>0) {
     useMinisat22 = travMgr->settings.aig.itpSolver;
+    if (useMinisat22 > 1)
+      doIncrItp = 1;
   }
   
   if (fromNewLevel >= 10) {
@@ -32699,7 +32717,7 @@ itpImg(
 
     if (itpExact ||
       (itpTravMgr->from != NULL && (dynAbstr > 3 && enDynAbstrOpt ||
-          useFwdUnroll))) {
+          useFwdUnroll || doIncrItp))) {
       char suffix[20];
       Ddi_Bddarray_t *newFwdUnroll = NULL;
       int constrainFwdUnroll = 0;
@@ -32711,12 +32729,13 @@ itpImg(
         Ddi_VararrayMakeNewVars(pi, "PDT_ITP_FWDUNR_PI", suffix, 1);
       Ddi_Bddarray_t *newPiLits = Ddi_BddarrayMakeLiteralsAig(newPiVars, 1);
 
-      Ddi_VararrayAppend(Tr_MgrReadI(Tr_TrMgr(itpMgr->trBdd)), newPiVars);
+      if (!doIncrItp)
+        Ddi_VararrayAppend(Tr_MgrReadI(Tr_TrMgr(itpMgr->trBdd)), newPiVars);
       Ddi_AigarrayComposeAcc(newFwdUnroll, pi, newPiLits);
       Ddi_Free(newPiVars);
       Ddi_Free(newPiLits);
       Pdtutil_Assert(itpExact || dynAbstr > 3
-        || useFwdUnroll, "wrong dynabstr");
+        || useFwdUnroll || doIncrItp, "wrong dynabstr");
       /* ps possono essere in fwdUnroll */
       Ddi_AigarrayComposeAcc(newFwdUnroll, ps, itpMgr->nsLit);
       if (toPlusCube != NULL && constrainFwdUnroll) {
@@ -35090,7 +35109,7 @@ interpolantInnerLoop(
   // int enItpBdd = Trav_MgrReadItpBdd(travMgr);
   int itpAppr = Trav_MgrReadItpAppr(travMgr);
   int unsoundProof = 0;
-  int useFwdUnroll = 0;
+  int useFwdUnroll = travMgr->settings.aig.itpSolver>1;
   // float itpTimeLimit = -1.0;
   // int useTimedItp = 1 || itpMgr->boundkOptPis != NULL;
   int enDynAbstr = 1, enDynAbstr0 = 1, maxNoAbstr0 = 2, maxNoAbstr = 2;
