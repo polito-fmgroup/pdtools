@@ -17439,8 +17439,6 @@ itpStrengthenReachedGfp(
   }
 
   static int chk0 = 0;
-  Ddi_Bddarray_t *saveF = Ddi_BddarrayDup(itpMgr->fromRings);
-  Ddi_Bdd_t *saveR = Ddi_BddDup(itpTravMgr->reached);
   if (chk0) {
     int myChkRings = itpCheckRingsFwd(itpMgr,-1,-1,0);
     printf("RING CHECK: %d\n", myChkRings);
@@ -17936,8 +17934,6 @@ itpStrengthenReachedGfp(
                    "problem with reached inclusion in care");
   }
   
-  Ddi_Free(saveR);
-  Ddi_Free(saveF);
   Ddi_Free(initStubRel);
   Ddi_Free(initNs);
   Ddi_Free(notReached);
@@ -26696,12 +26692,28 @@ itpImgGetCone(
               Ddi_Free(itpTravMgr->observedGates);
               itpTravMgr->observedGates = Ddi_BddarrayAlloc(ddm,0);
             }
+            int doExcludeInnerCones = 0 &&
+              boundK==0 && (start_i-end_i)>5;
+            Ddi_Bdd_t *constrCone = NULL;
+            if (doExcludeInnerCones) {
+              constrCone = Ddi_BddDup(localCone);
+              growConeBwdSubsetByTarget(itpMgr, constrCone, start_i-1, end_i, NULL,
+                 itpMgr->initStub,
+                 itpTravMgr->observedGates,
+                 tryTargetSubset,
+                 0 /*useRingConstr */ ,
+                 -1, 1 /*boundK*/);
+            }
             growConeBwdSubsetByTarget(itpMgr, localCone, start_i, end_i, NULL,
                  itpMgr->initStub,
                  itpTravMgr->observedGates,
                  tryTargetSubset,
                  growCone != 1 ? 2 : 0 /*useRingConstr */ ,
 		 -1, boundK);
+            if (constrCone!=NULL) {
+              Ddi_BddDiffAcc(localCone,constrCone);
+              Ddi_Free(constrCone);
+            }
             if (ddm->aig.actVars!=NULL) {
               Ddi_Unlock(ddm->aig.actVars);
               Ddi_Free(ddm->aig.actVars);
@@ -30530,7 +30542,7 @@ itpImgIncrLearn(
   int isSat=0;
   Ddi_Mgr_t *ddmDup = ddiS->ddiMgr;
   int useFwdUnroll = 0;
-
+  int assertCone = 1;
 
   Ddi_Bdd_t *cex=NULL, *checkPart =NULL;
   if (useFwdUnroll) {
@@ -30558,11 +30570,18 @@ itpImgIncrLearn(
   if (!DdiAig2CnfIdIsOpen(ddmDup)) {
     DdiAig2CnfIdInit(ddmDup);
   }
-  Ddi_AigSatMinisatLoadClausesIncrementalAsserted(ddiS, cone2);
-  Ddi_IncrSatMgrLockAig(ddiS,cone2);
-  Ddi_AigLockTopClauses(ddiS,cone2);
-  Ddi_AigSatMinisatLoadClausesIncremental(ddiS, check2,NULL);
+
+  if (assertCone) {
+    Ddi_AigSatMinisatLoadClausesIncrementalAsserted(ddiS, cone2);
+    Ddi_IncrSatMgrLockAig(ddiS,cone2);
+    Ddi_AigLockTopClauses(ddiS,cone2);
+  }
+  else {
+    Ddi_BddPartInsertLast(check2, cone2);
+    Ddi_BddSetFlattened(check2);
+  }
   Ddi_AigLockTopClauses(ddiS,check2);
+  Ddi_AigSatMinisatLoadClausesIncremental(ddiS, check2,NULL);
   long time22 = util_cpu_time();
   int useLgl = ddiS->lgl!=NULL;
   cex = Ddi_AigSatMinisat22WithCexAndAbortIncremental(ddiS,
@@ -30808,8 +30827,10 @@ itpImg(
     int sizeAig;
     Ddi_Bdd_t *prevTo = NULL, *newFwd = NULL, *toMinusTot = NULL;
     Ddi_Bdd_t *fpCheck;
-    Ddi_Bdd_t *localCone = NULL, *careCone = NULL, *toPlus = NULL,
-      *toPlusCube = NULL, *itpCare = NULL, *itpFullCare = NULL;
+    Ddi_Bdd_t *localCone = NULL, *localConeBase = NULL,
+      *careCone = NULL, *toPlus = NULL,
+      *toPlusCube = NULL, *itpCare = NULL, *itpCareBase=NULL,
+      *itpFullCare = NULL;
     Ddi_Varset_t *abstrVars = NULL;
     Ddi_Bddarray_t *implArray = NULL;
     int useApproxToPlus = 0;
@@ -32496,7 +32517,11 @@ itpImg(
         if (itpConstrLevel > 1 && myInvarConstr != NULL) {
           Ddi_AigAndCubeAcc(itpTravMgr->from, myInvarConstr);
         }
-        if (itpCare != NULL) {
+        if (/*useMinisat22<2 &&*/ (itpCare != NULL)) {
+          if (useMinisat22>=2) {
+            localConeBase=Ddi_BddDup(localCone);
+            itpCareBase=Ddi_BddDup(itpCare);
+          }
           Ddi_BddAndAcc(localCone, itpCare);
           useCareOpt = 1;
         }
@@ -33706,8 +33731,17 @@ itpImg(
                     int enIncrLearning = ddiS!=NULL;
                     if (enIncrLearning) {
                       int abort=0;
-                      isSat = itpImgIncrLearn(itpTravMgr,ddiS,fromAndNew,
-                                            b,c,itpTimeLimit,&abort);
+                      Ddi_Bdd_t *cone = b;
+                      Ddi_Bdd_t *care = Ddi_BddMakeConstAig(ddm,1);
+                      if (c!=NULL)
+                        Ddi_BddAndAcc(care,c);
+                      if (localConeBase!=NULL) {
+                        cone = localConeBase;
+                        Ddi_BddAndAcc(care,itpCareBase);
+                      }
+                      isSat = itpImgIncrLearn(itpTravMgr,ddiS,
+                           fromAndNew,cone,care,itpTimeLimit,&abort);
+                      Ddi_Free(care);
                     }
                     if (!isSat)
 		      to22 = itpImgPart(itpTravMgr,kCone,kConeRings,a,b,
@@ -34476,6 +34510,8 @@ itpImg(
 
     Ddi_Free(abstrVars);
     Ddi_Free(localCone);
+    Ddi_Free(localConeBase);
+    Ddi_Free(itpCareBase);
     Ddi_Free(careCone);
     Ddi_Free(implArray);
     Ddi_Free(toPlus);
@@ -42884,15 +42920,25 @@ Trav_ItpMgrInit(
       sprintf(name, "dynAbstrAux_%s", Ddi_VarName(v));
       newv = Ddi_VarFromName(ddm, name);
       if (newv == NULL) {
-        newv = Ddi_VarNewBeforeVar(v);
-        Ddi_VarAttachName(newv, name);
+        int isAig = Ddi_VarIsAig(v);
+        if (isAig) {
+          newv = Ddi_VarNewBaig(ddm, name);
+        } else {
+          newv = Ddi_VarNewBeforeVar(v);
+          Ddi_VarAttachName(newv, name);
+        }
       }
       Ddi_VararrayWrite(itpMgr->dynAbstrAux, j, newv);
       sprintf(name, "dynAbstrCut_%s", Ddi_VarName(v));
       newv = Ddi_VarFromName(ddm, name);
       if (newv == NULL) {
-        newv = Ddi_VarNewBeforeVar(v);
-        Ddi_VarAttachName(newv, name);
+        int isAig = Ddi_VarIsAig(v);
+        if (isAig) {
+          newv = Ddi_VarNewBaig(ddm, name);
+        } else {
+          newv = Ddi_VarNewBeforeVar(v);
+          Ddi_VarAttachName(newv, name);
+        }
       }
       Ddi_VararrayWrite(itpMgr->dynAbstrCut, j, newv);
       lit = Ddi_BddMakeLiteralAig(newv, 1);
