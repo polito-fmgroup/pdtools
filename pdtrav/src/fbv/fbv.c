@@ -13233,12 +13233,20 @@ invarDecompVerif(
               
             if (lookBwd && jj >= 1) {
               int fullTarget = 0;
-              if (!doRunItp && opt->mc.gfp > 0) {
+              int doGfp = /*!doRunItp &&*/ opt->mc.gfp > 0;
+              if (doGfp) {
                 if (fromRings!=NULL) {
+                  for (int jj = 1; jj < Ddi_BddarrayNum(fromRings); jj++) {
+                    Ddi_Bdd_t *f_jj = Ddi_BddarrayRead(fromRings, jj);
+                    Ddi_BddCofactorAcc(f_jj, pvarNs, 1);
+                  }
                   Trav_MgrSetNewi(travMgrAig,fromRings);
                 }
                 Trav_TravSatItpGfp(travMgrAig,fsmMgr,opt->mc.gfp,
                          1/*doStrengthen*/,opt->trav.countReached);
+                if (fromRings!=NULL) {
+                  Trav_MgrSetNewi(travMgrAig,fromRings);
+                }
               }
               Ddi_Bdd_t *inWindow =
                 Trav_DeepestRingCex(travMgrAig, fsmMgr2,
@@ -13247,7 +13255,7 @@ invarDecompVerif(
                                     doRunItp,
                                     opt->pre.specSubsetByAntecedents
                                     );
-              if (!doRunItp && opt->mc.gfp > 0) {
+              if (doGfp) {
                 Ddi_Free(fromRings);
                 fromRings = Ddi_BddarrayDup(Trav_MgrReadNewi(travMgrAig));
               }
@@ -13920,7 +13928,7 @@ invarDecompVerif(
         Ddi_Free(care);
 
       if (fromRings != NULL) {
-        //        Ddi_Free(care);
+                Ddi_Free(care);
         for (jj = 1; jj < Ddi_BddarrayNum(fromRings); jj++) {
           Ddi_Bdd_t *f_jj = Ddi_BddarrayRead(fromRings, jj);
 
