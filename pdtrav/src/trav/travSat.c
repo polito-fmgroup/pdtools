@@ -10535,6 +10535,10 @@ Trav_TravSatItpGfp(
   itpTravMgr = itpTravMgrInit(travMgr, itpMgr);
 
   int lastRing = Ddi_BddarrayNum(itpMgr->fromRings)-1;
+  if (travMgr->settings.ints.igrFpRing>0 &&
+      travMgr->settings.ints.igrFpRing<lastRing)
+    lastRing = travMgr->settings.ints.igrFpRing;
+
   itpTravMgr->careBwd = Ddi_BddMakeConstAig(ddm, 1);
 
   long startTime = util_cpu_time();
@@ -10623,26 +10627,29 @@ Trav_TravSatItpGfp(
                          (util_cpu_time() - startTime)));
   }
 
+  int doUpdateFsm = 0;
 
-  Ddi_Bdd_t *r = Ddi_BddSubstVars(itpTravMgr->reached,
-                                  itpMgr->ns,itpMgr->ps);
-  Fsm_MgrSetReachedBDD(fsmMgr,r);
-  Fsm_MgrSetCareBDD(fsmMgr,r);
-  Ddi_Bdd_t *constr = Fsm_MgrReadConstraintBDD(fsmMgr);
-  if (constr!=NULL) {
-    if (!doReplaceConstr)
-      Ddi_BddAndAcc(r,constr);
-  }
-  Fsm_MgrSetConstraintBDD(fsmMgr,r);
-  Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
-  int iConstr = Ddi_BddarrayNum(delta)-2;
-  Ddi_Bdd_t *dConstr = Ddi_BddarrayRead(delta,iConstr);
-  if (doReplaceConstr)
-    Ddi_DataCopy(dConstr,r);
-  else
-    Ddi_BddAndAcc(dConstr,r);
-  Ddi_Free(r);
-  
+  if (doUpdateFsm) {
+    Ddi_Bdd_t *r = Ddi_BddSubstVars(itpTravMgr->reached,
+                                    itpMgr->ns,itpMgr->ps);
+    Fsm_MgrSetReachedBDD(fsmMgr,r);
+    Fsm_MgrSetCareBDD(fsmMgr,r);
+    Ddi_Bdd_t *constr = Fsm_MgrReadConstraintBDD(fsmMgr);
+    if (constr!=NULL) {
+      if (!doReplaceConstr)
+        Ddi_BddAndAcc(r,constr);
+    }
+    Fsm_MgrSetConstraintBDD(fsmMgr,r);
+    Ddi_Bddarray_t *delta = Fsm_MgrReadDeltaBDD(fsmMgr);
+    int iConstr = Ddi_BddarrayNum(delta)-2;
+    Ddi_Bdd_t *dConstr = Ddi_BddarrayRead(delta,iConstr);
+
+    if (doReplaceConstr)
+      Ddi_DataCopy(dConstr,r);
+    else
+      Ddi_BddAndAcc(dConstr,r);
+    Ddi_Free(r);
+  }  
   itpTravMgrFree(itpTravMgr);
   Trav_ItpMgrQuit(itpMgr);
   return 1;
@@ -17571,7 +17578,7 @@ itpStrengthenLoop (
 /**Function*******************************************************************
   Synopsis    []
   Description []
-  SideEffects []
+  upSideEffects []
   SeeAlso     []
 ******************************************************************************/
 static int
@@ -17810,6 +17817,7 @@ itpStrengthenReachedGfp(
       Ddi_Bdd_t *propPs = Ddi_BddNot(itpMgr->target);
       Ddi_BddPartInsertLast(myFromAndTr, propPs);
       Ddi_Free(propPs);
+      if (i==1) useItp=1;
     }
     int doCofactor = 1;
     if (doCofactor) {

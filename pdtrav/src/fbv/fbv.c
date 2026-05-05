@@ -11768,8 +11768,8 @@ invarDecompVerif(
   int replaceReached = 1; // do not and reached at each k - replace it
   int useFullPropAsConstr=0&&(opt->pre.specDecompCore>0);
   int igrFpRing = -1;
-  int useRplusAsConstr = opt->trav.itpGfp>=1;
-  int useRplusAsCareWithItp = opt->trav.itpGfp>=1;
+  int useRplusAsConstr = 0&&opt->trav.itpGfp>=1;
+  int useRplusAsCareWithItp = 0&&opt->trav.itpGfp>=1;
   
   /**********************************************************************/
   /*                        Create DDI manager                          */
@@ -13173,6 +13173,25 @@ invarDecompVerif(
         Ddi_BddAndAcc(target, leftover);
       //      chk = Ddi_BddAnd(care,pLit);
       Ddi_Free(pLit);
+      
+      int doGfp = /*!doRunItp &&*/ opt->mc.gfp > 0;
+      if (doGfp) {
+        if (fromRings!=NULL) {
+          for (int jj = 1; jj < Ddi_BddarrayNum(fromRings); jj++) {
+            Ddi_Bdd_t *f_jj = Ddi_BddarrayRead(fromRings, jj);
+            Ddi_BddCofactorAcc(f_jj, pvarNs, 1);
+          }
+          Trav_MgrSetNewi(travMgrAig,fromRings);
+        }
+        if (igrFpRing>0)
+          travMgrAig->settings.ints.igrFpRing = igrFpRing;
+        Trav_TravSatItpGfp(travMgrAig,fsmMgr,opt->mc.gfp,
+                           1/*doStrengthen*/,opt->trav.countReached);
+        if (fromRings!=NULL) {
+          Trav_MgrSetNewi(travMgrAig,fromRings);
+        }
+      } 
+      
       if (fromRings != NULL) {
         int jj;
         Ddi_Bdd_t *myTarget = Ddi_BddDup(target);
@@ -13233,21 +13252,6 @@ invarDecompVerif(
               
             if (lookBwd && jj >= 1) {
               int fullTarget = 0;
-              int doGfp = /*!doRunItp &&*/ opt->mc.gfp > 0;
-              if (doGfp) {
-                if (fromRings!=NULL) {
-                  for (int jj = 1; jj < Ddi_BddarrayNum(fromRings); jj++) {
-                    Ddi_Bdd_t *f_jj = Ddi_BddarrayRead(fromRings, jj);
-                    Ddi_BddCofactorAcc(f_jj, pvarNs, 1);
-                  }
-                  Trav_MgrSetNewi(travMgrAig,fromRings);
-                }
-                Trav_TravSatItpGfp(travMgrAig,fsmMgr,opt->mc.gfp,
-                         1/*doStrengthen*/,opt->trav.countReached);
-                if (fromRings!=NULL) {
-                  Trav_MgrSetNewi(travMgrAig,fromRings);
-                }
-              }
               Ddi_Bdd_t *inWindow =
                 Trav_DeepestRingCex(travMgrAig, fsmMgr2,
                   myTarget, invarspec, fromRings, jj, genCubes,
@@ -13255,10 +13259,6 @@ invarDecompVerif(
                                     doRunItp,
                                     opt->pre.specSubsetByAntecedents
                                     );
-              if (doGfp) {
-                Ddi_Free(fromRings);
-                fromRings = Ddi_BddarrayDup(Trav_MgrReadNewi(travMgrAig));
-              }
               opt->trav.abstrRef = Trav_MgrReadAbstrRef(travMgrAig);
               if (inWindow != NULL) {
                 Ddi_Free(myWindow);
