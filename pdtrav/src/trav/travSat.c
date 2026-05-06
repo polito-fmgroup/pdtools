@@ -10650,6 +10650,9 @@ Trav_TravSatItpGfp(
       Ddi_BddAndAcc(dConstr,r);
     Ddi_Free(r);
   }  
+
+  Trav_MgrSetNewi(travMgr,itpMgr->fromRings);
+
   itpTravMgrFree(itpTravMgr);
   Trav_ItpMgrQuit(itpMgr);
   return 1;
@@ -17679,9 +17682,11 @@ itpStrengthenReachedGfp(
   Ddi_Bdd_t *itp=NULL, *fromAndTr;
   Ddi_Bddarray_t *myDelta = Ddi_BddarrayDup(deltaNs);
   Ddi_Var_t *pvNs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$NS");
-  Ddi_Bdd_t *invarspecNs=NULL;
+  Ddi_Var_t *pvPs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$PS");
+  Ddi_Bdd_t *invarspecNs=NULL, *invarspecPs=NULL;
   if (pvNs != NULL) {
     invarspecNs = Ddi_BddMakeLiteralAig(pvNs, 1);
+    invarspecPs = Ddi_BddMakeLiteralAig(pvPs, 1);
   }
 
   if (Ddi_VararrayNum(s_pi)>0) {
@@ -17823,11 +17828,15 @@ itpStrengthenReachedGfp(
     if (doCofactor) {
       Ddi_BddCofactorAcc(myFromAndTr,pvNs,1);
       Ddi_BddCofactorAcc(notReached,pvNs,1);
+      Ddi_BddCofactorAcc(myFromAndTr,pvPs,1);
+      Ddi_BddCofactorAcc(notReached,pvPs,1);
     }
     else {
       if (invarspecNs!=NULL) {
         Ddi_BddAndAcc(myFromAndTr,invarspecNs);
         Ddi_BddAndAcc(notReached,invarspecNs);
+        Ddi_BddAndAcc(myFromAndTr,invarspecPs);
+        Ddi_BddAndAcc(notReached,invarspecPs);
       }
     }
     
@@ -17960,6 +17969,7 @@ itpStrengthenReachedGfp(
   }
 
   Ddi_Free(invarspecNs);
+  Ddi_Free(invarspecPs);
   Ddi_Free(tAux);
   Ddi_Free(targetNs);
   Ddi_Free(targetNsProj);

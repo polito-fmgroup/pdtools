@@ -13188,7 +13188,8 @@ invarDecompVerif(
         Trav_TravSatItpGfp(travMgrAig,fsmMgr,opt->mc.gfp,
                            1/*doStrengthen*/,opt->trav.countReached);
         if (fromRings!=NULL) {
-          Trav_MgrSetNewi(travMgrAig,fromRings);
+          Ddi_Free(fromRings);
+          fromRings = Ddi_BddarrayDup(Trav_MgrReadNewi(travMgrAig));
         }
       } 
       
