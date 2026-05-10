@@ -15077,6 +15077,10 @@ growConeBwdSplit(
     split_i = -1;
   }
 
+  if (assumeBound) {
+    Pdtutil_Assert(boundK==0,"assumebound needs boundK==0");
+  }
+
   if (observedGates!=NULL && end_i>0) {
     Pdtutil_Assert(itpMgr->antecedents!=NULL,"missing antecedents");
     antecedentsNs = Ddi_BddarrayDup(itpMgr->antecedents);
@@ -15147,6 +15151,11 @@ growConeBwdSplit(
     if (iProp>=0) {
       Ddi_Bdd_t *deltaProp = Ddi_BddarrayRead(deltaNs,iProp);
       Ddi_BddCofactorAcc(deltaProp,vProp,1);
+      if (assumeBound) {
+        Ddi_Bdd_t *assumeLit = Ddi_BddMakeLiteralAig(vProp, 0);
+        Ddi_BddOrAcc(deltaProp,assumeLit);
+        Ddi_Free(assumeLit);
+      }
     }
   }
   deltaNsNoImg = Ddi_BddarrayDup(deltaNs);
@@ -15167,6 +15176,11 @@ growConeBwdSplit(
       Ddi_Bdd_t *deltaProp = Ddi_BddarrayRead(deltaNsUnrollSplit,
                                               iProp);
       Ddi_BddCofactorAcc(deltaProp,vProp,1);
+      if (assumeBound) {
+        Ddi_Bdd_t *assumeLit = Ddi_BddMakeLiteralAig(vProp, 0);
+        Ddi_BddOrAcc(deltaProp,assumeLit);
+        Ddi_Free(assumeLit);
+      }
     }
   }
   
@@ -16341,6 +16355,11 @@ growConeBwdSubsetByTarget(
     if (split_i == end_i) split_i++;
   }
   
+  int assumeBound=0;
+  if (boundK<0) {
+    boundK=0;
+    assumeBound=1;
+  }
   if (exactBoundDouble>0 && (start_i-end_i)>0) {
     int start_i1 = start_i-exactBoundDouble;
     if (start_i1<=end_i) start_i1 = end_i+1;
@@ -16350,9 +16369,8 @@ growConeBwdSubsetByTarget(
 		   NULL, NULL, NULL, NULL, NULL, andWithRingP, 0,1);
   }
 
-
   growConeBwdSplit(itpMgr, cone, start_i, end_i, split_i, delta,
-		   initStub, useRingConstr, boundK, 0, unrollSplit,
+		   initStub, useRingConstr, boundK, assumeBound, unrollSplit,
                    NULL, NULL, NULL, NULL, NULL,
                    observedGates, andWithRingP, 0,
                    1);
@@ -26929,12 +26947,12 @@ itpImgGetCone(
               Ddi_Free(itpTravMgr->observedGates);
               itpTravMgr->observedGates = Ddi_BddarrayAlloc(ddm,0);
             }
-            int doExcludeInnerCones = 0 &&
+            int doExcludeInnerCones = 1 &&
               boundK==0 && (start_i-end_i)>5;
             Ddi_Bdd_t *constrCone = NULL;
-            if (doExcludeInnerCones) {
+            if (0 && doExcludeInnerCones) {
               constrCone = Ddi_BddDup(localCone);
-              growConeBwdSubsetByTarget(itpMgr, constrCone, start_i-1, end_i, NULL,
+              growConeBwdSubsetByTarget(itpMgr, constrCone, start_i-2, end_i, NULL,
                  itpMgr->initStub,
                  itpTravMgr->observedGates,
                  tryTargetSubset,
@@ -26946,7 +26964,7 @@ itpImgGetCone(
                  itpTravMgr->observedGates,
                  tryTargetSubset,
                  growCone != 1 ? 2 : 0 /*useRingConstr */ ,
-		 -1, boundK);
+                 -1, doExcludeInnerCones?-1:boundK);
             if (constrCone!=NULL) {
               Ddi_BddDiffAcc(localCone,constrCone);
               Ddi_Free(constrCone);
@@ -28865,6 +28883,12 @@ itpImgPart (
 					   optCare,NULL,
 					   psat, 0, itpOdc, 
 					   0,timeLimit);
+      int doWeaken = 1&itp!=NULL && travMgr->settings.aig.itpWeaken;
+      doWeaken &= Ddi_BddSize(itp)>travMgr->settings.aig.itpWeaken;
+      // disabled for now as it weakens too much (convergence)
+      if (doWeaken) {
+        Ddi_AigOptByMonotoneCoreAcc(itp,coneAux,NULL,0,-1.0);
+      }
       Ddi_Free(coneAux);
       if (compareWithItp) {
         Pdtutil_Assert(Ddi_BddIncluded(a,itp),"problem with NEW");
