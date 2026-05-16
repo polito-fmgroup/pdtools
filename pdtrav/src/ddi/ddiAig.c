@@ -403,6 +403,7 @@ static void coiIntern(bAig_Manager_t *manager, bAigEdge_t nodeIndex);
 static Ddi_Bdd_t * FindMinCut(Ddi_Bdd_t *f, Ddi_Bdd_t *care, Ddi_Var_t *initVar, Ddi_Varset_t *smoothVars, int observeLevels, int maxPiNum, int startFromPiFanout, int doFullFlow, float cutRatio);
 static Ddi_Bddarray_t * FindMinCutArray(Ddi_Bddarray_t *fA, Ddi_Bdd_t *care, Ddi_Vararray_t *initVars, Ddi_Bddarray_t *substF, Ddi_Vararray_t *substV, int observeLevels, int maxPiNum, int startFromPiFanout, int doFullFlow, int disablePiFlow,   int fwdCut, int cutShortEdges, float cutRatio);
 static Ddi_Bddarray_t *FindMinCutArrayBF(Ddi_Bddarray_t *fA, Ddi_Bdd_t *care, Ddi_Vararray_t *initVars, Ddi_Vararray_t *lockedVars, Ddi_Bddarray_t *substF, Ddi_Vararray_t *substV);
+static Ddi_Bddarray_t *FindCutArrayTop(Ddi_Bddarray_t *fA, Ddi_Bdd_t *care, Ddi_Vararray_t *initVars, Ddi_Vararray_t *lockedVars, Ddi_Bddarray_t *substF, Ddi_Vararray_t *substV, float cutRatio);
 static int findFwdAugmPath(int startId, int visitId, bAig_array_t *visitedNodes, mincut_info *nodeInfoArray, int enBack);
 static int findFwdBwdAugmPathBF(bAig_array_t *visitedNodes, mincut_info *nodeInfoArray, int *bfvAuxArray, int startFromAll, int setMinCut, int doPrint);
 static Ddi_Bdd_t * evalMinCut(Ddi_Bdd_t *f, Ddi_Bdd_t *care, bAig_array_t *visitedNodes, mincut_info *nodeInfoArray, int doFullFlow, int *roots, int nRoots);
@@ -28925,6 +28926,86 @@ Ddi_AigOptByMinCut(
   SeeAlso     []
 ******************************************************************************/
 int
+Ddi_AigOptNnfWithCut(
+  Ddi_Bdd_t *f,
+  Ddi_Bdd_t *care,
+  int cutStrategy,
+  int doWeaken,
+  int sizeTh,
+  float timeLimit,
+  char *name
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
+  int i, n;
+  float cutRatio;
+  Ddi_Bdd_t *newF;
+
+  do {
+    int refSize = Ddi_BddSize(f);
+    Ddi_Bdd_t *cutRel=NULL;
+    cutRatio = ((float)sizeTh) / refSize;
+    Ddi_Bdd_t *splitF = NULL;
+    Ddi_Bddarray_t *substF = Ddi_BddarrayAlloc(ddm,0);
+    Ddi_Vararray_t *substV = Ddi_VararrayAlloc(ddm,0);
+
+    if (cutRatio>0 && cutRatio<1.0) {    
+      Ddi_Vararray_t *vA = Ddi_BddSuppVararray(f);
+      
+      if (cutStrategy==0) {
+        splitF = Ddi_BddFindTopCut (f,care,vA,NULL,substF,substV,cutRatio);
+      }
+      else
+        splitF = Ddi_BddSplitMinCut(f,care,vA,substF,substV,0/*disPiFlow*/,1/*fwdCut*/,cutRatio);
+      cutRel = Ddi_BddRelMakeFromArray(substF,substV);
+      Ddi_Free(vA);
+    }
+    else {
+      splitF = Ddi_BddDup(f);
+    }
+    
+    Ddi_Bdd_t *careOpt;
+    Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+      printf("%s %s\n", doWeaken?"Weakening":"Strengthening", name?name:"");
+    }
+    if (doWeaken) {
+      careOpt = Ddi_BddDiff(care,splitF);
+    }
+    else {
+      careOpt = Ddi_BddAnd(splitF,care);
+    }
+    if (cutRel!=NULL) {
+      Ddi_BddSetPartConj(careOpt);
+      Ddi_BddPartInsertLast(careOpt,cutRel);
+      Ddi_BddSetFlattened(careOpt);
+    }
+    Ddi_AigOptByMonotoneCoreAcc(splitF,careOpt,NULL,doWeaken?0:1,-1.0);
+    Ddi_Free(careOpt);
+    Ddi_Free(cutRel);
+    if (Ddi_VararrayNum(substV)>0) {
+      newF = Ddi_BddCompose(splitF,substV,substF);
+    }
+    else
+      newF = Ddi_BddDup(splitF);
+    Ddi_Free(splitF);
+    Ddi_Free(substF);
+    Ddi_Free(substV);
+
+  } while (0);
+
+  DdiGenericDataCopy((Ddi_Generic_t *)f,(Ddi_Generic_t *)newF);
+  Ddi_Free(newF);
+
+  return 1;
+}
+
+/**Function********************************************************************
+  Synopsis    [Aig to BDD conversion]
+  Description [Aig to BDD conversion]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+int
 Ddi_AigOptCustom(
   Ddi_Bdd_t *f,
   Ddi_Bdd_t *care,
@@ -40037,6 +40118,37 @@ DdiAigConstrainSignatures (
   SideEffects []
   SeeAlso     []
 ******************************************************************************/
+Ddi_Bdd_t *
+Ddi_BddFindMinCut (
+  Ddi_Bdd_t *f,
+  Ddi_Bdd_t *care,
+  Ddi_Vararray_t *initVars,
+  Ddi_Vararray_t *lockedVars,
+  Ddi_Bddarray_t *substF,
+  Ddi_Vararray_t *substV,
+  int disablePiFlow,
+  int fwdCut
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
+  Ddi_Bddarray_t *newFA, *fA = Ddi_BddarrayAlloc(ddm, 1);
+  Ddi_Bdd_t *newF;
+
+  Ddi_BddarrayWrite(fA,0,f);
+  newFA = Ddi_BddarrayFindMinCut (fA,care,initVars,lockedVars,
+                                  substF,substV,disablePiFlow,fwdCut);
+  newF = Ddi_BddDup(Ddi_BddarrayRead(newFA,0));
+  Ddi_Free(fA);
+  Ddi_Free(newFA);
+  return newF;  
+}
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
 Ddi_Bddarray_t *
 Ddi_BddarrayFindMinCut (
   Ddi_Bddarray_t *fA,
@@ -40057,6 +40169,57 @@ Ddi_BddarrayFindMinCut (
   else {
     return FindMinCutArrayBF(fA,care,initVars,lockedVars,substF,substV);
   }
+}
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bdd_t *
+Ddi_BddFindTopCut (
+  Ddi_Bdd_t *f,
+  Ddi_Bdd_t *care,
+  Ddi_Vararray_t *initVars,
+  Ddi_Vararray_t *lockedVars,
+  Ddi_Bddarray_t *substF,
+  Ddi_Vararray_t *substV,
+  float cutRatio
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
+  Ddi_Bddarray_t *newFA, *fA = Ddi_BddarrayAlloc(ddm, 1);
+  Ddi_Bdd_t *newF;
+
+  Ddi_BddarrayWrite(fA,0,f);
+  newFA = Ddi_BddarrayFindTopCut (fA,care,initVars,lockedVars,
+                                  substF,substV,cutRatio);
+  newF = Ddi_BddDup(Ddi_BddarrayRead(newFA,0));
+  Ddi_Free(fA);
+  Ddi_Free(newFA);
+  return newF;  
+}
+
+/**Function********************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+Ddi_Bddarray_t *
+Ddi_BddarrayFindTopCut (
+  Ddi_Bddarray_t *fA,
+  Ddi_Bdd_t *care,
+  Ddi_Vararray_t *initVars,
+  Ddi_Vararray_t *lockedVars,
+  Ddi_Bddarray_t *substF,
+  Ddi_Vararray_t *substV,
+  float cutRatio
+)
+
+{
+  return FindCutArrayTop(fA,care,initVars,lockedVars,substF,substV,cutRatio);
 }
 
 /**Function********************************************************************
@@ -40087,6 +40250,7 @@ Ddi_BddSplitMinCut (
                           0/*doFullFlow*/,disablePiFlow,fwdCut,0,cutRatio);
   newF = Ddi_BddDup(Ddi_BddarrayRead(newFA,0));
   Ddi_Free(newFA);
+  Ddi_Free(fA);
   return newF;
 }
 
@@ -50114,7 +50278,7 @@ Ddi_AigSatAndWithInterpolantIncr (
           Ddi_Vararray_t *substV2 = Ddi_VararrayAlloc(ddm,0);
           Ddi_Vararray_t *varsA2 = Ddi_VararrayUnion(varsA,substV);
           Ddi_Bdd_t *splitB2 = Ddi_BddSplitMinCut (splitB,myCare,varsA,
-                                                substF2,substV2,0,1,0.5);
+                                 substF2,substV2,0/*disPiFlow*/,1/*fwdCut*/,0.5);
           Ddi_BddarrayComposeAcc(substF2,substV,substF);
           Ddi_Bdd_t *tot = Ddi_BddCompose(splitB2,substV,substF);
           Ddi_BddComposeAcc(tot,substV2,substF2);
@@ -57933,6 +58097,267 @@ FindMinCutArrayBF
   //  doingMinCut = 0;
 
   Pdtutil_Free(roots);
+
+  return (newFA);
+}
+
+/**Function********************************************************************
+
+  Synopsis    [Min cut with modified Bellman-Ford algorithm]
+  Description [Min cut with modified Bellman-Ford algorithm]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Bddarray_t *
+FindCutArrayTop
+(
+  Ddi_Bddarray_t *fA,
+  Ddi_Bdd_t *care,
+  Ddi_Vararray_t *initVars,
+  Ddi_Vararray_t *lockedVars,
+  Ddi_Bddarray_t *substF,
+  Ddi_Vararray_t *substV,
+  float cutRatio
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(fA);
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  bAigEdge_t nodeIndex;
+  bAigEdge_t varIndex;
+  int nNodes, pathCnt, varCnt, varPoCnt, minCutCnt, cutSize=0, smoothCnt;
+  bAig_array_t *visitedNodes;
+  mincut_info *nodeInfoArray;
+  int i, k, startId, visitId, targetId, nRoots, *roots;
+  int *bfvAuxArray;
+  Ddi_Bddarray_t *newFA;
+  int cutRegionSize, cutMaxSize, flowCnt;
+  Pdtutil_VerbLevel_e verbosity = Ddi_MgrReadVerbosity (ddm);
+  int doPrint = (verbosity >= Pdtutil_VerbLevelUsrMax_c);
+  Ddi_Bdd_t *retF=NULL;
+  int useFreePis=0;
+
+  static int nCallsMinCut=0;
+
+  //  doingMinCut = 1;
+
+  nCallsMinCut++;
+
+  nRoots = Ddi_BddarrayNum(fA);
+  roots = Pdtutil_Alloc(int,nRoots);
+
+  visitedNodes = bAigArrayAlloc();
+
+  for (i=0; i<nRoots; i++) {
+    int prevSize = visitedNodes->num;
+    Ddi_Bdd_t *f_i = Ddi_BddarrayRead(fA,i);
+    nodeIndex = Ddi_BddToBaig(f_i);
+    postOrderAigVisitIntern(bmgr,nodeIndex,visitedNodes,-1);
+    if (visitedNodes->num > prevSize) {
+      roots[i] = visitedNodes->num-1;
+    }
+    else {
+      int j;
+      for (j=visitedNodes->num-1; j>=0; j--) {
+        if (bAig_NonInvertedEdge(visitedNodes->nodes[j]) ==
+            bAig_NonInvertedEdge(nodeIndex)) {
+          roots[i] = j;
+	  break;
+	}
+      }
+    }
+  }
+
+  aigArrayClearVisitedIntern(bmgr,visitedNodes);
+  aigArrayClearAuxAigIntern(bmgr,visitedNodes);
+
+  nNodes = visitedNodes->num;
+
+  nodeInfoArray = Pdtutil_Alloc(mincut_info,nNodes);
+
+  for (i=0; i<nNodes; i++) {
+    nodeInfoArray[i].foCnt = -1;
+    nodeInfoArray[i].foIds=NULL;
+    nodeInfoArray[i].isPathNext=NULL;
+    nodeInfoArray[i].fiIds[0] = nodeInfoArray[i].fiIds[1] = -1;
+    nodeInfoArray[i].isFiPrev[0] = nodeInfoArray[i].isFiPrev[1] = 0;
+    nodeInfoArray[i].visited = 0;
+    nodeInfoArray[i].flowVisited = 0;
+    nodeInfoArray[i].pathPrev = -1;
+    nodeInfoArray[i].pathNext = -1;
+    nodeInfoArray[i].bfVisited = 0;
+    nodeInfoArray[i].outLevel = -1;
+    nodeInfoArray[i].refInput = -1;
+    nodeInfoArray[i].cutIndex = -1;
+    nodeInfoArray[i].isTarget = 0;
+    nodeInfoArray[i].isInput = 0;
+    nodeInfoArray[i].lockedInput = 0;
+    nodeInfoArray[i].isSmoothInput = 0;
+    nodeInfoArray[i].isSmooth = 0;
+    nodeInfoArray[i].isMinCut = 0;
+    nodeInfoArray[i].noFlowRegion = 0;
+    nodeInfoArray[i].noCutRegion = 0;
+  }
+
+  /* initialize:
+    - node<->id correspondence (using _AuxInt field
+    - fanout count
+    - fanin index info (fiIds field)
+  */
+
+  for (i=0; i<visitedNodes->num; i++) {
+    int ir, il;
+    bAigEdge_t baig = visitedNodes->nodes[i];
+    bAig_AuxInt(bmgr,baig) = i;
+    nodeInfoArray[i].foCnt = 0;
+    if (!bAig_NodeIsConstant(baig) && bAig_isVarNode(bmgr,baig)) {
+      Ddi_Var_t *v = Ddi_VarFromBaig(ddm,baig);
+      nodeInfoArray[i].isSmooth = 1;
+    }
+    else if (!bAig_NodeIsConstant(baig)) {
+      ir = rightChildAuxInt(bmgr,baig);
+      il = leftChildAuxInt(bmgr,baig);
+      Pdtutil_Assert(ir>=0 && il>=0,"Invalid aux int");
+      Pdtutil_Assert(nodeInfoArray[ir].foCnt>=0,"fo cnt not initialized");
+      Pdtutil_Assert(nodeInfoArray[il].foCnt>=0,"fo cnt not initialized");
+      nodeInfoArray[ir].foCnt++;
+      nodeInfoArray[il].foCnt++;
+      nodeInfoArray[i].fiIds[0]=ir;
+      nodeInfoArray[i].fiIds[1]=il;
+    }
+  }
+
+  for (i=0; i<nRoots; i++) {
+    targetId = roots[i];
+    nodeInfoArray[targetId].isTarget = 1;
+    nodeInfoArray[targetId].outLevel = 0;
+  }
+
+  
+  Pdtutil_Assert(initVars!=NULL,"NULL init vars array");
+
+  /* set input level by bf forward visit from startId node.
+       Fanout and fanin edges are considered, so that nearest PIs are
+       considered */
+
+  for (i=0; i<Ddi_VararrayNum(initVars); i++) {
+    Ddi_Var_t *initVar = Ddi_VararrayRead(initVars,i);
+    varIndex = Ddi_VarToBaig(initVar);
+    Pdtutil_Assert(varIndex != bAig_NULL,"NULL variable in ExistVar");
+    startId = bAig_AuxInt(bmgr,varIndex);
+    if (startId<0) continue; /* var is not in support: skip */
+    nodeInfoArray[startId].isInput = 1;
+    nodeInfoArray[startId].isSmooth = 0;
+  }
+
+  for (i=0; lockedVars!=NULL && i<Ddi_VararrayNum(lockedVars); i++) {
+    Ddi_Var_t *lockedVar = Ddi_VararrayRead(lockedVars,i);
+    varIndex = Ddi_VarToBaig(lockedVar);
+    Pdtutil_Assert(varIndex != bAig_NULL,"NULL variable in ExistVar");
+    startId = bAig_AuxInt(bmgr,varIndex);
+    if (startId<0) continue; /* var is not in support: skip */
+    nodeInfoArray[startId].lockedInput = 1;
+    nodeInfoArray[startId].isInput = 1;
+    nodeInfoArray[startId].isTarget = 1;
+    nodeInfoArray[startId].isSmooth = 0;
+  }
+
+  // mark cuts
+  int cutId = nNodes * (1-cutRatio);
+  int nCuts=0;
+  int maxFoCntCut=0;
+  for (i=cutId; i<visitedNodes->num; i++) {
+    int ir, il;
+    bAigEdge_t baig = visitedNodes->nodes[i];
+    if (bAig_NodeIsConstant(baig) || bAig_isVarNode(bmgr,baig)) {
+      continue;
+    }
+    if (nodeInfoArray[i].isTarget) continue;
+    ir = rightChildAuxInt(bmgr,baig);
+    il = leftChildAuxInt(bmgr,baig);
+    Pdtutil_Assert(ir>=0 && il>=0,"Invalid aux int");
+    Pdtutil_Assert(nodeInfoArray[ir].foCnt>=0,"fo cnt not initialized");
+    Pdtutil_Assert(nodeInfoArray[il].foCnt>=0,"fo cnt not initialized");
+    if (ir<cutId && !nodeInfoArray[ir].isMinCut) {
+      nodeInfoArray[ir].isMinCut = 1; nCuts++;
+      if (nodeInfoArray[ir].foCnt > maxFoCntCut) maxFoCntCut = nodeInfoArray[ir].foCnt;
+    }
+    if (il<cutId && !nodeInfoArray[il].isMinCut) {
+      nodeInfoArray[il].isMinCut = 1; nCuts++;
+      if (nodeInfoArray[il].foCnt > maxFoCntCut) maxFoCntCut = nodeInfoArray[il].foCnt;
+    }
+  }
+  if (doPrint)
+    printf("CutRatio %f - Cut %d+%d=%d Found %d cut nodes\n",
+           cutRatio, cutId, nNodes-cutId, nNodes, nCuts);
+
+  //  Pdtutil_Assert(minCutCnt>=pathCnt,"mincut does not match maxflow");
+
+  /* Check MIN CUT */
+
+  for (i=0; i<visitedNodes->num; i++) {
+    nodeInfoArray[i].visited = 0;
+    nodeInfoArray[i].pathNext = -1;
+    nodeInfoArray[i].pathPrev = -1;
+  }
+
+  nCuts=0;
+  for (i=0; i<visitedNodes->num; i++) {
+    bAigEdge_t baig = visitedNodes->nodes[i];
+    baig = bAig_NonInvertedEdge(baig);
+    int cutFoTh = 0; //maxFoCntCut/100;
+    if (nodeInfoArray[i].isMinCut && (nodeInfoArray[i].foCnt > cutFoTh)) {
+      char name[1000];
+      Ddi_Bdd_t *auxF;
+      sprintf(name,"Pdtrav_Cut_AuxVar_%d", nCuts++);
+      Ddi_Var_t *auxV = Ddi_VarFromName(ddm, name);
+      if (auxV == NULL) {
+        auxV = Ddi_VarNewBaig(ddm,name);
+      }
+      Ddi_VararrayInsertLast(substV,auxV);
+      auxF = Ddi_BddMakeFromBaig(ddm,baig);
+      Ddi_BddarrayInsertLast(substF,auxF);
+      bAig_AuxAig0(bmgr,baig) = Ddi_VarBaigId(auxV);
+      bAig_Ref(bmgr, baig);
+    }
+  }
+
+  if (doPrint)
+    printf("Used %d cut nodes", nCuts);
+  newAigEvalIntern(ddm,visitedNodes);
+  newFA = Ddi_BddarrayAlloc(ddm,nRoots);
+
+  for (i=0; i<Ddi_BddarrayNum(fA); i++) {
+    Ddi_Bdd_t *fAig = Ddi_BddarrayRead(fA, i);
+    Ddi_Bdd_t *fAig0;
+    bAigEdge_t f, fBaig = Ddi_BddToBaig(fAig);
+    if (Ddi_BddIsConstant(fAig)) {
+      f = bAig_Zero;
+    }
+    else {
+      f = bAig_AuxAig0(bmgr,fBaig);
+    }
+    Pdtutil_Assert(f!=bAig_NULL,"NULL baig");
+    if (bAig_NodeIsInverted(fBaig)) {
+      f = bAig_Not(f);
+    }
+    fAig0 = Ddi_BddMakeFromBaig(ddm,f);
+    Ddi_BddarrayWrite(newFA,i,fAig0);
+    Ddi_Free(fAig0);
+  }
+
+  bAigArrayClearFreeAuxAig(bmgr,visitedNodes);
+  if (doPrint)
+    printf(" - Split Size: %d(%d)\n", Ddi_BddarraySize(newFA), Ddi_BddarraySize(substF));
+
+  Pdtutil_Free(nodeInfoArray);
+
+  bAigArrayFree(visitedNodes);
+
+  Pdtutil_Free(roots);
+
+  if (Ddi_BddarraySize(newFA) <= 1) {
+    printf("AAA\n");
+  }
 
   return (newFA);
 }

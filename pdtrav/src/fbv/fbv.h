@@ -342,10 +342,11 @@ typedef struct {
     int itpStructAbstr;         // command line parameter
     int itpTuneForDepth;        // command line parameter
     int itpInitAbstr;           // command line parameter
-    int itpEndAbstr;           // command line parameter
+    int itpEndAbstr;            // command line parameter
     int itpTrAbstr;             // command line parameter
     int itpBoundkOpt;           // command line parameter
     int itpExactBoundDouble;    // command line parameter
+    int itpExactBoundPlus;      // command line parameter
     int itpConeOpt;             // command line parameter
     int itpUseReached;          // command line parameter
     int itpReuseRings;          // command line parameter

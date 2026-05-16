@@ -349,6 +349,7 @@ typedef enum {
   Pdt_TravItpTuneForDepth_c,
   Pdt_TravItpBoundkOpt_c,
   Pdt_TravItpExactBoundDouble_c,
+  Pdt_TravItpExactBoundPlus_c,
   Pdt_TravItpConeOpt_c,
   Pdt_TravItpForceRun_c,
   Pdt_TravItpMaxStepK_c,

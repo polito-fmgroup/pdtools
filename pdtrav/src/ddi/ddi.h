@@ -709,6 +709,16 @@ EXTERN Ddi_Bdd_t *Ddi_AigSplitMonotoneGen (Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Bdd_t
 EXTERN int Ddi_AigOptByFoCntTop(Ddi_Bdd_t *f, Ddi_Bdd_t *care, int enBddOpt);
 EXTERN int Ddi_AigOptByBddSweepTop(Ddi_Bdd_t *f, Ddi_Bdd_t *care, int maxMerge);
 EXTERN int Ddi_AigOptByMinCut(Ddi_Bdd_t *f, Ddi_Bdd_t *care, Ddi_Varset_t *projectVars, int optLevel, int topDecomp, float timeLimit);
+EXTERN int
+Ddi_AigOptNnfWithCut(
+  Ddi_Bdd_t *f,
+  Ddi_Bdd_t *care,
+  int cutStrategy,
+  int doWeaken,
+  int sizeTh,
+  float timeLimit,
+  char *name
+);
 EXTERN int Ddi_AigOptByPart(Ddi_Bdd_t *f, Ddi_Bdd_t *care, int optLevel, float timeLimit);
 EXTERN int Ddi_AigOptByImpl(Ddi_Bdd_t *f, Ddi_Bddarray_t *implied, int optLevel, float timeLimit);
 EXTERN int Ddi_AigOptByCut(Ddi_Bdd_t *f, Ddi_Bdd_t *care, int cutNum, int optLevel, float timeLimit);
@@ -866,6 +876,37 @@ EXTERN int * Ddi_AigProveLemmasMinisat(Ddi_Bdd_t *f, Ddi_Bddarray_t *lemmas, Ddi
 EXTERN Ddi_Bddarray_t * Ddi_AigComputeInitialLemmas(Ddi_Bddarray_t *lemmasSimul, Ddi_Bddarray_t *lemmasBase, Ddi_Bdd_t *initState, int maxLevel);
 EXTERN char ** Ddi_AigCombinationalImplications(Ddi_Bddarray_t *lemmasBase, int complement);
 EXTERN Ddi_Bddarray_t *Ddi_BddarrayFindMinCut (Ddi_Bddarray_t *fA, Ddi_Bdd_t *care, Ddi_Vararray_t *initVars,   Ddi_Vararray_t *lockedVars, Ddi_Bddarray_t *substF, Ddi_Vararray_t *substV, int disablePiFlow, int fwdCut);
+EXTERN Ddi_Bdd_t *
+Ddi_BddFindMinCut (
+  Ddi_Bdd_t *f,
+  Ddi_Bdd_t *care,
+  Ddi_Vararray_t *initVars,
+  Ddi_Vararray_t *lockedVars,
+  Ddi_Bddarray_t *substF,
+  Ddi_Vararray_t *substV,
+  int disablePiFlow,
+  int fwdCut
+);
+EXTERN Ddi_Bdd_t *
+Ddi_BddFindTopCut (
+  Ddi_Bdd_t *f,
+  Ddi_Bdd_t *care,
+  Ddi_Vararray_t *initVars,
+  Ddi_Vararray_t *lockedVars,
+  Ddi_Bddarray_t *substF,
+  Ddi_Vararray_t *substV,
+  float cutRatio
+);
+EXTERN Ddi_Bddarray_t *
+Ddi_BddarrayFindTopCut (
+  Ddi_Bddarray_t *fA,
+  Ddi_Bdd_t *care,
+  Ddi_Vararray_t *initVars,
+  Ddi_Vararray_t *lockedVars,
+  Ddi_Bddarray_t *substF,
+  Ddi_Vararray_t *substV,
+  float cutRatio
+);
 EXTERN Ddi_Bdd_t *Ddi_BddSplitMinCut (Ddi_Bdd_t *f, Ddi_Bdd_t *care, Ddi_Vararray_t *initVars, Ddi_Bddarray_t *substF, Ddi_Vararray_t *substV, int disablePiFlow, int fwdCut, float cutRatio);
 EXTERN Ddi_Bdd_t *Ddi_BddSplitShortEdges (Ddi_Bdd_t *f, Ddi_Bdd_t *care, Ddi_Vararray_t *initVars, Ddi_Bddarray_t *substF, Ddi_Vararray_t *substV, float cutRatio);
 EXTERN Ddi_Bddarray_t *Ddi_BddarraySplitShortEdges (Ddi_Bddarray_t *fA, Ddi_Bdd_t *care, Ddi_Vararray_t *initVars, Ddi_Bddarray_t *substF, Ddi_Vararray_t *substV, float cutRatio);

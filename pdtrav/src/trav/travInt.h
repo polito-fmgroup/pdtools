@@ -140,6 +140,7 @@ struct Trav_Settings_s {
     int itpTuneForDepth;
     int itpBoundkOpt;
     int itpExactBoundDouble;
+    int itpExactBoundPlus;
     int itpConeOpt;
     int itpForceRun;
     int itpMaxStepK;

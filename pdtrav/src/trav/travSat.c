@@ -16314,6 +16314,7 @@ growConeBwdSubsetByTarget(
   int *andWithRingP = NULL;
   Ddi_Bdd_t *auxCone = NULL;
   int exactBoundDouble = travMgr->settings.aig.itpExactBoundDouble;
+  int exactBoundPlus = travMgr->settings.aig.itpExactBoundPlus;
   Ddi_Bdd_t *cone1=NULL;
   nCalls++;
 
@@ -16355,11 +16356,8 @@ growConeBwdSubsetByTarget(
     if (split_i == end_i) split_i++;
   }
   
-  int assumeBound=0;
-  if (boundK<0) {
-    boundK=0;
-    assumeBound=1;
-  }
+  int assumeBound = exactBoundPlus;
+
   if (exactBoundDouble>0 && (start_i-end_i)>0) {
     int start_i1 = start_i-exactBoundDouble;
     if (start_i1<=end_i) start_i1 = end_i+1;
@@ -26964,7 +26962,7 @@ itpImgGetCone(
                  itpTravMgr->observedGates,
                  tryTargetSubset,
                  growCone != 1 ? 2 : 0 /*useRingConstr */ ,
-                 -1, doExcludeInnerCones?-1:boundK);
+                 -1, boundK);
             if (constrCone!=NULL) {
               Ddi_BddDiffAcc(localCone,constrCone);
               Ddi_Free(constrCone);
@@ -28773,6 +28771,8 @@ itpImgPart (
     Ddi_Bdd_t *coneAux=NULL, *itp=NULL;
     if (usePrevToWithA) {
       Ddi_BddDiffAcc(aNew,prevTo);
+      if (itpTravMgr->prevFrom!=NULL && !Ddi_BddIsConstant(itpTravMgr->prevFrom))
+        Ddi_BddDiffAcc(aNew,itpTravMgr->prevFrom);
     }
     if (usePrevToWithB) {
       Ddi_BddDiffAcc(bNew,prevTo);
@@ -28806,7 +28806,9 @@ itpImgPart (
       Ddi_BddSetAig(careAig);
       ddm->settings.aig.itpUseCare = 1;
     }
-    printf("Computing ItpWithNew\n");
+    Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+      printf("Computing ItpWithNew\n");
+    }
     if (0 && itpTravMgr->prevFrom!=NULL && 
 	!Ddi_BddIsOne(itpTravMgr->prevFrom)) {
       Ddi_BddDiffAcc(aNew,itpTravMgr->prevFrom);
@@ -28862,6 +28864,25 @@ itpImgPart (
         if (!Ddi_BddIncluded(itpNew,itpNew))
           Ddi_BddAndAcc(itpNew,itpPlus);
       }
+      int doOpt = 1;
+      if (doOpt) {
+        static int cutTh0 = 50000;
+        char log[20];
+        Ddi_Bdd_t *myCare = Ddi_BddNot(prevTo);
+        int size0=Ddi_BddSize(itpNew);
+        if (size0>cutTh0) {
+          int cutTh=cutTh0/2+size0/4;
+          for (int ii=0; ii<3 && (Ddi_BddSize(itpNew) > cutTh); ii++) {
+            sprintf(log,"itpNew (iter: %d)", ii);
+            (void) Ddi_AigOptNnfWithCut(itpNew,myCare,0,1,cutTh,-1,log);
+            (void) Ddi_AigOptNnfWithCut(itpNew,myCare,0,0,cutTh,-1,log);
+            cutTh *= 2;
+          }
+        }
+        (void) Ddi_AigOptNnfWithCut(itpNew,myCare,0,1,-1,-1,"itpNew");
+        (void) Ddi_AigOptNnfWithCut(itpNew,myCare,0,0,-1,-1,"itpNew");
+        Ddi_Free(myCare);
+      }
       coneAux = Ddi_BddNot(itpNew);
       if (tryPrevImgLearning && !Ddi_BddIsConstant(coneAux)) {
 	Ddi_Free(itpTravMgr->careForBwdCone);
@@ -28874,18 +28895,21 @@ itpImgPart (
         Ddi_BddOrAcc(coneAux,notCare);
         Ddi_Free(notCare);
       }
-      Ddi_Free(itpNew);
+      //      Ddi_Free(itpNew);
       //      Ddi_BddAndAcc(coneAux,b);
-      printf("Re-Computing itp using ItpWithNew\n");
+      Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+        printf("Re-Computing itp using ItpWithNew\n");
+      }
       itp = Ddi_AigSat22AndWithInterpolant(NULL,a,coneAux,NULL,
 					  globalVars, domainVars,
 					   tfPiVars,tfPiNum,
 					   optCare,NULL,
 					   psat, 0, itpOdc, 
 					   0,timeLimit);
+      Ddi_Free(itpNew);
       int doWeaken = 1&itp!=NULL && travMgr->settings.aig.itpWeaken;
       doWeaken &= Ddi_BddSize(itp)>travMgr->settings.aig.itpWeaken;
-      // disabled for now as it weakens too much (convergence)
+      // disabled for now as it weakens too much (convergence): no, just hits cone earlier
       if (doWeaken) {
         Ddi_AigOptByMonotoneCoreAcc(itp,coneAux,NULL,0,-1.0);
       }
@@ -28893,15 +28917,19 @@ itpImgPart (
       if (compareWithItp) {
         Pdtutil_Assert(Ddi_BddIncluded(a,itp),"problem with NEW");
         Pdtutil_Assert(!Ddi_AigSatAnd(itp,b,optCare),"problem witn NEW");
-	printf("Comparing ItpWithNew to standard ITP\n");
+        Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+          printf("Comparing ItpWithNew to standard ITP\n");
+        }
 	Ddi_Bdd_t *itpRef = Ddi_AigSat22AndWithInterpolant(NULL,a,b,NULL,
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
 					  optCare,NULL,
 					  psat, 0, itpOdc, 
 					  0,timeLimit);
-	printf("ItpWithNew / std Itp: %d / %d\n", Ddi_BddSize(itp),
+        Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+          printf("ItpWithNew / std Itp: %d / %d\n", Ddi_BddSize(itp),
 	     Ddi_BddSize(itpRef));
+        }
 	Ddi_Free(itpRef);
       }
       if (clungItp!=NULL /*&& Ddi_BddSize(clungItp)<2000000*/) {
@@ -34000,8 +34028,12 @@ itpImg(
                         cone = localConeBase;
                         Ddi_BddAndAcc(care,itpCareBase);
                       }
+                      Ddi_Bdd_t *myA = Ddi_BddDup(fromAndNew);
+                      if (0&&itpTravMgr->prevFrom!=NULL)
+                        Ddi_BddDiffAcc(myA,itpTravMgr->prevFrom);
                       isSat = itpImgIncrLearn(itpTravMgr,ddiS,
-                           fromAndNew,cone,care,itpTimeLimit,&abort);
+                           myA,cone,care,itpTimeLimit,&abort);
+                      Ddi_Free(myA);
                       Ddi_Free(care);
                     }
                     if (!isSat)

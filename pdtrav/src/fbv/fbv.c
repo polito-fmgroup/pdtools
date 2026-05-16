@@ -5499,6 +5499,12 @@ FbvParseArgs(
       argc--;
       argv++;
       argc--;
+    } else if (strcmp(argv[1], "-itpExactBoundPlus") == 0) {
+      opt->trav.itpExactBoundPlus = atoi(argv[2]);
+      argv++;
+      argc--;
+      argv++;
+      argc--;
     } else if (strcmp(argv[1], "-itpBoundkOpt") == 0) {
       opt->trav.itpBoundkOpt = atoi(argv[2]);
       argv++;
@@ -6419,7 +6425,8 @@ FbvParseArgs(
               opt->trav.itpBoundkOpt = 2;
               break;
             case 'E':
-              opt->trav.itpExactBoundDouble = 1;
+              // opt->trav.itpExactBoundDouble = 1;
+              opt->trav.itpExactBoundPlus = 1;
             case 'e':
               opt->trav.itpBoundkOpt = 2;
               if (opt->trav.itpReuseRings == 2) {
@@ -20117,6 +20124,7 @@ FbvSetTravMgrOpt(
     opt->trav.itpStructAbstr);
   Trav_MgrSetOption(travMgr, Pdt_TravItpNew_c, inum, opt->trav.itpNew);
   Trav_MgrSetOption(travMgr, Pdt_TravItpExactBoundDouble_c, inum, opt->trav.itpExactBoundDouble);
+  Trav_MgrSetOption(travMgr, Pdt_TravItpExactBoundPlus_c, inum, opt->trav.itpExactBoundPlus);
   Trav_MgrSetItpExact(travMgr, opt->trav.itpExact);
   Trav_MgrSetItpInductiveTo(travMgr, opt->trav.itpInductiveTo);
   Trav_MgrSetItpInnerCones(travMgr, opt->trav.itpInnerCones);
@@ -22559,6 +22567,8 @@ travOpt2OptList(
     opt->trav.itpTuneForDepth);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpBoundkOpt_c, inum,
     opt->trav.itpBoundkOpt);
+  Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpExactBoundPlus_c, inum,
+    opt->trav.itpExactBoundPlus);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpExactBoundDouble_c, inum,
     opt->trav.itpExactBoundDouble);
   Pdtutil_OptListIns(pkgOpt, eTravOpt, Pdt_TravItpConeOpt_c, inum,
@@ -23046,6 +23056,7 @@ new_settings(
   opt->trav.itpTuneForDepth = 0;
   opt->trav.itpBoundkOpt = 0;
   opt->trav.itpExactBoundDouble = 0;
+  opt->trav.itpExactBoundPlus = 0;
   opt->trav.itpConeOpt = 0;
   opt->trav.itpForceRun = -1;
   opt->trav.itpMaxStepK = -1;

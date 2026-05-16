@@ -206,6 +206,7 @@ Trav_MgrInit(
   travMgr->settings.aig.itpTuneForDepth = 0;
   travMgr->settings.aig.itpBoundkOpt = 0;
   travMgr->settings.aig.itpExactBoundDouble = 0;
+  travMgr->settings.aig.itpExactBoundPlus = 0;
   travMgr->settings.aig.itpConeOpt = 0;
   travMgr->settings.aig.itpForceRun = -1;
   travMgr->settings.aig.itpMaxStepK = -1;
@@ -4835,6 +4836,9 @@ Trav_MgrSetOptionItem(
     case Pdt_TravItpExactBoundDouble_c:
       travMgr->settings.aig.itpExactBoundDouble = optItem.optData.inum;
       break;
+    case Pdt_TravItpExactBoundPlus_c:
+      travMgr->settings.aig.itpExactBoundPlus = optItem.optData.inum;
+      break;
     case Pdt_TravItpConeOpt_c:
       travMgr->settings.aig.itpConeOpt = optItem.optData.inum;
       break;
@@ -5448,6 +5452,9 @@ Trav_MgrReadOption(
       break;
     case Pdt_TravItpExactBoundDouble_c:
       *(int *)optRet = travMgr->settings.aig.itpExactBoundDouble;
+      break;
+    case Pdt_TravItpExactBoundPlus_c:
+      *(int *)optRet = travMgr->settings.aig.itpExactBoundPlus;
       break;
     case Pdt_TravItpConeOpt_c:
       *(int *)optRet = travMgr->settings.aig.itpConeOpt;
