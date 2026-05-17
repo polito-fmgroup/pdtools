@@ -84554,7 +84554,7 @@ aigSat22AndWithInterpolantIntern (
   if (1 && optCare != NULL && !Ddi_BddIsOne(optCare)) {
     Ddi_BddAndAcc(b2,optCare);
   }
-  if (1 && prevItp != NULL) {
+  if (0 && prevItp != NULL) {
     Ddi_BddDiffAcc(b2,prevItp);
   }
   if (Ddi_BddIsZero(b2) /*|| !Ddi_AigSat(b2)*/) {

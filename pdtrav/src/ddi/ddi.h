@@ -815,7 +815,7 @@ Ddi_AigSatLearningToAigs (
   Ddi_Bdd_t *refAig
 );
 EXTERN Ddi_Bdd_t *Ddi_AigSatMinisat22WithCexAndAbortIncremental(Ddi_IncrSatMgr_t *incrSat, Ddi_Bdd_t *f, Ddi_Vararray_t *filterVars, int asserted, float timeLimit, int *pAbort);
-Ddi_Bdd_t *
+EXTERN Ddi_Bdd_t *
 Ddi_AigSatMinisat22WithCexAigAndAbortIncremental
 (
   Ddi_IncrSatMgr_t *incrSat,

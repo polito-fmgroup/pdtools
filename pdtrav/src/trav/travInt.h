@@ -929,6 +929,87 @@ TravTravTrAbstrLoad(
   Trav_Mgr_t * travMgr,
   int *nfp
 );
+EXTERN Ddi_Bdd_t *
+TravItpImgPart (
+  Trav_ItpTravMgr_t * itpTravMgr,
+  Ddi_Bdd_t * kCone,
+  Ddi_Bdd_t * kConeRings,
+  Ddi_Bdd_t *a,
+  Ddi_Bdd_t *b,
+  Ddi_Bdd_t *prevTo,
+  int step,
+  int doSplit,
+  Ddi_Varset_t *globalVars,
+  Ddi_Varset_t *domainVars,
+  Ddi_Bdd_t *optCare,
+  Ddi_Bdd_t *itpPlus,
+  Ddi_Bdd_t *toPlusCube,
+  int *psat,
+  int itpPart,
+  int itpOdc,
+  float timeLimit
+);
+EXTERN int
+TravItpStrengthenBwdRing(
+  Trav_ItpMgr_t * itpMgr,
+  Ddi_Bdd_t *splitCone
+);
+EXTERN Ddi_Bdd_t *TravGrowConeBwd(
+  Trav_ItpMgr_t * itpMgr,
+  Ddi_Bdd_t * cone,
+  int start_i,
+  int end_i,
+  Ddi_Bddarray_t * delta,
+  Ddi_Bddarray_t * initStub,
+  int useRingConstr,
+  int andWithRing_i,
+  int boundK
+);
+EXTERN Ddi_Bdd_t *TravGrowConeBwdDecomp(
+  Trav_ItpMgr_t * itpMgr,
+  Ddi_Bdd_t * cone,
+  int start_i,
+  int end_i,
+  int split_i,
+  int useSplitUnrollConstr,
+  int useNewVars,
+  Ddi_Bddarray_t * delta,
+  Ddi_Bddarray_t * initStub,
+  int useRingConstr,
+  int andWithRing_i,
+  int boundK
+);
+EXTERN Ddi_Bdd_t *TravGrowUnrollRelation(
+  Trav_ItpMgr_t * itpMgr,
+  Ddi_Vararray_t * nsSupp,
+  int start_i,
+  int end_i,
+  Ddi_Bddarray_t * delta,
+  Ddi_Bddarray_t * initStub,
+  int useRingConstr,
+  int andWithRingForced_i,
+  int boundK,
+  int initMark
+);
+EXTERN void
+TravItpMgrApplyRingEq(
+  Trav_ItpMgr_t * itpMgr,
+  Ddi_Bdd_t *f,
+  Ddi_Bddarray_t *fA,
+  Ddi_Vararray_t *suppVars,
+  int i,
+  int applyEqConstr
+);
+EXTERN int
+TravItpCheckConeAtRing(
+  Trav_ItpMgr_t * itpMgr,
+  Ddi_Bdd_t *ring,
+  Ddi_Bdd_t *cone, 
+  int iRing,
+  int k,
+  int boundK
+);
+
 
 /**AutomaticEnd***************************************************************/
 
