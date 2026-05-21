@@ -80751,6 +80751,73 @@ Ddi_AigSatLearningToAigs (
   
 }
 
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+int
+Ddi_AigFilterLearningAigs (
+  Ddi_Bdd_t *f
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  bAig_array_t *visitedNodes = bAigArrayAlloc();
+  Ddi_PostOrderBddAigVisitIntern(f,visitedNodes,-1);
+  postOrderAigClearVisitedIntern(bmgr,visitedNodes);
+
+  for (int i=0; i<visitedNodes->num; i++) {
+    bAigEdge_t baig;
+    baig = visitedNodes->nodes[i];
+    bAig_AuxInt(bmgr,baig) = i+1;
+  }
+
+  Ddi_Info_t *p = f->common.info;
+
+  vec<vec<int>> *clausesNew = new vec<vec<int>>;
+  vec<vec<int>> *clausesOrig = p->data.clauses.clausesInt;
+  clausesNew->clear();
+  vec<int> cInt;
+  bAig_array_t *baigsRef = p->data.clauses.baigs;
+  int nLits0=0, nLits1=0;
+  vec<vec<int>>& v = *clausesOrig;
+  for (int i=0; i<v.size(); i++) {
+    int ii;
+    vec<int>& cInt = v[i];
+    int useClause=1;
+    nLits0+=cInt.size();
+    for (int j=0; j<cInt.size(); j++) {
+      int id = abs(cInt[j])-1;
+      Pdtutil_Assert(id>=0&&id<baigsRef->num,"wrong clauseInt lit");
+      bAigEdge_t baig = baigsRef->nodes[id];
+      int filteredId = bAig_AuxInt(bmgr,baig);
+      Pdtutil_Assert(filteredId<1 || filteredId<=visitedNodes->num,
+                     "wrong baig in baigclause");
+      if (filteredId<1) {
+        useClause=0;
+        break;
+      }
+    }
+    if (useClause) {
+      clausesNew->push();
+      cInt.copyTo(clausesNew->last());
+      nLits1+=cInt.size();
+    }
+  }      
+
+  p->data.clauses.clausesInt = clausesNew;
+  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+    printf("Filtered %d clauses (%d literals - avg: %.1f) to -> %d (%d - avg: %.1f)\n",
+           clausesOrig->size(), nLits0, (float)nLits0/clausesOrig->size(), 
+           clausesNew->size(), nLits1, (float)nLits1/clausesNew->size()); 
+  }
+  delete clausesOrig;
+  
+  return clausesNew->size();  
+}
+
  
 /**Function********************************************************************
   Synopsis    [Convert a DDI AIG to a monolitic BDD]

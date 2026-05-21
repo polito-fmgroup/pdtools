@@ -16346,6 +16346,7 @@ growConeBwd(
   int *andWithRingP = NULL;
   int useForImage = 1;
   int exactBoundDouble = travMgr->settings.aig.itpExactBoundDouble;
+  int exactBoundPlus = travMgr->settings.aig.itpExactBoundPlus;
   Ddi_Bdd_t *cone1=NULL;
   
   nCalls++;
@@ -16366,7 +16367,7 @@ growConeBwd(
   }
 
   growConeBwdSplit(itpMgr, cone, start_i, end_i, -1, delta,
-		   initStub, useRingConstr, boundK, 0, NULL,
+		   initStub, useRingConstr, boundK, exactBoundPlus, NULL,
                    NULL, NULL, NULL, NULL, NULL, NULL, andWithRingP, 0,
                    useForImage);
 
@@ -16686,6 +16687,7 @@ growConeBwdDecomp(
     Ddi_Free(coneAux);
   }
   Ddi_DataCopy(cone, coneTot);
+  Ddi_InfoCopy(cone, coneTot);
   Ddi_Free(coneTot);
   Ddi_Free(careSplit);
   Ddi_Free(constrSplit);
@@ -31406,7 +31408,8 @@ itpImgLoop(
                     }
                     if (!isSat)
 		      to22 = TravItpImgPart(itpTravMgr,kCone,kConeRings,a,b,
-                        itpTravMgr->prevTo,step,doSplit,
+                        itpTravMgr->reached,step,doSplit,
+                        //                        itpTravMgr->prevTo,step,doSplit,
 			nsvars, psvars,
 			/* careBwd DISABLED */ c, itpPlus, toPlusCube,
                         &sat, itpPart, 1, itpTimeLimit);
@@ -38954,6 +38957,7 @@ itpTravMgrInit(
   itpTravMgr->to = NULL;
   itpTravMgr->toItpSeq = NULL;
   itpTravMgr->cone = NULL;
+  itpTravMgr->coneAux = NULL;
   itpTravMgr->careFwd = NULL;
   itpTravMgr->prevTo = NULL;
   itpTravMgr->prevFrom = NULL;
@@ -39031,6 +39035,7 @@ itpTravMgrFree(
   Ddi_Free(itpTravMgr->to);
   Ddi_Free(itpTravMgr->toItpSeq);
   Ddi_Free(itpTravMgr->cone);
+  Ddi_Free(itpTravMgr->coneAux);
   Ddi_Free(itpTravMgr->careFwd);
   Ddi_Free(itpTravMgr->prevTo);
   Ddi_Free(itpTravMgr->prevFrom);

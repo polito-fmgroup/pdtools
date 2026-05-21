@@ -275,8 +275,228 @@ itpBwdRingPreimg(
 }
 
 
+Ddi_Bdd_t *itpImgSplitConeCubeConstr(
+  Trav_ItpTravMgr_t * itpTravMgr, 
+  Ddi_Bdd_t * kConeRings,
+  Ddi_Bdd_t *a,
+  Ddi_Bdd_t *cone,
+  Ddi_Bdd_t *itpPartial,
+  int step,
+  int *psat
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(a);
+  Trav_ItpMgr_t *itpMgr = itpTravMgr->itpMgr;
+  Trav_Mgr_t *travMgr = itpMgr->travMgr;
+  int mark = Ddi_BddReadMark(cone);
+  if (mark<6) return NULL;
+
+  int split = (mark)*3/4;
+  int split_i = step + split;
+  Ddi_Bdd_t *coneAux = itpTravMgr->coneAux;
+
+  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+    printf("\ngenerating constraining cone with split cone of bound %d\n",
+           mark);
+  }
+
+  if (itpTravMgr->coneAux==NULL) {
+    int fullK = step+mark;
+    int start_i = fullK-1;
+    int growCone = abs(Trav_MgrReadIgrGrowCone(travMgr));
+    int boundK = (growCone > 2) ? 1 : 0;
+    coneAux = Ddi_BddDup(Ddi_BddPartRead(kConeRings,fullK-1));
+    TravGrowConeBwdDecomp(itpMgr, coneAux, start_i, step, split_i,  
+			  1, 1, NULL,
+			  itpMgr->initStub, 0/*useRingConstr*/, -1/*andWithRing_i*/, boundK);	
+    itpTravMgr->coneAux = coneAux;
+  }
+  
+  Ddi_Bddarray_t *splitU = NULL;
+  Ddi_Vararray_t *splitV = NULL;
+  Ddi_Bdd_t *splitConstr = NULL;
+  Ddi_Varset_t *splitVars = NULL;
+  Ddi_Bdd_t *myA = NULL, *myBl = NULL;
+  Ddi_Vararray_t *v1=NULL,*v2=NULL, *glbA=NULL;
+  Ddi_Bdd_t *coneConstr = NULL;	
+  myBl = Ddi_BddDup(Ddi_BddReadComposeF(coneAux));
+  splitU = Ddi_BddarrayDup(Ddi_BddReadComposeSubst(coneAux));
+  splitV = Ddi_VararrayDup(Ddi_BddReadComposeVars(coneAux));
+  splitConstr = Ddi_BddReadComposeConstr(coneAux);
+  myA =  Ddi_BddRelMakeFromArray(splitU,splitV);
+  splitVars = Ddi_VarsetMakeFromArray(splitV);
+  Ddi_BddSetAig(myA);
+  if (splitConstr!=NULL) {
+    Ddi_BddAndAcc(myA, splitConstr);
+  }
+  Ddi_BddAndAcc(myA, itpPartial);
+  Ddi_Bdd_t *itpSplit =
+    //    Ddi_AigSat22AndWithInterpolant(NULL,myBl,myA,NULL,
+    Ddi_AigSat22AndWithInterpolant(NULL,myA,myBl,NULL,
+                                   splitVars, NULL,NULL,0,
+                                   NULL,NULL,
+                                   psat, 0, 1, 1, -1.0);
+  //  if (itpSplit!=NULL) Ddi_BddNotAcc(itpSplit);
+  Ddi_Bdd_t *cex=NULL;
+  if (!(*psat) && !Ddi_BddIsOne(itpSplit)) {
+    Ddi_AigOptByMonotoneCoreAcc(itpSplit,myBl,NULL,0,-1.0);
+    coneConstr = Ddi_BddNot(itpSplit);
+    Ddi_BddComposeAcc(coneConstr,splitV,splitU);
+    cex=Ddi_AigSatMinisat22WithCexAndAbortIncremental(
+                        NULL,coneConstr,itpMgr->ns,0,-1,NULL);
+  }
+  Ddi_Free(itpSplit);
+  Ddi_Free(myA);
+  Ddi_Free(myBl);
+  Ddi_Free(splitV);
+  Ddi_Free(splitVars);
+  Ddi_Free(splitU);
+
+  Ddi_BddSetAig(coneConstr);
+  Ddi_BddAndAcc(coneConstr,a);
+  Ddi_Free(coneConstr);  
+  return cex;
+}
+
+
+Ddi_Bdd_t *itpImgSplitConeConstr(
+  Trav_ItpTravMgr_t * itpTravMgr, 
+  Ddi_Bdd_t * kConeRings,
+  Ddi_Bdd_t *a,
+  Ddi_Bdd_t *cone,
+  int step,
+  int *psat
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(a);
+  Trav_ItpMgr_t *itpMgr = itpTravMgr->itpMgr;
+  Trav_Mgr_t *travMgr = itpMgr->travMgr;
+  int mark = Ddi_BddReadMark(cone), minMark=8;
+  if (mark<minMark) return NULL;
+
+  int diffBound = 5;
+  int split = (mark-diffBound)*3/4;
+  int split_i = step + split;
+  Ddi_Bdd_t *coneAux = itpTravMgr->coneAux;
+
+  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+    printf("\ngenerating constraining cone with split cone of bound %d\n",
+           mark-diffBound);
+  }
+
+  if (itpTravMgr->coneAux==NULL) {
+    int fullK = step+mark;
+    int start_i = fullK-diffBound-1;
+    coneAux = Ddi_BddDup(Ddi_BddPartRead(kConeRings,fullK-1));
+    TravGrowConeBwdDecomp(itpMgr, coneAux, start_i, step, split_i,  
+			  1, 1, NULL,
+			  itpMgr->initStub, 0/*useRingConstr*/, -1/*andWithRing_i*/, 0);	
+    itpTravMgr->coneAux = coneAux;
+  }
+  
+  Ddi_Bddarray_t *splitU = NULL;
+  Ddi_Vararray_t *splitV = NULL;
+  Ddi_Varset_t *splitVars = NULL;
+  Ddi_Bdd_t *myA = NULL, *myBl = NULL;
+  Ddi_Vararray_t *v1=NULL,*v2=NULL, *glbA=NULL;
+  Ddi_Bdd_t *coneConstr = NULL;	
+  myBl = Ddi_BddDup(Ddi_BddReadComposeF(coneAux));
+  splitU = Ddi_BddarrayDup(Ddi_BddReadComposeSubst(coneAux));
+  splitV = Ddi_VararrayDup(Ddi_BddReadComposeVars(coneAux));
+  myA =  Ddi_BddRelMakeFromArray(splitU,splitV);
+  splitVars = Ddi_VarsetMakeFromArray(splitV);
+  Ddi_BddSetAig(myA);
+  Ddi_BddAndAcc(myA, a);
+  Ddi_Bdd_t *itpSplit =
+    //    Ddi_AigSat22AndWithInterpolant(NULL,myBl,myA,NULL,
+    Ddi_AigSat22AndWithInterpolant(NULL,myA,myBl,NULL,
+                                   splitVars, NULL,NULL,0,
+                                   NULL,NULL,
+                                   psat, 0, 1, 1, -1.0);
+  //  if (itpSplit!=NULL) Ddi_BddNotAcc(itpSplit);
+  if (!(*psat) && !Ddi_BddIsOne(itpSplit)) {
+    Ddi_AigOptByMonotoneCoreAcc(itpSplit,myA,NULL,1,-1.0);
+    coneConstr = Ddi_BddDup(itpSplit);
+    Ddi_BddComposeAcc(coneConstr,splitV,splitU);
+  }
+  Ddi_Free(itpSplit);
+  Ddi_Free(myA);
+  Ddi_Free(myBl);
+  Ddi_Free(splitV);
+  Ddi_Free(splitVars);
+  Ddi_Free(splitU);
+
+  return coneConstr;
+}
+
+Ddi_Bdd_t *itpImgExactBound(
+  Trav_ItpTravMgr_t * itpTravMgr, 
+  Ddi_Bdd_t * kConeRings,
+  Ddi_Bdd_t *a,
+  Ddi_Bdd_t *cone,
+  Ddi_Bdd_t *prevTo,
+  Ddi_Varset_t *globalVars,
+  Ddi_Varset_t *domainVars,
+  int step,
+  int *psat
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(a);
+  Trav_ItpMgr_t *itpMgr = itpTravMgr->itpMgr;
+  Trav_Mgr_t *travMgr = itpMgr->travMgr;
+  int mark = Ddi_BddReadMark(cone);
+  Ddi_Bdd_t *coneAux = itpTravMgr->coneAux;
+
+  if (mark<6) return NULL;
+  
+  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+    printf("\nusing exact bound cone\n");
+  }
+
+  if (itpTravMgr->coneAux==NULL) {
+    int fullK = step+mark;
+    int start_i = fullK-1;
+    coneAux = Ddi_BddDup(Ddi_BddPartRead(kConeRings,fullK-1));
+    int exactBoundPlusSave = travMgr->settings.aig.itpExactBoundPlus;
+    travMgr->settings.aig.itpExactBoundPlus=1;
+    TravGrowConeBwd(itpMgr, coneAux, start_i, step, 
+                    itpMgr->delta, itpMgr->initStub,  0, -1, 0);
+    travMgr->settings.aig.itpExactBoundPlus=exactBoundPlusSave;
+    itpTravMgr->coneAux = coneAux;
+  }
+#if 1
+  Ddi_Bdd_t *myCone = Ddi_BddDup(cone);
+  Ddi_BddAndAcc(myCone,coneAux);
+#else
+  Ddi_Bdd_t *myCone = Ddi_BddDup(coneAux);
+  if (prevTo!=NULL)
+      Ddi_BddDiffAcc(myCone,prevTo);  
+  Ddi_InfoCopy(myCone,cone);
+#endif
+  Ddi_Bdd_t *itpEB =
+    //    Ddi_AigSat22AndWithInterpolant(NULL,myBl,myA,NULL,
+    Ddi_AigSat22AndWithInterpolant(NULL,a,myCone,NULL,
+                                   globalVars, domainVars, NULL,0,
+                                   NULL,NULL,
+                                   psat, 0, 1, 1, -1.0);
+  if (!(*psat) && !Ddi_BddIsOne(itpEB)) {
+    Ddi_AigOptByMonotoneCoreAcc(itpEB,a,NULL,1,-1.0);
+    int s0 = Ddi_BddSize(cone);
+    Ddi_BddDiffAcc(cone,coneAux);
+    Ddi_BddAndAcc(cone, itpEB);
+    Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+      printf("constraining cone (%d) with exactBoundCone (%d) and itp (%d) -> %d\n",
+             s0, Ddi_BddSize(coneAux), Ddi_BddSize(itpEB), Ddi_BddSize(cone));
+    }
+  }
+  Ddi_Free(myCone);
+  return itpEB;
+}
+
+
 static Ddi_Bdd_t *itpImgWithPrevTo (
   Trav_ItpTravMgr_t * itpTravMgr,
+  Ddi_Bdd_t * kConeRings,
   Ddi_Bdd_t *a,
   Ddi_Bdd_t *b,
   Ddi_Bdd_t *prevTo,
@@ -284,6 +504,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
   Ddi_Bdd_t *itpPlus,
   Ddi_Varset_t *globalVars,
   Ddi_Varset_t *domainVars,
+  int step,
   int *psat,
   int itpPart,
   int itpOdc,
@@ -343,6 +564,33 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
     Ddi_BddSetAig(careAig);
     ddm->settings.aig.itpUseCare = 1;
   }
+
+  int enOptB = 0;
+  if (enOptB) {
+    Ddi_Bdd_t *constrCone = itpImgSplitConeConstr(
+                              itpTravMgr,kConeRings,aNew,bNew,step,psat);
+    if (constrCone!=NULL) {
+      int s0 = Ddi_BddSize(bNew);
+      Ddi_BddAndAcc(bNew,constrCone);
+      //      Ddi_BddNotAcc(constrCone);
+      //      Ddi_BddOrAcc(bNew,constrCone);
+      Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+        printf("constraining cone (%d) with coneConstr (%d) -> %d\n",
+               s0, Ddi_BddSize(constrCone), Ddi_BddSize(bNew));
+      }
+      Ddi_Free(constrCone);
+    }
+  }
+  int enExactBoundOpt = 0;
+  Ddi_Bdd_t *itpExactBound=NULL;
+  if (enExactBoundOpt) {
+    itpExactBound = itpImgExactBound(
+                                     itpTravMgr,kConeRings,aNew,bNew,prevTo,
+                                  globalVars, domainVars,
+                                  step,psat);
+  }
+
+  
   Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
     printf("Computing ItpWithNew\n");
   }
@@ -366,33 +614,44 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
   else clungItpRatio = -1.0; // enforce disable
 
 
-  int enPart = Ddi_BddSize(prevTo)>1000;
+  int enPart = 1 && (Ddi_BddSize(prevTo)>10000);
+  int enSplitConstr = enPart;
   int again = 1;
   Ddi_Bdd_t *aCare = Ddi_BddNot(prevTo);
   Ddi_Bdd_t *itpNew=Ddi_BddMakeConstAig(ddm,0);
   int doOptNew = 1;
   Ddi_Vararray_t *filterv = Ddi_VararrayDup(itpMgr->ps);
+  int nDiff = Ddi_VararrayNum(filterv)/3;
+  Ddi_Bdd_t *constrCube=NULL;
   for (int ii=0; again; ii++) {
     again=0;
-    Ddi_Bdd_t *aAndCare = NULL, *cex=NULL;
     Ddi_Bdd_t *myA = Ddi_BddDup(aNew);
+    Ddi_Bdd_t *aAndCare = Ddi_BddDup(myA), *cex=NULL;
     int n0=0;
     if (enPart) {
       Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
         printf("\nA partitioned IMG iteration %d\n", ii);
       }
-      aAndCare = Ddi_BddAnd(myA,aCare);
+      Ddi_BddAndAcc(aAndCare,aCare);
+      Ddi_Bdd_t *aAndCareConstrained = Ddi_BddDup(aAndCare);
+      if (constrCube!=NULL)
+        Ddi_BddAndAcc(aAndCareConstrained,constrCube);
+      Ddi_Free(constrCube);
       cex=Ddi_AigSatMinisat22WithCexAndAbortIncremental(
-                        NULL,aAndCare,filterv,0,-1,NULL);
+                        NULL,aAndCareConstrained,filterv,0,-1,NULL);
+      Ddi_Free(aAndCareConstrained);
       if (cex==NULL)
         break;
       Ddi_Varset_t *supp = Ddi_BddSupp(cex);
       n0 = Ddi_VarsetNum(supp);
       Ddi_Free(supp);
+      nDiff = Ddi_VararrayNum(filterv)/4;
+      //      if (nDiff <8) nDiff=8;
       again = 1;
       Ddi_AigAndCubeAcc(myA,cex);
+      Ddi_BddDiffAcc(bNew,itpNew);
     }
-    
+
     Ddi_Bdd_t *itpNew_i = Ddi_AigSat22AndWithInterpolantAndClung(
                                                   itpTravMgr->incrSat,
                                                   myA,bNew,NULL,
@@ -406,25 +665,31 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
     ddm->settings.aig.itpNoQuantify = 0;
     ddm->settings.aig.itpUseCare = 0;
     if (itpNew_i!=NULL) {
+      if (itpExactBound!=NULL) {
+        if (!Ddi_BddIncluded(itpNew_i,itpExactBound))
+          Ddi_BddAndAcc(itpNew_i,itpExactBound);
+      }
       if (doOptNew) {
         coneAux = Ddi_BddNot(itpNew_i);
-        Ddi_Bdd_t *aAndNew = Ddi_BddDiff(myA,prevTo);
         Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
           printf("Optimizing itp using aAndNew\n");
         }
         Ddi_Free(itpNew_i);
         itpNew_i = Ddi_AigSat22AndWithInterpolant(NULL,
-                                                aAndNew,coneAux,NULL,
+                                                myA,coneAux,NULL,
                                                 globalVars, domainVars,
                                                 tfPiVars,tfPiNum,
                                                 optCare,NULL,
                                                 psat, 0, itpOdc, 
                                                 0,timeLimit);
-        //  Ddi_AigOptByMonotoneCoreAcc(itpNew,aAndNew,NULL,1,-1.0);
         Ddi_Free(coneAux);
       }
       Ddi_BddOrAcc(itpNew,itpNew_i);
-      if (enPart) {
+      Ddi_Free(constrCube);
+      if (n0==0) {
+        again=0;
+      }
+      else if (enPart) {
         Ddi_BddDiffAcc(aCare,itpNew_i);
         Ddi_BddDiffAcc(aAndCare,itpNew_i);
         int sat1 = Ddi_AigSatMinisatWithAbortAndFinal (aAndCare,
@@ -432,7 +697,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
         Pdtutil_Assert (!sat1,"unsat needed");
         Ddi_Vararray_t *suppA = Ddi_BddSuppVararray(cex);
         int n1 = Ddi_VararrayNum(suppA);
-        if (n1>=n0) {
+        while (n1>=1 && ((n1+nDiff)>=n0)) {
           Ddi_VararrayRemove(suppA,n1-1); n1--;
         }
         Ddi_VararrayIntersectAcc(filterv,suppA);
@@ -440,7 +705,13 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
         Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
           printf("constraining cube abstracted from %d to %d vars\n",
                  n0, n1);
-        }      }
+        }
+        if (enSplitConstr && itpNew_i!=NULL) {
+          constrCube = itpImgSplitConeCubeConstr(
+                                    itpTravMgr,kConeRings,aAndCare,bNew,itpNew_i,step,psat);
+          if (constrCube==NULL || *psat) again=0;
+        }
+      }
     }
     else {
       Ddi_Free(itpNew);
@@ -451,6 +722,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
   } 
   Ddi_Free(filterv);
   
+  Ddi_Free(constrCube);
   Ddi_Free(aCare);
   Ddi_Free(aNew);
   Ddi_Free(bNew);
@@ -461,7 +733,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
         Ddi_BddAndAcc(itpNew,optCare);
     }
     if (itpPlus!=NULL && useCareWithB) {
-      if (!Ddi_BddIncluded(itpNew,itpNew))
+      if (!Ddi_BddIncluded(itpNew,itpPlus))
         Ddi_BddAndAcc(itpNew,itpPlus);
     }
 
@@ -508,7 +780,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
                                            psat, 0, itpOdc, 
                                            0,timeLimit);
     Ddi_Free(itpNew);
-    int doWeaken = 1&itp!=NULL && travMgr->settings.aig.itpWeaken;
+    int doWeaken = 0&itp!=NULL && travMgr->settings.aig.itpWeaken;
     doWeaken &= Ddi_BddSize(itp)>travMgr->settings.aig.itpWeaken;
     // disabled for now as it weakens too much (convergence): no, just hits cone earlier
     if (doWeaken) {
@@ -541,6 +813,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
     }
   }
   Ddi_Free(clungItp);
+  Ddi_Free(itpExactBound);
   return itp;
 }
 
@@ -1049,8 +1322,9 @@ TravItpImgPart (
   }
 
   if (1 && prevTo!=NULL && itpPart<=8) {
-    return itpImgWithPrevTo (itpTravMgr,a,b,prevTo,optCare,itpPlus,
-                             globalVars,domainVars,psat,
+
+    return itpImgWithPrevTo (itpTravMgr,kConeRings,a,b,prevTo,optCare,itpPlus,
+                             globalVars,domainVars,step,psat,
                              itpPart,itpOdc,timeLimit);
   }
 

@@ -784,6 +784,7 @@ struct TravItpTravMgr_s {
   Ddi_Bddarray_t *toItpSeq;
   Ddi_Bdd_t *reached;
   Ddi_Bdd_t *cone;
+  Ddi_Bdd_t *coneAux;
   Ddi_Bdd_t *careFwd;
   Ddi_Bdd_t *prevTo;
   Ddi_Bdd_t *prevFrom;
