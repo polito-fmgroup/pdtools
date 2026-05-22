@@ -38958,6 +38958,8 @@ itpTravMgrInit(
   itpTravMgr->toItpSeq = NULL;
   itpTravMgr->cone = NULL;
   itpTravMgr->coneAux = NULL;
+  itpTravMgr->coneAuxSplit = NULL;
+  itpTravMgr->coneAuxSplitItp = NULL;
   itpTravMgr->careFwd = NULL;
   itpTravMgr->prevTo = NULL;
   itpTravMgr->prevFrom = NULL;
@@ -39036,6 +39038,8 @@ itpTravMgrFree(
   Ddi_Free(itpTravMgr->toItpSeq);
   Ddi_Free(itpTravMgr->cone);
   Ddi_Free(itpTravMgr->coneAux);
+  Ddi_Free(itpTravMgr->coneAuxSplit);
+  Ddi_Free(itpTravMgr->coneAuxSplitItp);
   Ddi_Free(itpTravMgr->careFwd);
   Ddi_Free(itpTravMgr->prevTo);
   Ddi_Free(itpTravMgr->prevFrom);

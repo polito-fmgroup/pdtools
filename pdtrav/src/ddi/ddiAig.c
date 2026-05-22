@@ -80783,6 +80783,8 @@ Ddi_AigFilterLearningAigs (
   bAig_array_t *baigsRef = p->data.clauses.baigs;
   int nLits0=0, nLits1=0;
   vec<vec<int>>& v = *clausesOrig;
+  vec<int> cIntNew;
+  int nBaigsNew = visitedNodes->num;
   for (int i=0; i<v.size(); i++) {
     int ii;
     vec<int>& cInt = v[i];
@@ -80801,13 +80803,28 @@ Ddi_AigFilterLearningAigs (
       }
     }
     if (useClause) {
+      cIntNew.clear();
+      for (int j=0; j<cInt.size(); j++) {
+        int id = abs(cInt[j])-1;
+        int s = cInt[j]<0;
+        bAigEdge_t baig = baigsRef->nodes[id];
+        int idNew = bAig_AuxInt(bmgr,baig);
+        Pdtutil_Assert(idNew>0&&idNew<nBaigsNew,"wrong baig id");
+        idNew++; // start at 1
+        if (s) idNew = -idNew;
+        cIntNew.push(idNew);
+      }
       clausesNew->push();
-      cInt.copyTo(clausesNew->last());
-      nLits1+=cInt.size();
+      cIntNew.copyTo(clausesNew->last());
+      nLits1+=cIntNew.size();
     }
   }      
 
   p->data.clauses.clausesInt = clausesNew;
+
+  bAigArrayFree(baigsRef);
+  p->data.clauses.baigs = visitedNodes;
+
   Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
     printf("Filtered %d clauses (%d literals - avg: %.1f) to -> %d (%d - avg: %.1f)\n",
            clausesOrig->size(), nLits0, (float)nLits0/clausesOrig->size(), 
