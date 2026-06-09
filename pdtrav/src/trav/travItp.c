@@ -406,11 +406,13 @@ Ddi_Bdd_t *itpImgSplitConeConstr(
   int mark = Ddi_BddReadMark(cone), minMark=8;
   if (mark<minMark) return NULL;
 
-  int diffBound = 5;
-  int split = (mark-diffBound)*3/4;
+  float coneSplitRatio = travMgr->settings.aig.igrConeSplitRatio;
+  int diffBound = 4;
+  int split = (mark-diffBound)*coneSplitRatio;
   int split_i = step + split;
   Ddi_Bdd_t *coneAux = itpTravMgr->coneAux;
-
+  Ddi_Bdd_t *prevSplitItp = itpTravMgr->coneAuxSplitItp;
+  
   Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
     printf("\ngenerating constraining cone with split cone of bound %d\n",
            mark-diffBound);
@@ -424,6 +426,7 @@ Ddi_Bdd_t *itpImgSplitConeConstr(
 			  1, 1, NULL,
 			  itpMgr->initStub, 0/*useRingConstr*/, -1/*andWithRing_i*/, 0);	
     itpTravMgr->coneAux = coneAux;
+    prevSplitItp = itpTravMgr->coneAuxSplitItp = Ddi_BddMakeConstAig(ddm,0);
   }
   
   Ddi_Bddarray_t *splitU = NULL;
@@ -439,6 +442,12 @@ Ddi_Bdd_t *itpImgSplitConeConstr(
   splitVars = Ddi_VarsetMakeFromArray(splitV);
   Ddi_BddSetAig(myA);
   Ddi_BddAndAcc(myA, a);
+  Ddi_BddDiffAcc(myBl, prevSplitItp);
+
+  int doLearn=1;
+  if (doLearn) {
+  }
+
   Ddi_Bdd_t *itpSplit =
     //    Ddi_AigSat22AndWithInterpolant(NULL,myBl,myA,NULL,
     Ddi_AigSat22AndWithInterpolant(NULL,myA,myBl,NULL,
@@ -447,7 +456,11 @@ Ddi_Bdd_t *itpImgSplitConeConstr(
                                    psat, 0, 1, 1, -1.0);
   //  if (itpSplit!=NULL) Ddi_BddNotAcc(itpSplit);
   if (!(*psat) && !Ddi_BddIsOne(itpSplit)) {
+    Ddi_BddOrAcc(itpSplit,prevSplitItp);
+    //    Ddi_AigOptByMonotoneCoreAcc(itpSplit,myBl,NULL,0,-1.0);
     Ddi_AigOptByMonotoneCoreAcc(itpSplit,myA,NULL,1,-1.0);
+    Ddi_Free(itpTravMgr->coneAuxSplitItp);
+    itpTravMgr->coneAuxSplitItp = Ddi_BddDup(itpSplit);
     coneConstr = Ddi_BddDup(itpSplit);
     Ddi_BddComposeAcc(coneConstr,splitV,splitU);
   }
@@ -534,6 +547,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
   Ddi_Bdd_t *prevTo,
   Ddi_Bdd_t *optCare,
   Ddi_Bdd_t *itpPlus,
+  Ddi_Bdd_t *partWindow,
   Ddi_Varset_t *globalVars,
   Ddi_Varset_t *domainVars,
   int step,
@@ -597,7 +611,8 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
     ddm->settings.aig.itpUseCare = 1;
   }
 
-  int enOptB = 0;
+  float coneSplitRatio = travMgr->settings.aig.igrConeSplitRatio;
+  int enOptB = coneSplitRatio<0.99;
   if (enOptB) {
     Ddi_Bdd_t *constrCone = itpImgSplitConeConstr(
                               itpTravMgr,kConeRings,aNew,bNew,step,psat);
@@ -645,20 +660,50 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
   }
   else clungItpRatio = -1.0; // enforce disable
 
-
-  int enPart = 1 && (Ddi_BddSize(prevTo)>100000);
+  int partTh = Ddi_MgrReadAigItpPartTh(ddm);
+  int enPart = 0 && (Ddi_BddSize(prevTo)>partTh);
+  int nPart = 4;
+  int enPartWindow = partWindow!=NULL && Ddi_BddPartNum(partWindow) > 2*nPart;
+  int enPartWindow2 = partWindow==NULL && (Ddi_BddSize(prevTo)>partTh);
   int enSplitConstr = enPart;
   int again = 1;
   Ddi_Bdd_t *aCare = Ddi_BddNot(prevTo);
-  Ddi_Bdd_t *itpNew=Ddi_BddMakeConstAig(ddm,0);
+  Ddi_Bdd_t *itpNew=Ddi_BddMakeConstAig(ddm,(enPartWindow||enPartWindow2)?1:0);
   int doOptNew = 1;
   Ddi_Vararray_t *filterv = Ddi_VararrayDup(itpMgr->ps);
   int nDiff = Ddi_VararrayNum(filterv)/3;
   Ddi_Bdd_t *constrCube=NULL;
   Ddi_Bdd_t *coneSplitOutItp=NULL;
+  Ddi_Bddarray_t *windowLits=NULL;
+  Ddi_Bdd_t *pW=NULL;
+  Ddi_Bdd_t *pWtot = Ddi_BddMakePartConjVoid(ddm); 
+
+  if (enPartWindow) {
+    for (int j=0;j<nPart;j++) {
+      pW = Ddi_BddMakePartConjVoid(ddm);
+      Ddi_BddPartInsertLast(pWtot,pW);
+      Ddi_Free(pW);
+    }
+    for (int j=0; j<Ddi_BddPartNum(partWindow); j++) {
+      int jj=j%nPart;
+      pW = Ddi_BddPartRead(pWtot,jj);
+      Ddi_BddPartInsertLast(pW,Ddi_BddPartRead(partWindow,j));
+    }
+    for (int j=0;j<nPart;j++) {
+      pW = Ddi_BddPartRead(pWtot,j);
+      Ddi_BddSetAig(pW);
+    }
+  }
+
+  if (partTh>0 && (Ddi_BddSize(prevTo)<=partTh)) {
+    Ddi_Free(itpTravMgr->imgPart.windowLits);
+    windowLits = itpTravMgr->imgPart.windowLits = Ddi_BddarrayAlloc(ddm, 0); 
+  }
+  
   for (int ii=0; again; ii++) {
     again=0;
     Ddi_Bdd_t *myA = Ddi_BddDup(aNew);
+    Ddi_Bdd_t *myB = Ddi_BddDup(bNew);
     Ddi_Bdd_t *aAndCare = Ddi_BddDup(myA), *cex=NULL;
     int n0=0;
     if (enPart) {
@@ -684,16 +729,130 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
       Ddi_AigAndCubeAcc(myA,cex);
       Ddi_BddDiffAcc(bNew,itpNew);
     }
+    if (enPartWindow) {
+      Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+        printf("\nA partitioned IMG in window (iter: %d)\n", ii);
+      }
+      Ddi_Bdd_t *myPartWindow=NULL;
+      if (ii==0) {
+        again=1;
+        myPartWindow = Ddi_BddMakeAig(pWtot);
+      }
+      else {
+        again=ii<Ddi_BddPartNum(pWtot);
+        myPartWindow = Ddi_BddNot(Ddi_BddPartRead(pWtot,(ii-1)));
+      }
+      Ddi_BddAndAcc(myB,myPartWindow);
+#if 0
+      // doesn't seem to improve
+      Ddi_BddNotAcc(itpNew);
+      Ddi_BddOrAcc(myB,itpNew);
+      Ddi_BddDiffAcc(myB,prevTo);
+      Ddi_BddNotAcc(itpNew);
+#endif
+      Ddi_Free(myPartWindow);
+    }
+    else if (enPartWindow2) {
+      Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+        printf("\nA partitioned IMG in window (iter: %d)\n", ii);
+      }
+      Ddi_Bdd_t *myPartWindow=Ddi_BddarrayRead(itpTravMgr->imgPart.windows,ii);
+      Ddi_BddAndAcc(myB,myPartWindow);      
+      again=ii<Ddi_BddarrayNum(itpTravMgr->imgPart.windows)-1;
+      //      Ddi_BddNotAcc(itpNew);
+      Ddi_BddAndAcc(myB,itpNew);
+      //      Ddi_BddNotAcc(itpNew);
+    }
+    
+    if (enPartWindow || enPartWindow2) {
 
-    Ddi_Bdd_t *itpNew_i = Ddi_AigSat22AndWithInterpolantAndClung(
+      static int tryNonPart=1;
+      if (tryNonPart && ii==0) {
+        Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+          printf("\nA try nonPart\n");
+        }
+        Ddi_Bdd_t *itpNew_base = Ddi_AigSat22AndWithInterpolantAndClung(
                                                   itpTravMgr->incrSat,
                                                   myA,bNew,NULL,
                                                   globalVars, domainVars,
                                                   tfPiVars,tfPiNum,
                                                   careAig,prevTo,
+                                                  NULL,
                                                   clungItp,clungItpRatio,
                                                   psat, itpPart, itpOdc, 
                                                   0,timeLimit);
+        Ddi_Free(itpNew_base);
+        Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+          printf("\nA now try part\n");
+        }
+      }
+
+    }
+
+    Ddi_Bdd_t *itpNew_i = Ddi_AigSat22AndWithInterpolantAndClung(
+                                                  itpTravMgr->incrSat,
+                                                  myA,myB,NULL,
+                                                  globalVars, domainVars,
+                                                  tfPiVars,tfPiNum,
+                                                  careAig,prevTo,
+                                                  windowLits,
+                                                  clungItp,clungItpRatio,
+                                                  psat, itpPart, itpOdc, 
+                                                  0,timeLimit);
+
+    if (windowLits!=NULL) {
+      Ddi_Bddarray_t *windows = Ddi_BddarrayAlloc(ddm, 0);
+      int np=3;
+      Ddi_Bdd_t *wAnd = Ddi_BddMakePartConjFromArray(windowLits);
+      for (int ii=0; ii<np; ii++) {
+        Ddi_Bdd_t *w_ii = Ddi_BddMakePartDisjVoid(ddm);
+        Ddi_BddarrayWrite(windows,ii,w_ii);
+        Ddi_Free(w_ii);
+      }
+      Ddi_BddarrayWrite(windows,np,wAnd);
+      Ddi_Free(wAnd);
+      for (int ii=0; ii<Ddi_BddarrayNum(windowLits); ii++) {
+        Ddi_Bdd_t *w_i = Ddi_BddNot(Ddi_BddarrayRead(windowLits,ii));
+        int id = ii%np;
+        Ddi_Bdd_t *w_id = Ddi_BddarrayRead(windows,id);
+        Ddi_BddPartInsertLast(w_id,w_i);
+        Ddi_Free(w_i);
+      }
+      for (int ii=0; ii<=np; ii++) {
+        Ddi_Bdd_t *w_ii = Ddi_BddarrayRead(windows,ii);
+        Ddi_BddSetAig(w_ii);
+      }
+      Ddi_Free(itpTravMgr->imgPart.windows);
+      itpTravMgr->imgPart.windows = windows;
+    }
+
+    if (0 && itpNew_i != NULL && enPartWindow) {
+      Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+        printf("\nA partitioned IMG out of window\n");
+      }
+      Ddi_Free(myB);
+      myB = Ddi_BddDup(bNew);
+      Ddi_BddDiffAcc(myB,partWindow);
+      Ddi_BddAndAcc(myB,itpNew_i);
+
+      Ddi_Bdd_t *itpNew_i2 = Ddi_AigSat22AndWithInterpolantAndClung(
+                                                  itpTravMgr->incrSat,
+                                                  myA,myB,NULL,
+                                                  globalVars, domainVars,
+                                                  tfPiVars,tfPiNum,
+                                                  careAig,prevTo,
+                                                  NULL,
+                                                  clungItp,clungItpRatio,
+                                                  psat, itpPart, itpOdc, 
+                                                  0,timeLimit);
+      if (itpNew_i2!=NULL) {
+        Ddi_BddAndAcc(itpNew_i,itpNew_i2);
+        Ddi_Free(itpNew_i2);
+      }
+      else {
+        Ddi_Free(itpNew_i);
+      }
+    }
 
     ddm->settings.aig.itpNoQuantify = 0;
     ddm->settings.aig.itpUseCare = 0;
@@ -704,6 +863,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
       }
       if (doOptNew) {
         coneAux = Ddi_BddNot(itpNew_i);
+        Ddi_BddDiffAcc(coneAux,prevTo);
         Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
           printf("Optimizing itp using aAndNew\n");
         }
@@ -717,9 +877,12 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
                                                 0,timeLimit);
         Ddi_Free(coneAux);
       }
-      Ddi_BddOrAcc(itpNew,itpNew_i);
+      if (enPartWindow || enPartWindow2)
+        Ddi_BddAndAcc(itpNew,itpNew_i);
+      else
+        Ddi_BddOrAcc(itpNew,itpNew_i);
       Ddi_Free(constrCube);
-      if (n0==0) {
+      if (n0==0 && !(enPartWindow || enPartWindow2)) {
         again=0;
       }
       else if (enPart) {
@@ -759,12 +922,16 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
       }
     }
     else {
+      again=0;
       Ddi_Free(itpNew);
     }
     Ddi_Free(itpNew_i);
     Ddi_Free(aAndCare);
+    Ddi_Free(myA);
+    Ddi_Free(myB);
     Ddi_Free(cex);
   } 
+  Ddi_Free(pWtot);
   Ddi_Free(filterv);
   Ddi_Free(coneSplitOutItp);
   
@@ -891,6 +1058,7 @@ TravItpImgPart (
   Ddi_Bdd_t *optCare,
   Ddi_Bdd_t *itpPlus,
   Ddi_Bdd_t *toPlusCube,
+  Ddi_Bdd_t *partWindow,
   int *psat,
   int itpPart,
   int itpOdc,
@@ -929,7 +1097,7 @@ TravItpImgPart (
   Ddi_Vararray_t *splitRefV;
   Ddi_Varset_t *splitVars = NULL;
   Ddi_Bdd_t *itpNextRing = NULL;
-  int itpPartTh = Ddi_MgrReadAigItpPartTh(ddm);
+  int itpPartTh = 0; // Ddi_MgrReadAigItpPartTh(ddm);
   int doSplit2 = 0 && (doSplit/2);
   int doSplitCare = 0, doFwdBwd = 0;
   int enLowerBoundk = 0;
@@ -1037,7 +1205,7 @@ TravItpImgPart (
     else {
       itp1 = TravItpImgPart (itpTravMgr,kCone,kConeRings,a1,b1,prevTo,
 			 step,doSplit,globalVars,domainVars,optCare1,
-			 itpPlus1,toPlusCube,&sat1,itpPart,itpOdc,timeLimit);
+                         itpPlus1,toPlusCube,NULL,&sat1,itpPart,itpOdc,timeLimit);
     }
     if (sat1) {
       if (psat!=NULL) *psat = sat1;
@@ -1055,7 +1223,7 @@ TravItpImgPart (
       else {
 	itp01 = TravItpImgPart (itpTravMgr,kCone,kConeRings,a01,b0,prevTo,
 			  step,doSplit,globalVars,domainVars,optCare0,
-			   itpPlus0,toPlusCube,&sat0,itpPart,itpOdc,timeLimit);
+                          itpPlus0,toPlusCube,NULL,&sat0,itpPart,itpOdc,timeLimit);
       }
       if (sat0) {
 	if (psat!=NULL) *psat = sat0;
@@ -1073,7 +1241,7 @@ TravItpImgPart (
       else {
 	itp00 = TravItpImgPart (itpTravMgr,kCone,kConeRings,a00,b0,prevTo,
 			   step,doSplit,globalVars,domainVars,optCare0,
-			   itpPlus0,toPlusCube,&sat0,itpPart,itpOdc,timeLimit);
+                           itpPlus0,toPlusCube,NULL,&sat0,itpPart,itpOdc,timeLimit);
       }
       if (sat0) {
 	if (psat!=NULL) *psat = sat0;
@@ -1239,7 +1407,7 @@ TravItpImgPart (
 
 	itp_i = TravItpImgPart (itpTravMgr,kCone,kConeRings,a_i,b_i,prevTo,
 			   step,doSplit,globalVars,domainVars,optCare,
-			   itpPlus,toPlusCube,&sat_i,itpPart,itpOdc,timeLimit);
+                           itpPlus,toPlusCube,NULL,&sat_i,itpPart,itpOdc,timeLimit);
 	if (sat_i) {
 	  if (psat!=NULL) *psat = sat_i;
 	  Ddi_Free(itp);
@@ -1296,7 +1464,7 @@ TravItpImgPart (
 	  itpLeft = TravItpImgPart (itpTravMgr,kCone,kConeRings,aLeft,bLeft,
 				prevTo,
 				step,doSplit,globalVars,domainVars,optCare,
-				itpPlus,toPlusCube,&sat1,itpPart,itpOdc,
+                                itpPlus,toPlusCube,NULL,&sat1,itpPart,itpOdc,
 				timeLimit);
 	  itpTravMgr->imgPartVars = save;
 	  if (sat1) {
@@ -1369,7 +1537,7 @@ TravItpImgPart (
 
   if (1 && prevTo!=NULL && itpPart<=8) {
 
-    return itpImgWithPrevTo (itpTravMgr,kConeRings,a,b,prevTo,optCare,itpPlus,
+    return itpImgWithPrevTo (itpTravMgr,kConeRings,a,b,prevTo,optCare,itpPlus,partWindow,
                              globalVars,domainVars,step,psat,
                              itpPart,itpOdc,timeLimit);
   }
@@ -1664,6 +1832,7 @@ TravItpImgPart (
 					  globalVars, domainVars,
 					  tfPiVars,tfPiNum,
 					  optCare,prevTo,
+                                          NULL,
                                           clungItp,clungItpRatio,
                                           psat, itpPart, itpOdc, 
 					  0,timeLimit);

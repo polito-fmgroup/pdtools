@@ -16457,7 +16457,7 @@ growConeBwdSubsetByTarget(
 #endif
   }
 
-  float coneSplitRatio = travMgr->settings.aig.igrConeSplitRatio;
+  float coneSplitRatio = 1.0; //travMgr->settings.aig.igrConeSplitRatio;
   Ddi_Bddarray_t *unrollSplit = NULL;
   int split_i = -1;
   if ((coneSplitRatio < 0.99) && (start_i-end_i)>4) {
@@ -26920,7 +26920,7 @@ itpImgGetCone(
                  itpMgr->initStub,
                  itpTravMgr->observedGates,
                  tryTargetSubset,
-                 growCone != 1 ? 2 : 0 /*useRingConstr */ ,
+                 0/*growCone != 1 ? 2 : 0*/ /*useRingConstr */ ,
                  -1, boundK);
             if (constrCone!=NULL) {
               Ddi_BddDiffAcc(localCone,constrCone);
@@ -28184,6 +28184,7 @@ itpImgIncrLearn(
   Ddi_Bdd_t * fromAndNew,
   Ddi_Bdd_t * cone,
   Ddi_Bdd_t * care,
+  Ddi_Bdd_t * partWindowOut,
   float itpTimeLimit,
   int *pabort
 )
@@ -28251,7 +28252,18 @@ itpImgIncrLearn(
     Ddi_Free(cex);
   }
   else {
-    int nl = Ddi_AigSatLearningToAigs (ddiS,cone2);
+    if (partWindowOut!=NULL) {
+      int minIn=6, minOut=10;
+      Ddi_Bdd_t *cone2dup = Ddi_BddDup(cone2);
+      int nlw = Ddi_AigSatLearningToAigs (ddiS,cone2dup,0,minIn,minOut);
+      Ddi_Bdd_t *window2 = Ddi_AigSatLearningAigsToBdds(cone2dup);
+      Ddi_Bdd_t *window = Ddi_BddCopy(ddm,window2);
+      Ddi_DataCopy(partWindowOut,window);
+      Ddi_Free(cone2dup);
+      Ddi_Free(window2);
+      Ddi_Free(window);
+    }
+    int nl = Ddi_AigSatLearningToAigs (ddiS,cone2,0,0,0);
     int size0 = Ddi_BddSize(cone);
     //    Pdtutil_Assert(learntAigDup!=NULL,"missing learnt aig");
     Ddi_BddSetAig(cone);
@@ -28278,9 +28290,12 @@ itpImgIncrLearn(
     int assumeNotFrom=itpTravMgr->prevTo!=NULL;
     if (assumeNotFrom) {
       Ddi_Bdd_t *constr2 = Ddi_BddCopy(ddmDup,itpTravMgr->from0);
+      //      Ddi_Bdd_t *constr2Orig = Ddi_BddSubstVars(itpTravMgr->prevTo,itpMgr->ns,itpMgr->ps);
+      //      Ddi_Bdd_t *constr2 = Ddi_BddCopy(ddmDup,constr2Orig);
       Ddi_BddNotAcc(constr2);
       Ddi_AigSatMinisatLoadClausesIncrementalAsserted(ddiS, constr2);
       Ddi_IncrSatMgrLockAig(ddiS,constr2);
+      //      Ddi_Free(constr2Orig);
       Ddi_Free(constr2);
     }
   }
@@ -28431,8 +28446,8 @@ itpImgLoop(
   }
   
   if (fromNewLevel >= 10) {
+    usePrevTo = fromNewLevel-10;
     fromNewLevel = 0;
-    usePrevTo = 1;
   }
 
   itpTravMgr->settings.enItpSeq = 0;
@@ -28454,6 +28469,7 @@ itpImgLoop(
     int useLgl = useMinisat22>2;
     //    ddiS = Ddi_IncrSatMgrAlloc(NULL, 1, 1, 0);
     ddmDup = Ddi_MgrDup(ddm);
+    //    Ddi_MgrSetAigCnfLevel(ddmDup, 0);
     if (useLgl)
       ddiS = Ddi_IncrSatMgrAlloc(ddmDup, -1 /* lgl */, 0, 0);
     else 
@@ -28906,8 +28922,11 @@ itpImgLoop(
 
       if (fromNewLevel > 0 || usePrevTo != 0) { 
         Ddi_Free(itpTravMgr->prevTo);
-        if (step>0 && Ddi_BddSize(itpTravMgr->from) > 0) {
+        if (usePrevTo == 1 && step>0 && Ddi_BddSize(itpTravMgr->from) > 0) {
           itpTravMgr->prevTo = Ddi_BddDup(itpTravMgr->from);
+        }
+        else if (usePrevTo > 1 && step>0 && Ddi_BddSize(itpTravMgr->reached) > 0) {
+          itpTravMgr->prevTo = Ddi_BddDup(itpTravMgr->reached);
         }
       }
 
@@ -31382,6 +31401,7 @@ itpImgLoop(
                     }
                     Ddi_Bdd_t *to22 = NULL;
                     int enIncrLearning = ddiS!=NULL;
+                    Ddi_Bdd_t *partWindow=NULL;
                     if (enIncrLearning) {
                       int abort=0;
                       Ddi_Bdd_t *cone = Ddi_BddDup(b);
@@ -31399,8 +31419,12 @@ itpImgLoop(
                       Ddi_Bdd_t *myA = Ddi_BddDup(fromAndNew);
                       if (0&&itpTravMgr->prevFrom!=NULL)
                         Ddi_BddDiffAcc(myA,itpTravMgr->prevFrom);
+                      int tryLearnConeWindow = 0 && (Ddi_BddSize(cone)>100000);
+                      if (tryLearnConeWindow) {
+                        partWindow = Ddi_BddMakeConstAig(ddm, 1); 
+                      }
                       isSat = itpImgIncrLearn(itpTravMgr,ddiS,
-                           myA,cone,care,itpTimeLimit,&abort);
+                        myA,cone,care,partWindow,itpTimeLimit,&abort);
                       Ddi_InfoCopy(b,cone);
                       Ddi_Free(myA);
                       Ddi_Free(cone);
@@ -31408,11 +31432,12 @@ itpImgLoop(
                     }
                     if (!isSat)
 		      to22 = TravItpImgPart(itpTravMgr,kCone,kConeRings,a,b,
-                        itpTravMgr->reached,step,doSplit,
-                        //                        itpTravMgr->prevTo,step,doSplit,
+                        //    itpTravMgr->reached,step,doSplit,
+                        itpTravMgr->prevTo,step,doSplit,
 			nsvars, psvars,
-			/* careBwd DISABLED */ c, itpPlus, toPlusCube,
+                        /* careBwd DISABLED */ c, itpPlus, toPlusCube, partWindow,
                         &sat, itpPart, 1, itpTimeLimit);
+                    Ddi_Free(partWindow);
                     ddm->settings.aig.itpUseCare = careOpt;
 		    isSat = to22==NULL;
 		    static int checkRing = 0 && sat;
@@ -38969,6 +38994,10 @@ itpTravMgrInit(
   itpTravMgr->prevFwdUnroll = NULL;
   itpTravMgr->noDynAbstr = Ddi_VararrayAlloc(ddm, 0);
 
+  itpTravMgr->imgPart.windowLits = NULL;
+  itpTravMgr->imgPart.windows = NULL;
+  itpTravMgr->imgPart.fromSizeTh = 0;
+
   itpTravMgr->constrainVars = NULL;
   itpTravMgr->constrainSubstLits = NULL;
   itpTravMgr->saveConstrainVars = NULL;
@@ -39049,6 +39078,9 @@ itpTravMgrFree(
   Ddi_Free(itpTravMgr->prevFwdUnroll);
   Ddi_Free(itpTravMgr->noDynAbstr);
 
+  Ddi_Free(itpTravMgr->imgPart.windowLits);
+  Ddi_Free(itpTravMgr->imgPart.windows);
+  
   Ddi_Free(itpTravMgr->constrainVars);
   Ddi_Free(itpTravMgr->constrainSubstLits);
   Ddi_Free(itpTravMgr->saveConstrainVars);

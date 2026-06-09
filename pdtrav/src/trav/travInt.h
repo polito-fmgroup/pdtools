@@ -685,6 +685,10 @@ struct TravItpMgr_s {
   } nnf;
 
   struct {
+    Ddi_Bdd_t *partWindow;
+  } learn;
+
+  struct {
     int nScc;
     int *sccSize;
     int *latchSccMap;
@@ -801,6 +805,12 @@ struct TravItpTravMgr_s {
   Ddi_Vararray_t *saveConstrainVars;
   Ddi_Bddarray_t *saveConstrainSubstLits;
 
+  struct {
+    Ddi_Bddarray_t *windowLits;
+    Ddi_Bddarray_t *windows;
+    int fromSizeTh;
+  } imgPart;
+  
   Ddi_Vararray_t *imgPartVars;
   Ddi_Bddarray_t *itpSatHints;
   Ddi_Bddarray_t *observedGates;
@@ -947,6 +957,7 @@ TravItpImgPart (
   Ddi_Bdd_t *optCare,
   Ddi_Bdd_t *itpPlus,
   Ddi_Bdd_t *toPlusCube,
+  Ddi_Bdd_t *partWindow,
   int *psat,
   int itpPart,
   int itpOdc,

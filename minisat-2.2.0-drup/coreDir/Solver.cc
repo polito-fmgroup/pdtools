@@ -1933,8 +1933,9 @@ lbool Solver::search(int nof_conflicts)
                 if (next == lit_Undef)
                     // Model found:
                     return l_True;
-                if (varDecisions.size() > var(next)) {
-                  varDecisions[var(next)]++;
+                if (varDecisions.size() > 2*var(next)) {
+                  int id = 2*var(next)+(sign(next)?1:0);
+                  varDecisions[id]++;
                 }
             }
 

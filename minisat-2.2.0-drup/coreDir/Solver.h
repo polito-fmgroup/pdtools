@@ -205,28 +205,39 @@ public:
 
   void enableVarDecisions(){
     //    varDecisions.clear();
-    varDecisions.growTo(nVars());
+    varDecisions.growTo(2*nVars());
   }
-  void topVarDecisions(vec<Var>& topv, vec<int>& topd, int *cnf2aig, int n, int mind) {
+  void topVarDecisions(vec<Var>& topv, vec<int>& topd, int *cnf2aig, int n,
+                       int mind, float litUnbTh) {
     topv.clear();
     topd.clear();
     while(n-->0) {
-      Var vMax = 0; 
+      Var vMax = 0;
+      int dMax = varDecisions[0]+varDecisions[1];
       for (Var v=1; v<nVars(); v++) {
-        if (varDecisions[v]>varDecisions[vMax])
+        int dec0 = varDecisions[2*v]; 
+        int dec1 = varDecisions[2*v+1]; 
+        float ratio = (dec0>dec1) ? ((float)dec0)/dec1 : ((float)dec1)/dec0;
+        if (ratio < litUnbTh) continue;
+        if (dec0+dec1>dMax) {
           vMax = v;
+          dMax = dec0+dec1;
+        }
       }
-      if (varDecisions[vMax]>mind) {
+      if (dMax>mind) {
         if (cnf2aig!=NULL && cnf2aig[vMax]<=2) {
           n++; // don't count it
         }
         topv.push(vMax);
-        topd.push(varDecisions[vMax]);
-        varDecisions[vMax] = 0;
+        topd.push(varDecisions[2*vMax]);
+        topd.push(varDecisions[2*vMax+1]);
+        varDecisions[2*vMax] = 0;
+        varDecisions[2*vMax+1] = 0;
       }
     }
     for (int i=0; i<topv.size(); i++) {
-      varDecisions[topv[i]] = topd[i];
+      varDecisions[2*topv[i]] = topd[2*i];
+      varDecisions[2*topv[i]+1] = topd[2*i+1];
     }
   }
   

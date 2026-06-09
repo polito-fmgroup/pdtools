@@ -812,7 +812,14 @@ Ddi_AigSatStopLearningIncremental
 EXTERN int
 Ddi_AigSatLearningToAigs (
   Ddi_IncrSatMgr_t *mgr,
-  Ddi_Bdd_t *refAig
+  Ddi_Bdd_t *refAig,
+  int includeOriginal,
+  int minLitIn,
+  int minLitOut
+);
+Ddi_Bdd_t *
+Ddi_AigSatLearningAigsToBdds (
+  Ddi_Bdd_t *f
 );
 EXTERN int
 Ddi_AigFilterLearningAigs (
@@ -933,6 +940,7 @@ Ddi_AigSat22AndWithInterpolantAndClung (
   int tfPiNum,
   Ddi_Bdd_t *optCare,
   Ddi_Bdd_t *prevItp, // *itpPlus, 
+  Ddi_Bddarray_t *windowLits, 
   Ddi_Bdd_t *clungItp, 
   float clungItpRatio,
   int *psat,

@@ -618,6 +618,13 @@ sat22ConstrainIntern(
   int doTernary,
   float subsetRatio
 );
+static Ddi_Bddarray_t *
+Minisat22SolverTopVarsByDecisions(
+  void *pS22void,
+  Ddi_Bdd_t *filter,
+  float litUnbalanceTh,
+  int nv
+);
 
 /**AutomaticEnd***************************************************************/
 
@@ -1349,6 +1356,7 @@ Ddi_BddPartFilter (
     }
   }
   Ddi_AigArrayClearAuxInt(bmgr,aigNodes);
+  bAigArrayFree(aigNodes);
   
   return fFiltered;
 }
@@ -77870,6 +77878,94 @@ bAigSetAuxCharForInterpolant(
   return (nA);
 }
 
+
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+static int
+addAigClausesBaigs(
+  Ddi_Bdd_t *f,
+  Ddi_Bddarray_t *fA
+)
+{
+  if (f==NULL) return 0;
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
+  int n=0;
+  
+  bAig_array_t *clausesBaigs = Ddi_BddReadClausesBaigs(f);
+  if (clausesBaigs!=NULL) {
+    vec<bool> usedPos(clausesBaigs->num,false);
+    vec<bool> usedNeg(clausesBaigs->num,false);
+    vec<vec<int>> *clausesInt = (vec<vec<int>> *) Ddi_BddReadClausesInt(f);
+    vec<vec<int>>& v = *clausesInt;
+    for (int i=0; i<v.size(); i++) {
+      int ii;
+      vec<int>& cInt = v[i];
+      for (int j=0; j<cInt.size(); j++) {
+        int id = abs(cInt[j])-1;
+        Pdtutil_Assert(id>=0&&id<clausesBaigs->num,"wrong clauseInt lit");
+        if (cInt[j]<0) usedNeg[id]=true;
+        else usedPos[id]=true;
+      }
+    }
+    for (int j=0; j<clausesBaigs->num; j++) {
+      if (usedPos[j]||usedNeg[j]) {
+        bAigEdge_t baig = clausesBaigs->nodes[j];
+        Ddi_Bdd_t *aig = Ddi_BddMakeFromBaig(ddm, baig);
+        if (usedPos[j]) Ddi_BddarrayInsertLast(fA,aig), n++;
+        Ddi_BddNotAcc(aig);
+        if (usedNeg[j]) Ddi_BddarrayInsertLast(fA,aig), n++;
+        Ddi_Free(aig);
+      }
+    }
+  }
+  return n;
+}
+
+
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+static void
+addAigClauses(
+  Ddi_Bdd_t *f,
+  Solver&    S,
+  void *S22
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
+  bAig_array_t *baigs = Ddi_BddReadClausesBaigs(f);
+  if (baigs!=NULL) {
+    vec<vec<int>> *clausesInt = (vec<vec<int>> *) Ddi_BddReadClausesInt(f);
+    vec<vec<int>>& v = *clausesInt;
+    for (int i=0; i<v.size(); i++) {
+      int ii;
+      vec<Lit> partTargets;
+      vec<int>& cInt = v[i];
+      partTargets.clear();
+      for (int j=0; j<cInt.size(); j++) {
+        int id = abs(cInt[j])-1;
+        Pdtutil_Assert(id>=0&&id<baigs->num,"wrong clauseInt lit");
+        bAigEdge_t baig = cInt[j]<0 ? bAig_Not(baigs->nodes[id]) : baigs->nodes[id];
+        int fCnf = DdiAig2CnfIdSigned(ddm->aig.mgr,baig); 
+        partTargets.push(MinisatLit(fCnf));          
+      }
+      if (S22==NULL) {
+        MinisatSolverAddClause(S,partTargets);
+      }
+      else {
+        Minisat22Clause(S22,partTargets);
+      }
+    }      
+  }
+}
+  
 /**Function********************************************************************
   Synopsis    [Convert a DDI AIG to a monolitic BDD]
   Description [Convert a DDI AIG to a monolitic BDD]
@@ -78069,6 +78165,7 @@ MinisatClausesWithSuppFlow(
     //    Ddi_Bddarray_t *fA = Ddi_BddarrayMakeFromBddPart(f);
     Ddi_Bddarray_t *fA = Ddi_BddarrayMakeFromBddRoots(f);
     Ddi_Vararray_t *vA = NULL;
+    addAigClausesBaigs(f,fA);
     if (g!=NULL) {
       if (Ddi_BddIsPart(g)) {
         Ddi_Bddarray_t *gA = Ddi_BddarrayMakeFromBddPart(g);
@@ -78087,35 +78184,7 @@ MinisatClausesWithSuppFlow(
       Ddi_Vararray_t *pIs = incrementalSat ? NULL:Ddi_BddarraySuppVararray(fA);
       Ddi_Bddarray_t *fA2 = Ddi_BddarrayDup(fA);
       Ddi_BddarrayAppend(fA2,sharedAigs);
-      if (1 && (g!=NULL)) {
-        bAig_array_t *clausesBaigs = Ddi_BddReadClausesBaigs(g);
-        if (clausesBaigs!=NULL) {
-          vec<bool> usedPos(clausesBaigs->num,false);
-          vec<bool> usedNeg(clausesBaigs->num,false);
-          vec<vec<int>> *clausesInt = (vec<vec<int>> *) Ddi_BddReadClausesInt(g);
-          vec<vec<int>>& v = *clausesInt;
-          for (int i=0; i<v.size(); i++) {
-            int ii;
-            vec<int>& cInt = v[i];
-            for (int j=0; j<cInt.size(); j++) {
-              int id = abs(cInt[j])-1;
-              Pdtutil_Assert(id>=0&&id<clausesBaigs->num,"wrong clauseInt lit");
-              if (cInt[j]<0) usedNeg[id]=true;
-              else usedPos[id]=true;
-            }
-          }
-          for (int j=0; j<clausesBaigs->num; j++) {
-            if (usedPos[j]||usedNeg[j]) {
-              baig = clausesBaigs->nodes[j];
-              Ddi_Bdd_t *aig = Ddi_BddMakeFromBaig(ddm, baig);
-              if (usedPos[j]) Ddi_BddarrayInsertLast(fA2,aig);
-              Ddi_BddNotAcc(aig);
-              if (usedNeg[j]) Ddi_BddarrayInsertLast(fA2,aig);
-              Ddi_Free(aig);
-            }
-          }
-        }
-      }
+      addAigClausesBaigs(g,fA2);
       Ddi_AbcLock ();
       aigAbcInfo = Ddi_BddarrayToAbcCnfInfo (fA2, pIs, visitedNodes);
       Ddi_Free(pIs);
@@ -78738,6 +78807,8 @@ MinisatClausesWithSuppFlow(
 
     aigCnfMgr->phFilter = phFilter;
   }
+  
+  addAigClauses(f,S,S22);
 
   if (na!=NULL && *na < 0 && !disNA && incrSat==NULL) {
     Pdtutil_Assert(lgl==NULL,"LGL not supported with proof");
@@ -78839,6 +78910,8 @@ MinisatClausesWithSuppFlow(
         Minisat22Clause(S22,partTargets);
       }
     }
+
+    addAigClauses(g,S,S22);
 
     bAig_array_t *baigs = Ddi_BddReadClausesBaigs(g);
     if (baigs!=NULL) {
@@ -80436,6 +80509,7 @@ static int getLglLearning(
   LGL *lgl,
   vec<int> *learned123p,
   vec<vec<Lit> >& learned,
+  int includeOriginal,
   int maxSize
 )
 {
@@ -80461,7 +80535,8 @@ static int getLglLearning(
       doExport = 1;
       nLits = sCl->top-sCl->start;
       litArray = sCl->start;
-      continue; // skip
+      if (!includeOriginal)
+        continue; // skip
     }
     else {
       doExport = 1;
@@ -80473,7 +80548,7 @@ static int getLglLearning(
       if (l>=notalit) continue;
       if (l==0) {
         if (cl.size()>0) {
-          if (cl.size()<=maxSize) {
+          if (cl.size()<=maxSize||maxSize<=0) {
             if (learned.size()<=last_i)
               learned.growTo(learned.size()*2);
             //            learned.push();
@@ -80600,7 +80675,10 @@ static int getEquivFromClauses(
 int
 Ddi_AigSatLearningToAigs (
   Ddi_IncrSatMgr_t *mgr,
-  Ddi_Bdd_t *refAig
+  Ddi_Bdd_t *refAig,
+  int includeOriginal,
+  int minLitIn,
+  int minLitOut
 )
 {
   Ddi_Mgr_t *ddm = mgr->ddiMgr;
@@ -80648,20 +80726,29 @@ Ddi_AigSatLearningToAigs (
     learned.clear();
     int maxSize = 10000; // just a big number
     getLglLearning(ddm,mgr->lgl,mgr->lglLearned123,
-                   learned,maxSize);    
+                   learned,includeOriginal,maxSize);    
     for (int i=0; i<learned.size() ; i++) {
       int j;
       const vec<Lit>& c = learned[i];
       bool useClause = true;
-      for (j=0; j<c.size() && useClause; j++) {
+      int cntLitIn=0;
+      for (j=0; j<c.size() && (useClause||minLitIn>0); j++) {
         int v = var(c[j]);
         if (!usedVar[v])
           useClause = false;
+        else
+          cntLitIn++;
+      }
+      if (minLitIn>0) {
+        useClause = (cntLitIn >= minLitIn && cntLitIn < 100);
+        if (minLitOut>0) useClause &= ((c.size()-cntLitIn) >= minLitOut);
       }
       if (useClause) {
         cInt.clear();
         for (j=0; j<c.size(); j++) {
           int v = var(c[j]);
+          if (!usedVar[v])
+            continue; // skip lits out of refAig 
           bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
           int s = sign(c[j]);
           int litInt = bAig_AuxInt(bmgr,baig);
@@ -80678,17 +80765,26 @@ Ddi_AigSatLearningToAigs (
   else {
     for (int i=0; i<S22->nLearnts(); i++) {
       int j;
+      int cntLitIn=0;
       const Minisat::Clause& c = S22->getLearnedClause (i);
       bool useClause = true;
       for (j=0; j<c.size() && useClause; j++) {
         int v = Minisat::var(c[j]);
         if (!usedVar[v])
           useClause = false;
+        else
+          cntLitIn++;
+      }
+      if (minLitIn>0) {
+        useClause = (cntLitIn >= minLitIn);
+        if (minLitOut>0) useClause &= ((c.size()-cntLitIn) >= minLitOut);
       }
       if (useClause) {
         cInt.clear();
         for (j=0; j<c.size(); j++) {
           int v = Minisat::var(c[j]);
+          if (!usedVar[v])
+            continue; // skip lits out of refAig 
           bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
           int s = Minisat::sign(c[j]);
           int litInt = bAig_AuxInt(bmgr,baig);
@@ -80719,36 +80815,51 @@ Ddi_AigSatLearningToAigs (
   aigArrayClearAuxIntIntern(bmgr,visitedNodes);
 
   return learntClauses->size();
-#if 0  
+  
+}
+
+
+/**Function********************************************************************
+  Synopsis    [Convert a DDI AIG to a monolitic BDD]
+  Description [Convert a DDI AIG to a monolitic BDD]
+  SideEffects []
+  SeeAlso     [Ddi_BddMakeFromCU]
+******************************************************************************/
+Ddi_Bdd_t *
+Ddi_AigSatLearningAigsToBdds (
+  Ddi_Bdd_t *f
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(f);
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
 
   Ddi_Bdd_t *learntAig = Ddi_BddMakePartConjVoid(ddm);
-  for (int i=0; i<S22->nLearnts(); i++) {
-    int j;
-    const Minisat::Clause& c = S22->getLearnedClause (i);
-    bool useClause = true;
-    for (j=0; j<c.size() && useClause; j++) {
-      int v = Minisat::var(c[j]);
-      if (!usedVar[v])
-        useClause = false;
-    }
-    if (useClause) {
-      Ddi_Bdd_t *clauseAig = Ddi_BddMakePartDisjVoid(ddm);
-      for (j=0; j<c.size(); j++) {
-        int v = Minisat::var(c[j]);
-        bAigEdge_t baig = ddm->cnf.cnf2aig[v+1];
-        int s = Minisat::sign(c[j]);
-        Ddi_Bdd_t *litAig = Ddi_BddMakeFromBaig(ddm, baig);
-        if (s) Ddi_BddNotAcc(litAig);
-        Ddi_BddPartInsertLast(clauseAig,litAig);
-        Ddi_Free(litAig);
-      }
-      Ddi_BddPartInsertLast(learntAig,clauseAig);
-      Ddi_Free(clauseAig);
-    }
-  }
-  return learntAig;
-#endif
+
+  bAig_array_t *baigs = Ddi_BddReadClausesBaigs(f);
+  Pdtutil_Assert(baigs!=NULL,"ref baigs needed");
+  vec<vec<int>> *clausesInt = (vec<vec<int>> *) Ddi_BddReadClausesInt(f);
+  vec<vec<int>>& v = *clausesInt;
   
+  for (int i=0; i<v.size(); i++) {
+    int ii;
+    vec<Lit> partTargets;
+    vec<int>& cInt = v[i];
+    partTargets.clear();
+    Ddi_Bdd_t *clauseAig = Ddi_BddMakePartDisjVoid(ddm);
+    for (int j=0; j<cInt.size(); j++) {
+      int id = abs(cInt[j])-1;
+      Pdtutil_Assert(id>=0&&id<baigs->num,"wrong clauseInt lit");
+      bAigEdge_t baig = cInt[j]<0 ? bAig_Not(baigs->nodes[id]) : baigs->nodes[id];
+      Ddi_Bdd_t *litAig = Ddi_BddMakeFromBaig(ddm, baig);
+      Ddi_BddPartInsertLast(clauseAig,litAig);
+      Ddi_Free(litAig);
+    }
+    Ddi_BddPartInsertLast(learntAig,clauseAig);
+    Ddi_Free(clauseAig);
+  }
+
+  //  Ddi_BddSetAig(learntAig);
+  return learntAig;
 }
 
 /**Function********************************************************************
@@ -80970,7 +81081,7 @@ Ddi_AigSatImpliedLearningIncremental
     int maxSize = 4;
     nSolverVars = lglmaxvar(incrSat->lgl)+1;
     getLglLearning(ddm,incrSat->lgl,incrSat->lglLearned123,
-                   learned,maxSize);    
+                   learned,0,maxSize);    
   }
   if (learned.size()>0) {
     int again = 0;
@@ -81204,6 +81315,7 @@ Ddi_AigSatMinisat22WithCexAndAbortIncremental
     }
     incrSat->lglMaxFrozen = lglmaxvar(incrSat->lgl);
     //    LGL *clone = lglclone(incrSat->lgl);
+    lglsetopt(incrSat->lgl,"plim",1000000);
     res = lglsat (incrSat->lgl);
     //    lglunclone (incrSat->lgl, clone);
     //    lglrelease (clone);
@@ -81952,6 +82064,7 @@ Ddi_AigSatMinisat22RemoveCoreFinal
     }
     else 
       Ddi_DataCopy(constr,constrNoFinal);
+    bAigArrayFree(finalNodes);
   }
   
   Ddi_Free(constrPart);
@@ -84178,6 +84291,7 @@ aigSat22AndWithInterpolantIntern (
   int tfPiNum,
   Ddi_Bdd_t *optCare,
   Ddi_Bdd_t *prevItp, // *itpPlus, 
+  Ddi_Bddarray_t *windowLits, 
   Ddi_Bdd_t *clungItp,
   float clungItpRatio,
   int *psat,
@@ -84818,6 +84932,8 @@ aigSat22AndWithInterpolantIntern (
       //    S22->eliminate(false);
       if (timeLimit >= 0) {
         S22->setTimeBudget((double)timeLimit);
+        S22->enableVarDecisions();
+
         Ddi_Bddarray_t *actAigs = ddm->aig.actVars;
         if (actAigs!=NULL) {
           int na0 = assumps22.size();
@@ -84858,6 +84974,10 @@ aigSat22AndWithInterpolantIntern (
     // fprintf(dMgrO(ddm),"UNSAT\n");
   }
 
+  if (windowLits!=NULL) {
+    Ddi_Bddarray_t *newWL = Minisat22SolverTopVarsByDecisions(S22,b,5.0,16);
+    Ddi_DataCopy(windowLits,newWL);
+  }
 
   cpuTime = itpSatTime = util_cpu_time () - startTime;
 
@@ -85808,7 +85928,7 @@ Ddi_AigSat22AndWithInterpolant (
   return
     aigSat22AndWithInterpolantIntern (
       incrSat,a,b,bAbstr,globalVars,domainVars,tfPiVars,tfPiNum,
-      optCare,prevItp,NULL,-1.0,psat,itpPart,itpOdc,tryRevItp,timeLimit);
+      optCare,prevItp,NULL,NULL,-1.0,psat,itpPart,itpOdc,tryRevItp,timeLimit);
 }
  
 /**Function********************************************************************
@@ -85836,6 +85956,7 @@ Ddi_AigSat22AndWithInterpolantAndClung (
   int tfPiNum,
   Ddi_Bdd_t *optCare,
   Ddi_Bdd_t *prevItp, // *itpPlus, 
+  Ddi_Bddarray_t *windowLits, 
   Ddi_Bdd_t *clungItp, 
   float clungItpRatio,
   int *psat,
@@ -85848,7 +85969,7 @@ Ddi_AigSat22AndWithInterpolantAndClung (
   return
     aigSat22AndWithInterpolantIntern (
       incrSat,a,b,bAbstr,globalVars,domainVars,tfPiVars,tfPiNum,
-      optCare,prevItp,clungItp,clungItpRatio,psat,itpPart,itpOdc,tryRevItp,timeLimit);
+      optCare,prevItp,windowLits,clungItp,clungItpRatio,psat,itpPart,itpOdc,tryRevItp,timeLimit);
 }
  
 /**Function********************************************************************
@@ -89546,6 +89667,74 @@ Minisat22ConstrainSolverWithAbstrCex(
   }
 
   return nAClausesNew;
+}
+
+/**Function********************************************************************
+  Synopsis    [Satisfiability Check on a&b with aig core generation]
+  Description [Satisfiability Check on a&b with aig core generation.
+              ]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Bddarray_t *
+Minisat22SolverTopVarsByDecisions(
+  void *pS22void,
+  Ddi_Bdd_t *filter,
+  float litUnbalanceTh,
+  int nv
+) {
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(filter);
+  bAig_array_t *bNodes;
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  Minisat22Solver *pS22 = (Minisat22Solver *)pS22void;
+  int j, i;
+  Ddi_Bddarray_t *litA = Ddi_BddarrayAlloc(ddm,0);
+  
+  Minisat::vec<Minisat::Var> topv22;
+  Minisat::vec<int> topd;
+  Minisat::vec<double> topa;
+  int mind = 10;
+  double mina = 0.0;
+  int nSolverVars=pS22->nVars();
+  int *myCnf2Aig = (int *)calloc(nSolverVars, sizeof(int));
+
+  bAig_array_t *aigNodes = bAigArrayAlloc();
+  Ddi_PostOrderBddAigVisitIntern(filter,aigNodes,-1);
+  Ddi_PostOrderAigClearVisitedIntern(bmgr,aigNodes);
+  for (i=0; i<aigNodes->num; i++) {
+    bAigEdge_t baig = aigNodes->nodes[i];
+    int vBaig = aig2CnfId(bmgr,baig);
+    int vSat = vBaig-1;
+    Pdtutil_Assert(vSat>=0 &&vSat<nSolverVars,"wrong sat var id");
+    myCnf2Aig[vSat]=3;
+  }
+  bAigArrayFree(aigNodes);
+  
+  pS22->topVarDecisions(topv22, topd, myCnf2Aig, nv, mind, litUnbalanceTh);
+  //pS22->topVarActivity(topv22, topa, myCnf2Aig, nv, mina);
+
+  for (int ii=0; ii<topv22.size(); ii++) {
+    int i = (int)topv22[ii];
+    int vCnf = i+1;
+    bAigEdge_t baig = ddm->cnf.cnf2aig[vCnf];
+    Ddi_Bdd_t *lit;
+    Pdtutil_Assert(baig!=bAig_NULL,"Null baig");
+    if (bAig_isVarNode(bmgr,baig) && !bAig_NodeIsConstant(baig)) {
+      Ddi_Var_t *v = Ddi_VarFromBaig(ddm,baig);
+      lit = Ddi_BddMakeLiteralAig(v,1);
+    }
+    else if (baig != bAig_NULL) {
+      lit = Ddi_BddMakeFromBaig(ddm, baig);
+    }
+    if (topd[2*ii]<topd[2*ii+1])
+      Ddi_BddNotAcc(lit);
+    Ddi_BddarrayInsertLast(litA,lit);
+    Ddi_Free(lit);
+  }
+  
+  free(myCnf2Aig);
+
+  return litA;
 }
 
 /**Function********************************************************************
