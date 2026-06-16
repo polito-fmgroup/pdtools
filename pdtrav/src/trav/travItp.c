@@ -396,6 +396,7 @@ Ddi_Bdd_t *itpImgSplitConeConstr(
   Ddi_Bdd_t * kConeRings,
   Ddi_Bdd_t *a,
   Ddi_Bdd_t *cone,
+  Ddi_Bdd_t *itpOut,
   int step,
   int *psat
 )
@@ -456,14 +457,30 @@ Ddi_Bdd_t *itpImgSplitConeConstr(
                                    psat, 0, 1, 1, -1.0);
   //  if (itpSplit!=NULL) Ddi_BddNotAcc(itpSplit);
   if (!(*psat) && !Ddi_BddIsOne(itpSplit)) {
-    Ddi_BddOrAcc(itpSplit,prevSplitItp);
-    //    Ddi_AigOptByMonotoneCoreAcc(itpSplit,myBl,NULL,0,-1.0);
-    Ddi_AigOptByMonotoneCoreAcc(itpSplit,myA,NULL,1,-1.0);
+    //    Ddi_BddOrAcc(itpSplit,prevSplitItp);
+    Ddi_AigOptByMonotoneCoreAcc(itpSplit,myBl,NULL,0,100);
+    //    Ddi_AigOptByMonotoneCoreAcc(itpSplit,myA,NULL,1,100);
     Ddi_Free(itpTravMgr->coneAuxSplitItp);
     itpTravMgr->coneAuxSplitItp = Ddi_BddDup(itpSplit);
     coneConstr = Ddi_BddDup(itpSplit);
     Ddi_BddComposeAcc(coneConstr,splitV,splitU);
+
+    if (itpOut!=NULL) {
+      Ddi_Bdd_t *bConstr = Ddi_BddNot(coneConstr);
+      Ddi_Bdd_t *itp =
+        //    Ddi_AigSat22AndWithInterpolant(NULL,myBl,myA,NULL,
+        Ddi_AigSat22AndWithInterpolant(NULL,a,bConstr,NULL,
+                                       itpMgr->nsvars,NULL,NULL,0,
+                                       NULL,NULL,
+                                       psat, 0, 1, 1, -1.0);
+      Pdtutil_Assert(!(*psat)&&itp!=NULL,"unsat and itp expected");
+      Ddi_DataCopy(itpOut,itp);
+      Ddi_Free(itp);
+      Ddi_Free(bConstr);
+    }
   }
+
+
   Ddi_Free(itpSplit);
   Ddi_Free(myA);
   Ddi_Free(myBl);
@@ -472,6 +489,163 @@ Ddi_Bdd_t *itpImgSplitConeConstr(
   Ddi_Free(splitU);
 
   return coneConstr;
+}
+
+void itpImgSplitConeBwdConstr(
+  Trav_ItpTravMgr_t * itpTravMgr, 
+  Ddi_Bdd_t * kConeRings,
+  Ddi_Bdd_t *a,
+  int step,
+  int bound,
+  int split,
+  int delta,
+  int *psat
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(a);
+  Trav_ItpMgr_t *itpMgr = itpTravMgr->itpMgr;
+  Trav_Mgr_t *travMgr = itpMgr->travMgr;
+
+  int split_i = step + split;
+  Ddi_Bdd_t *coneSplit = itpTravMgr->bwdConstr.coneSplit;
+  Ddi_Bdd_t *itpSplit = itpTravMgr->bwdConstr.itpSplit;
+  
+  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+    printf("\ngenerating constraining cone with split cone of bound %d\n",
+           bound);
+  }
+
+  if (itpTravMgr->bwdConstr.coneSplit==NULL) {
+    int fullK = step+bound;
+    int start_i = fullK-1;
+    int np = Ddi_BddPartNum(kConeRings);
+    coneSplit = Ddi_BddDup(Ddi_BddPartRead(kConeRings,np-1));
+    TravGrowConeBwdDecomp(itpMgr, coneSplit, start_i, step, split_i,  
+			  1, 1, NULL,
+			  itpMgr->initStub, 0/*useRingConstr*/, -1/*andWithRing_i*/, 0);	
+    itpTravMgr->bwdConstr.coneSplit = coneSplit;
+    itpSplit = itpTravMgr->bwdConstr.itpSplit = Ddi_BddMakeConstAig(ddm,0);
+    itpTravMgr->bwdConstr.bound = bound;
+    itpTravMgr->bwdConstr.split = split+delta;
+  }
+  
+  Ddi_Bddarray_t *splitU = NULL;
+  Ddi_Vararray_t *splitV = NULL;
+  Ddi_Varset_t *splitVars = NULL;
+  Ddi_Bdd_t *myA = NULL, *myBl = NULL;
+  Ddi_Vararray_t *v1=NULL,*v2=NULL, *glbA=NULL;
+  Ddi_Bdd_t *coneConstr = NULL;	
+  myBl = Ddi_BddDup(Ddi_BddReadComposeF(coneSplit));
+  splitU = Ddi_BddarrayDup(Ddi_BddReadComposeSubst(coneSplit));
+  splitV = Ddi_VararrayDup(Ddi_BddReadComposeVars(coneSplit));
+  myA =  Ddi_BddRelMakeFromArray(splitU,splitV);
+  splitVars = Ddi_VarsetMakeFromArray(splitV);
+  Ddi_BddSetAig(myA);
+  Ddi_BddAndAcc(myA, a);
+
+  Ddi_Bdd_t *myItpSplit =
+    Ddi_AigSat22AndWithInterpolant(NULL,myA,myBl,NULL,
+                                   splitVars, NULL,NULL,0,
+                                   NULL,NULL,
+                                   psat, 0, 1, 1, -1.0);
+  if (!(*psat) && !Ddi_BddIsOne(myItpSplit)) {
+    //    Ddi_BddOrAcc(myItpSplit,itpSplit);
+    Ddi_AigOptByMonotoneCoreAcc(myItpSplit,myBl,NULL,0,-1.0);
+    Ddi_Free(itpTravMgr->bwdConstr.itpSplit);
+    itpTravMgr->bwdConstr.itpSplit = Ddi_BddDup(myItpSplit);
+    coneConstr = Ddi_BddNot(myItpSplit);
+    Ddi_BddSubstVarsAcc(coneConstr, splitV, itpMgr->ns);
+    Ddi_BddWriteMark(coneConstr,0);
+    int fullK = step+bound;
+    int start_i = fullK-1;
+    TravGrowConeBwd(itpMgr, coneConstr, start_i+delta, step, 
+                    itpMgr->delta, itpMgr->initStub,  0, -1, 1);
+    Ddi_Free(itpTravMgr->bwdConstr.coneConstr);
+    itpTravMgr->bwdConstr.coneConstr = coneConstr;
+  }
+  Ddi_Free(myItpSplit);
+  Ddi_Free(myA);
+  Ddi_Free(myBl);
+  Ddi_Free(splitV);
+  Ddi_Free(splitVars);
+  Ddi_Free(splitU);
+
+}
+
+void itpImgSplitConeTrConstr(
+  Trav_ItpTravMgr_t * itpTravMgr, 
+  Ddi_Bdd_t * kConeRings,
+  Ddi_Bdd_t *a,
+  int step,
+  int bound,
+  int split,
+  int delta,
+  int *psat
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(a);
+  Trav_ItpMgr_t *itpMgr = itpTravMgr->itpMgr;
+  Trav_Mgr_t *travMgr = itpMgr->travMgr;
+
+  int split_i = step + split;
+  Ddi_Bdd_t *coneSplit = itpTravMgr->trConstr.coneSplit;
+  Ddi_Bdd_t *itpSplit = itpTravMgr->trConstr.itpSplit;
+  
+  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+    printf("\ngenerating constraining cone with split cone of bound %d\n",
+           bound);
+  }
+
+  if (itpTravMgr->trConstr.coneSplit==NULL) {
+    int fullK = step+bound;
+    int start_i = fullK-1;
+    int np = Ddi_BddPartNum(kConeRings);
+    coneSplit = Ddi_BddDup(Ddi_BddPartRead(kConeRings,np-1));
+    TravGrowConeBwdDecomp(itpMgr, coneSplit, start_i, step, split_i,  
+			  1, 1, NULL,
+			  itpMgr->initStub, 0/*useRingConstr*/, -1/*andWithRing_i*/, 0);	
+    itpTravMgr->trConstr.coneSplit = coneSplit;
+    itpSplit = itpTravMgr->trConstr.itpSplit = Ddi_BddMakeConstAig(ddm,1);
+    itpTravMgr->trConstr.bound = bound;
+    itpTravMgr->trConstr.split = split;
+  }
+  
+  Ddi_Bddarray_t *splitU = NULL;
+  Ddi_Vararray_t *splitV = NULL;
+  Ddi_Varset_t *splitVars = NULL;
+  Ddi_Bdd_t *myA = NULL, *myBl = NULL;
+  Ddi_Vararray_t *v1=NULL,*v2=NULL, *glbA=NULL;
+  Ddi_Bdd_t *coneConstr = NULL;	
+  myBl = Ddi_BddDup(Ddi_BddReadComposeF(coneSplit));
+  splitU = Ddi_BddarrayDup(Ddi_BddReadComposeSubst(coneSplit));
+  splitV = Ddi_VararrayDup(Ddi_BddReadComposeVars(coneSplit));
+  myA =  Ddi_BddRelMakeFromArray(splitU,splitV);
+  splitVars = Ddi_VarsetMakeFromArray(splitV);
+  Ddi_BddSetAig(myA);
+  Ddi_BddAndAcc(myBl, a);
+
+  Ddi_Bdd_t *myItpSplit =
+    Ddi_AigSat22AndWithInterpolant(NULL,myA,myBl,NULL,
+                                   splitVars, NULL,NULL,0,
+                                   NULL,NULL,
+                                   psat, 0, 1, 1, -1.0);
+  if (!(*psat) && !Ddi_BddIsOne(myItpSplit)) {
+    //    Ddi_BddAndAcc(myItpSplit,itpSplit);
+    Ddi_AigOptByMonotoneCoreAcc(myItpSplit,myA,NULL,1,-1.0);
+    Ddi_Free(itpTravMgr->trConstr.itpSplit);
+    itpTravMgr->trConstr.itpSplit = Ddi_BddDup(myItpSplit);
+    coneConstr = Ddi_BddDup(myItpSplit);
+    Ddi_BddComposeAcc(coneConstr,splitV,splitU);
+    Ddi_Free(itpTravMgr->trConstr.coneConstr);
+    itpTravMgr->trConstr.coneConstr = coneConstr;
+  }
+  Ddi_Free(myItpSplit);
+  Ddi_Free(myA);
+  Ddi_Free(myBl);
+  Ddi_Free(splitV);
+  Ddi_Free(splitVars);
+  Ddi_Free(splitU);
+
 }
 
 Ddi_Bdd_t *itpImgExactBound(
@@ -611,11 +785,39 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
     ddm->settings.aig.itpUseCare = 1;
   }
 
+  int prevToSize = Ddi_BddSize(prevTo);
+  int useTrConstr = 0;
+  int enBwdSplitConstr = 0 && (prevToSize>1000);
+  if (enBwdSplitConstr) {
+    int mark = Ddi_BddReadMark(bNew);
+    int delta = 4;
+    int bound = mark - delta;
+    int split = bound/(useTrConstr?1.5:4);
+    if (split >= 1) {
+      if (useTrConstr) {
+        if (!itpTravMgr->trConstr.active)
+          itpImgSplitConeTrConstr(itpTravMgr, kConeRings,aNew,step,bound,split,delta,psat);
+        if (prevToSize > 7000)
+          itpTravMgr->trConstr.active = 1;
+      }
+      else {
+        if (!itpTravMgr->bwdConstr.active)
+          itpImgSplitConeBwdConstr(itpTravMgr, kConeRings,aNew,step,bound,split,delta,psat);
+        if (prevToSize > 8000)
+          itpTravMgr->bwdConstr.active = 1;
+      }
+    }
+  }
+  
   float coneSplitRatio = travMgr->settings.aig.igrConeSplitRatio;
   int enOptB = coneSplitRatio<0.99;
+  Ddi_Bdd_t *coneSplitItp = NULL;
   if (enOptB) {
+    //    enPart = 0; // not Compatible as uses itpNew as care
+    coneSplitItp = Ddi_BddMakeConstAig(ddm,1);
     Ddi_Bdd_t *constrCone = itpImgSplitConeConstr(
-                              itpTravMgr,kConeRings,aNew,bNew,step,psat);
+                              itpTravMgr,kConeRings,aNew,bNew,
+                              coneSplitItp,step,psat);
     if (constrCone!=NULL) {
       int s0 = Ddi_BddSize(bNew);
       Ddi_BddAndAcc(bNew,constrCone);
@@ -626,6 +828,9 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
                s0, Ddi_BddSize(constrCone), Ddi_BddSize(bNew));
       }
       Ddi_Free(constrCone);
+    }
+    else {
+      Ddi_Free(coneSplitItp);
     }
   }
   int enExactBoundOpt = 0;
@@ -663,12 +868,14 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
   int partTh = Ddi_MgrReadAigItpPartTh(ddm);
   int enPart = 0 && (Ddi_BddSize(prevTo)>partTh);
   int nPart = 4;
+  int enWindow = 1;
   int enPartWindow = partWindow!=NULL && Ddi_BddPartNum(partWindow) > 2*nPart;
-  int enPartWindow2 = partWindow==NULL && (Ddi_BddSize(prevTo)>partTh);
+  int enPartWindow2 = partWindow==NULL && (Ddi_BddSize(prevTo)>partTh) &&
+    itpTravMgr->imgPart.windowLits != NULL;
   int enSplitConstr = enPart;
   int again = 1;
   Ddi_Bdd_t *aCare = Ddi_BddNot(prevTo);
-  Ddi_Bdd_t *itpNew=Ddi_BddMakeConstAig(ddm,(enPartWindow||enPartWindow2)?1:0);
+  Ddi_Bdd_t *itpNew=Ddi_BddMakeConstAig(ddm,(enPart)?0:1);
   int doOptNew = 1;
   Ddi_Vararray_t *filterv = Ddi_VararrayDup(itpMgr->ps);
   int nDiff = Ddi_VararrayNum(filterv)/3;
@@ -678,6 +885,11 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
   Ddi_Bdd_t *pW=NULL;
   Ddi_Bdd_t *pWtot = Ddi_BddMakePartConjVoid(ddm); 
 
+  if (coneSplitItp!=NULL && !enPart) {
+    Ddi_BddAndAcc(itpNew,coneSplitItp);
+  }
+  Ddi_Free(coneSplitItp);
+  
   if (enPartWindow) {
     for (int j=0;j<nPart;j++) {
       pW = Ddi_BddMakePartConjVoid(ddm);
@@ -695,7 +907,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
     }
   }
 
-  if (partTh>0 && (Ddi_BddSize(prevTo)<=partTh)) {
+  if (partTh>0 && enWindow && (Ddi_BddSize(prevTo)<=partTh)) {
     Ddi_Free(itpTravMgr->imgPart.windowLits);
     windowLits = itpTravMgr->imgPart.windowLits = Ddi_BddarrayAlloc(ddm, 0); 
   }
@@ -728,6 +940,9 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
       again = 1;
       Ddi_AigAndCubeAcc(myA,cex);
       Ddi_BddDiffAcc(bNew,itpNew);
+    }
+    else {
+      //      Ddi_BddAndAcc(myB,itpNew);
     }
     if (enPartWindow) {
       Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
@@ -766,7 +981,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
     
     if (enPartWindow || enPartWindow2) {
 
-      static int tryNonPart=1;
+      static int tryNonPart=0;
       if (tryNonPart && ii==0) {
         Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
           printf("\nA try nonPart\n");
@@ -877,7 +1092,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
                                                 0,timeLimit);
         Ddi_Free(coneAux);
       }
-      if (enPartWindow || enPartWindow2)
+      if (!enPart)
         Ddi_BddAndAcc(itpNew,itpNew_i);
       else
         Ddi_BddOrAcc(itpNew,itpNew_i);

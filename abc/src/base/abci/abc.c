@@ -564,7 +564,7 @@ int Abc_GetFrameProbStatus(Abc_Frame_t * pAbc)
   SeeAlso     []
 
 ***********************************************************************/
-int Abc_GetNtkName(Abc_Frame_t * pAbc)
+char *Abc_GetNtkName(Abc_Frame_t * pAbc)
 {
   return Abc_NtkName(Abc_FrameReadNtk(pAbc));
 }

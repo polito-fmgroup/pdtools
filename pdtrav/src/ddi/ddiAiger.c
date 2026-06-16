@@ -294,7 +294,7 @@ Ddi_AigarrayNetLoadAigerMapVars(
     fprintf(stderr,"Error Loading AIGER file %s - error %s.\n", 
 	    filename, error);
     aiger_reset (mgr);
-    return 1;
+    return NULL;
   }
 
 

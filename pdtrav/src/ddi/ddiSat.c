@@ -7261,6 +7261,7 @@ Ddi_IncrSatMgrAlloc(
   mgr->suspended = 0;
   mgr->lglMaxFrozen = 0;
   mgr->enLglLearn = 0;
+  mgr->flag1 = 0;
   mgr->lglLearned123 = NULL;
   
   return mgr;

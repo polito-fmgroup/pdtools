@@ -561,7 +561,7 @@ Fsm_MgrLoadAiger(
   fsmTime = util_cpu_time() - fsmTime;
   fsmMgr->fsmTime += fsmTime;
 
-  fsmMgrP = fsmMgr;
+  *fsmMgrP = fsmMgr;
 
   return (0);
 }
@@ -702,6 +702,7 @@ setupcount(
   }
 }
 
+int
 LoadInputs(FsmPortBnetNetwork_t * net, FsmPortBnetNode_t ** plastnode)
 {
   char letter[20];
@@ -768,7 +769,7 @@ LoadInputs(FsmPortBnetNetwork_t * net, FsmPortBnetNode_t ** plastnode)
   *plastnode = lastnode;
   return 1;
 failure:
-  return NULL;
+  return 0;
 }
 
 int
@@ -1589,7 +1590,7 @@ Fsm_FsmCopyToAiger(
   fsmTime = util_cpu_time();
   if (fsmMgr == NULL) {
     fprintf(stderr, "Error FSM==NULL %s.\n", error);
-    return 1;
+    return NULL;
   }
   mgr = aiger_init();
   //mgr->maxvar=;
@@ -1831,7 +1832,7 @@ Fsm_FsmMiniCopyToAiger(
   fsmTime = util_cpu_time();
   if (fsmFsm == NULL) {
     fprintf(stderr, "Error FSM==NULL %s.\n", error);
-    return 1;
+    return NULL;
   }
   mgr = aiger_init();
   //mgr->maxvar=;

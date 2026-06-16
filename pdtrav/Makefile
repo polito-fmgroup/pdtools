@@ -98,9 +98,9 @@ CUDD_XCFLAGS =	-ffloat-store -mtune=native -malign-double -DHAVE_IEEE_754 -DBSD 
 #ICFLAGS = 	-Wall -O6 -fPIC -pthread -mtune=native -malign-double -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8
 XC_FLAGS =	-DHAVE_IEEE_754=1 -DBSD=1 -DSTDC_HEADERS=1 -DHAVE_STRSTR=1
 ifdef PDTOPT
-CFLAGS =	-DLIN64 -O6 -Wall -fPIE -pthread $(SANITIZER)
+CFLAGS =	-DLIN64 -O6 -Wall -fPIE -pthread $(SANITIZER) -Wno-error=implicit-function-declaration
 else
-CFLAGS =	-DLIN64 -g -Wall -fPIE -pthread $(SANITIZER)
+CFLAGS =	-DLIN64 -g -Wall -fPIE -pthread $(SANITIZER) -Wno-error=implicit-function-declaration
 endif
 endif
 LINKER =	g++

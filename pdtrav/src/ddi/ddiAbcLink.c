@@ -118,10 +118,10 @@ static int ddiAbcOptAccInt (int, int, char *, char *, float);
 static int ddiAigarrayAbcOptWithLevelAcc (Ddi_Bddarray_t *aigA, int optLevel, float timeLimit);
 static int ddiAbcOptWithLevelAcc (Ddi_Bdd_t *aig, int optLevel, float timeLimit);
 
-static inline bAigEdge_t Aig_ObjChild0Baig (Aig_Obj_t *pObj)  { assert(!Aig_IsComplement(pObj)); return Aig_ObjFanin0(pObj)? Aig_NotCond((bAigEdge_t)Aig_ObjFanin0(pObj)->iData, Aig_ObjFaninC0(pObj)) : bAig_NULL; }
-static inline bAigEdge_t Aig_ObjChild1Baig (Aig_Obj_t *pObj)  { assert(!Aig_IsComplement(pObj)); return Aig_ObjFanin1(pObj)? Aig_NotCond((bAigEdge_t)Aig_ObjFanin1(pObj)->iData, Aig_ObjFaninC1(pObj)) : bAig_NULL; }
-static inline int Aig_ObjChild0Id (Aig_Obj_t *pObj)  { assert(!Aig_IsComplement(pObj)); return Aig_ObjFanin0(pObj)? Aig_NotCond((int)Aig_ObjFanin0(pObj)->Id, Aig_ObjFaninC0(pObj)) : -1; }
-static inline int Aig_ObjChild1Id (Aig_Obj_t *pObj)  { assert(!Aig_IsComplement(pObj)); return Aig_ObjFanin1(pObj)? Aig_NotCond((int)Aig_ObjFanin1(pObj)->Id, Aig_ObjFaninC1(pObj)) : -1; }
+static inline bAigEdge_t Aig_ObjChild0Baig (Aig_Obj_t *pObj)  { assert(!Aig_IsComplement(pObj)); return Aig_ObjFanin0(pObj)? bAig_NotCond((bAigEdge_t)Aig_ObjFanin0(pObj)->iData, Aig_ObjFaninC0(pObj)) : bAig_NULL; }
+static inline bAigEdge_t Aig_ObjChild1Baig (Aig_Obj_t *pObj)  { assert(!Aig_IsComplement(pObj)); return Aig_ObjFanin1(pObj)? bAig_NotCond((bAigEdge_t)Aig_ObjFanin1(pObj)->iData, Aig_ObjFaninC1(pObj)) : bAig_NULL; }
+//static inline int Aig_ObjChild0Id (Aig_Obj_t *pObj)  { assert(!Aig_IsComplement(pObj)); return Aig_ObjFanin0(pObj)? Aig_NotCond((int)Aig_ObjFanin0(pObj)->Id, Aig_ObjFaninC0(pObj)) : -1; }
+//static inline int Aig_ObjChild1Id (Aig_Obj_t *pObj)  { assert(!Aig_IsComplement(pObj)); return Aig_ObjFanin1(pObj)? Aig_NotCond((int)Aig_ObjFanin1(pObj)->Id, Aig_ObjFaninC1(pObj)) : -1; }
 static Aig_Man_t *abcBddToAig (Ddi_Bdd_t *f, Ddi_Vararray_t *vars);
 static Aig_Man_t *abcBddarrayToAig (Ddi_Bddarray_t *f, bAig_array_t *varNodes,bAig_array_t *visitedNodes);
 static Ddi_Bdd_t *abcBddFromAig (Aig_Man_t *pAig, Ddi_Vararray_t *vars, Ddi_Bdd_t *refAig);
@@ -284,7 +284,7 @@ Aig_Man_t * Dar_ManCompress2Pdt (
 
     if (optLevel <= 1 || (abcTimeLimit>=0 &&
         (clock() - timeInit) > abcTimeLimit*MY_CLOCKS_PER_SEC)) break;
-
+#if 0
     if (0) {
       // csweep
       pAig = Csw_Sweep( pTemp = pAig, 8, 6, 0 );
@@ -297,7 +297,7 @@ Aig_Man_t * Dar_ManCompress2Pdt (
       pAig = Aig_ManDupDfs( pTemp = pAig ); 
       Aig_ManStop( pTemp );
     }
-
+#endif
     // rewrite
     //    Dar_ManRewrite( pAig, pParsRwr );
     pParsRwr->fUpdateLevel = 0;  // disable level update
@@ -681,7 +681,7 @@ Ddi_BddarrayToAbcCnfInfo (        //Genera l'AIG e la CNF con ABC e predispone l
   }
   
   //Alloca un vettore per il mapping tra ABC e PDTrav (vettore di puntatori a nodi dell'AIG di ABC, dimensionato sul massimo cnf id convertito da ABC)--->in realtà è usato come vettore di interi (cnfId)
-  aigAbcInfo->abc2PdtIdMap = Pdtutil_Alloc(Aig_Obj_t *,aigAbcInfo->abcCnfMaxId+1);
+  aigAbcInfo->abc2PdtIdMap = Pdtutil_Alloc(int,aigAbcInfo->abcCnfMaxId+1);
   for (i=0; i<=aigAbcInfo->abcCnfMaxId; i++) {
     aigAbcInfo->abc2PdtIdMap[i] = 0;
   }
@@ -1817,7 +1817,7 @@ Ddi_AigarrayAbcRpmAcc (
   Ddi_Bddarray_t *aigOptA;
   Ddi_Vararray_t *vA;
   Aig_Man_t *aigAbc;
-  Ddi_Bddarray_t *piSupp, *psSupp;
+  Ddi_Vararray_t *piSupp, *psSupp;
   Gia_Man_t *pGiaOpt, *pGia;
   Ddi_Bdd_t *myOne;
   int improved, nPiPrev;
@@ -2990,7 +2990,7 @@ void myLink(Fsm_Fsm_t *fsm)
   /* Build Command List */
   snprintf(command, PDTUTIL_MAX_STR_LEN, "read %s", fileName);
 
-  if ( Cmd_CommandExecute (pAbc, command) ) return (0);
+  if ( Cmd_CommandExecute (pAbc, command) ) return;
   if (verbose) Cmd_CommandExecute (pAbc, "print_stats");
   Cmd_CommandExecute (pAbc, "strash");
   //  Cmd_CommandExecute (pAbc, "sim3 -v");

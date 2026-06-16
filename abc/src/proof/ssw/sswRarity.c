@@ -1008,7 +1008,7 @@ static void Ssw_RarTransferPatternsByAuxDepthOnly( Ssw_RarMan_t * p, Vec_Int_t *
   SeeAlso     []
 
 ***********************************************************************/
-static fallback_to_rarity = 0;
+static int fallback_to_rarity = 0;
 static void Ssw_RarTransferPatternsByRarityAndAuxDepth( Ssw_RarMan_t * p, Vec_Int_t * vInits, Vec_Int_t * vDepths )
 {
   if (fallback_to_rarity++ % 100 == 0) fprintf(stdout,"Transfer %d\n", fallback_to_rarity);

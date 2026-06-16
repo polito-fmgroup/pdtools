@@ -990,6 +990,7 @@ struct Ddi_IncrSatMgr_s {
   int lglMaxFrozen;
   int simpSolver;
   int suspended;
+  int flag1;
   int enSimplify;
   int enProofLog;
   int enLglLearn;

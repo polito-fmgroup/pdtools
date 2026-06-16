@@ -81315,7 +81315,7 @@ Ddi_AigSatMinisat22WithCexAndAbortIncremental
     }
     incrSat->lglMaxFrozen = lglmaxvar(incrSat->lgl);
     //    LGL *clone = lglclone(incrSat->lgl);
-    lglsetopt(incrSat->lgl,"plim",1000000);
+    lglsetopt(incrSat->lgl,"plim",2000000);
     res = lglsat (incrSat->lgl);
     //    lglunclone (incrSat->lgl, clone);
     //    lglrelease (clone);

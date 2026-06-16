@@ -811,6 +811,22 @@ struct TravItpTravMgr_s {
     int fromSizeTh;
   } imgPart;
   
+  struct {
+    Ddi_Bdd_t *coneSplit;
+    Ddi_Bdd_t *itpSplit;
+    Ddi_Bdd_t *coneConstr;
+    int bound, split;
+    char active;
+  } bwdConstr;
+  
+  struct {
+    Ddi_Bdd_t *coneSplit;
+    Ddi_Bdd_t *itpSplit;
+    Ddi_Bdd_t *coneConstr;
+    int bound, split;
+    char active;
+  } trConstr;
+  
   Ddi_Vararray_t *imgPartVars;
   Ddi_Bddarray_t *itpSatHints;
   Ddi_Bddarray_t *observedGates;

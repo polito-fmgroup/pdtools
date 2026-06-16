@@ -25207,10 +25207,14 @@ itpImgTrSetup(
     itpTravMgr->settings.computeRestartFrom = 0;
   } else {
     if (itpTravMgr->settings.useInitStub) {
+      Ddi_Free(itpTravMgr->trArray);
       itpTravMgr->trArray = Ddi_BddarrayDup(itpMgr->stubTrArray);
+      Ddi_Free(itpTravMgr->trAux);
       itpTravMgr->trAux = Ddi_BddDup(itpMgr->initStubState);
     } else {
+      Ddi_Free(itpTravMgr->trArray);
       itpTravMgr->trArray = Ddi_BddarrayDup(itpMgr->trArray);
+      Ddi_Free(itpTravMgr->trAux);
       itpTravMgr->trAux = Ddi_BddDup(itpMgr->trAux);
     }
     if (itpTravMgr->settings.useInvarFull && itpMgr->invarConstrForTr != NULL) {
@@ -26975,6 +26979,41 @@ itpImgGetCone(
           }
         }
       }
+      if (itpTravMgr->bwdConstr.split > 0) {
+	int boundK = (!rewinding && (growCone > 2)) ? 1 : 0;
+        int split = itpTravMgr->bwdConstr.split;
+        Ddi_Bdd_t *coneConstr = itpTravMgr->bwdConstr.coneConstr;
+        int s0 = Ddi_BddSize(localCone);
+        Ddi_BddAndAcc(localCone,coneConstr);
+        if (boundK) {
+          int np = Ddi_BddPartNum(kConeRings);
+          Ddi_Bdd_t *coneShort = Ddi_BddDup(Ddi_BddPartRead(kConeRings, np - 1));
+          growConeBwdSubsetByTarget(itpMgr, coneShort, end_i+split, end_i, NULL,
+                 itpMgr->initStub,
+                 itpTravMgr->observedGates,
+                 0,
+                 0/*growCone != 1 ? 2 : 0*/ /*useRingConstr */ ,
+                 -1, boundK);
+          int s0 = Ddi_BddSize(localCone);
+          Ddi_BddOrAcc(localCone,coneShort);
+          Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+            printf("constraining cone (%d) with Bwd coneConstr (%d, bound: %d) -> %d\n",
+                   s0, Ddi_BddSize(coneConstr), split, Ddi_BddSize(localCone));
+          }
+          Ddi_Free(coneShort);
+        }
+      }
+      if (itpTravMgr->trConstr.split>0) {
+        int split = itpTravMgr->trConstr.split;
+        Ddi_Bdd_t *coneConstr = itpTravMgr->trConstr.coneConstr;
+        int s0 = Ddi_BddSize(localCone);
+        Ddi_BddAndAcc(localCone,coneConstr);
+        Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+          printf("constraining cone (%d) with Tr coneConstr (%d, bound: %d) -> %d\n",
+                 s0, Ddi_BddSize(coneConstr), split, Ddi_BddSize(localCone));
+        }
+      }
+
       if (assumeSafeBound>1 && (start_i - end_i) >= assumeSafeBound) {
         Ddi_Var_t *pvarNs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$NS");
 	Ddi_Bdd_t *cone0 = Ddi_BddMakeLiteralAig(pvarNs, 0);
@@ -28287,7 +28326,7 @@ itpImgIncrLearn(
     Ddi_Free(learntAigDup);
     Ddi_Free(learntAig);
 #endif
-    int assumeNotFrom=itpTravMgr->prevTo!=NULL;
+    int assumeNotFrom=1&&(itpTravMgr->prevTo!=NULL);
     if (assumeNotFrom) {
       Ddi_Bdd_t *constr2 = Ddi_BddCopy(ddmDup,itpTravMgr->from0);
       //      Ddi_Bdd_t *constr2Orig = Ddi_BddSubstVars(itpTravMgr->prevTo,itpMgr->ns,itpMgr->ps);
@@ -28297,6 +28336,13 @@ itpImgIncrLearn(
       Ddi_IncrSatMgrLockAig(ddiS,constr2);
       //      Ddi_Free(constr2Orig);
       Ddi_Free(constr2);
+      if (0 && !ddiS->flag1) {
+        ddiS->flag1=1;
+        constr2 = Ddi_BddCopy(ddmDup,itpTravMgr->trAux);
+        Ddi_AigSatMinisatLoadClausesIncrementalAsserted(ddiS, constr2);
+        Ddi_IncrSatMgrLockAig(ddiS,constr2);
+        Ddi_Free(constr2);
+      }
     }
   }
   //  Ddi_IncrSatMgrLockAig(ddiS,check2);
@@ -29189,7 +29235,7 @@ itpImgLoop(
         }
       }
 
-      Ddi_Free(itpTravMgr->trAux);
+      //      Ddi_Free(itpTravMgr->trAux);
       if (verbosity >= Pdtutil_VerbLevelUsrMax_c) {
         printf("  Aig interpolant inner iteration %d: |from:%d| -> ",
           step, Ddi_BddSize(itpTravMgr->from));
@@ -32738,7 +32784,8 @@ itpImgLoop(
       *pAbort = 1;
       again = 0;
     }
-
+    Ddi_Free(itpTravMgr->trAux);
+      
   } while (again);
 
 
@@ -38998,6 +39045,20 @@ itpTravMgrInit(
   itpTravMgr->imgPart.windows = NULL;
   itpTravMgr->imgPart.fromSizeTh = 0;
 
+  itpTravMgr->bwdConstr.coneSplit = NULL;
+  itpTravMgr->bwdConstr.coneConstr = NULL;
+  itpTravMgr->bwdConstr.itpSplit = NULL;
+  itpTravMgr->bwdConstr.bound = 0;
+  itpTravMgr->bwdConstr.split = 0;
+  itpTravMgr->bwdConstr.active = 0;
+
+  itpTravMgr->trConstr.coneSplit = NULL;
+  itpTravMgr->trConstr.coneConstr = NULL;
+  itpTravMgr->trConstr.itpSplit = NULL;
+  itpTravMgr->trConstr.bound = 0;
+  itpTravMgr->trConstr.split = 0;
+  itpTravMgr->trConstr.active = 0;
+
   itpTravMgr->constrainVars = NULL;
   itpTravMgr->constrainSubstLits = NULL;
   itpTravMgr->saveConstrainVars = NULL;
@@ -39080,6 +39141,12 @@ itpTravMgrFree(
 
   Ddi_Free(itpTravMgr->imgPart.windowLits);
   Ddi_Free(itpTravMgr->imgPart.windows);
+  Ddi_Free(itpTravMgr->bwdConstr.coneSplit);
+  Ddi_Free(itpTravMgr->bwdConstr.coneConstr);
+  Ddi_Free(itpTravMgr->bwdConstr.itpSplit);
+  Ddi_Free(itpTravMgr->trConstr.coneSplit);
+  Ddi_Free(itpTravMgr->trConstr.coneConstr);
+  Ddi_Free(itpTravMgr->trConstr.itpSplit);
   
   Ddi_Free(itpTravMgr->constrainVars);
   Ddi_Free(itpTravMgr->constrainSubstLits);
