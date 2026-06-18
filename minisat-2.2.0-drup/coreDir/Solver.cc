@@ -1704,6 +1704,10 @@ CRef Solver::propagate(bool coreOnly, int maxPart, bool coreFirst)
             // Did not find watch -- clause is unit under assignment:
             *j++ = w;
             if (value(first) == l_False){
+                if (varConflicts.size() > 2*var(first)) {
+                  int id = 2*var(first)+(sign(first)?1:0);
+                  varConflicts[id]++;
+                }
                 confl = cr;
                 qhead = trail.size();
                 // Copy the remaining watches:
@@ -1718,6 +1722,10 @@ CRef Solver::propagate(bool coreOnly, int maxPart, bool coreFirst)
     }
     propagations += num_props;
     simpDB_props -= num_props;
+
+    if (varDecisions.size() > 0) {
+      updateLastVarDecision(num_props);
+    }
 
     return confl;
 }
@@ -1935,6 +1943,7 @@ lbool Solver::search(int nof_conflicts)
                     return l_True;
                 if (varDecisions.size() > 2*var(next)) {
                   int id = 2*var(next)+(sign(next)?1:0);
+                  lastDecision=id;
                   varDecisions[id]++;
                 }
             }

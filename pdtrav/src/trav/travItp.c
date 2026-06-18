@@ -981,7 +981,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
     
     if (enPartWindow || enPartWindow2) {
 
-      static int tryNonPart=0;
+      static int tryNonPart=1;
       if (tryNonPart && ii==0) {
         Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
           printf("\nA try nonPart\n");
@@ -1016,9 +1016,12 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
                                                   0,timeLimit);
 
     if (windowLits!=NULL) {
+      Ddi_Bddarray_t *myWindowLits = Ddi_BddarrayDup(windowLits);
+      //      for (int i=0; i<Ddi_BddarrayNum(myWindowLits);i++)
+      //        Ddi_BddNotAcc(Ddi_BddarrayRead(myWindowLits,i));
       Ddi_Bddarray_t *windows = Ddi_BddarrayAlloc(ddm, 0);
       int np=3;
-      Ddi_Bdd_t *wAnd = Ddi_BddMakePartConjFromArray(windowLits);
+      Ddi_Bdd_t *wAnd = Ddi_BddMakePartConjFromArray(myWindowLits);
       for (int ii=0; ii<np; ii++) {
         Ddi_Bdd_t *w_ii = Ddi_BddMakePartDisjVoid(ddm);
         Ddi_BddarrayWrite(windows,ii,w_ii);
@@ -1026,8 +1029,8 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
       }
       Ddi_BddarrayWrite(windows,np,wAnd);
       Ddi_Free(wAnd);
-      for (int ii=0; ii<Ddi_BddarrayNum(windowLits); ii++) {
-        Ddi_Bdd_t *w_i = Ddi_BddNot(Ddi_BddarrayRead(windowLits,ii));
+      for (int ii=0; ii<Ddi_BddarrayNum(myWindowLits); ii++) {
+        Ddi_Bdd_t *w_i = Ddi_BddNot(Ddi_BddarrayRead(myWindowLits,ii));
         int id = ii%np;
         Ddi_Bdd_t *w_id = Ddi_BddarrayRead(windows,id);
         Ddi_BddPartInsertLast(w_id,w_i);
@@ -1039,6 +1042,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
       }
       Ddi_Free(itpTravMgr->imgPart.windows);
       itpTravMgr->imgPart.windows = windows;
+      Ddi_Free(myWindowLits);
     }
 
     if (0 && itpNew_i != NULL && enPartWindow) {
