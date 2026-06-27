@@ -39096,6 +39096,9 @@ itpTravMgrInit(
   itpTravMgr->stats.coneHit = 0;
   itpTravMgr->stats.conePiConstrTf_i = 0;
   itpTravMgr->stats.conePiConstrStep = 0;
+  itpTravMgr->stats.imgPart.cnt = 0;
+  itpTravMgr->stats.imgPart.nPart = 0;
+  itpTravMgr->stats.imgPart.nProp = NULL;
 
   return itpTravMgr;
 }
@@ -39155,6 +39158,8 @@ itpTravMgrFree(
   Ddi_Free(itpTravMgr->imgPartVars);
   Ddi_Free(itpTravMgr->itpSatHints);
   Ddi_Free(itpTravMgr->observedGates);
+
+  Pdtutil_Free(itpTravMgr->stats.imgPart.nProp);  
 
   if (itpTravMgr->incrSat!=NULL) {
     Ddi_IncrSatMgrQuit(itpTravMgr->incrSat);

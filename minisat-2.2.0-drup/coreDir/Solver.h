@@ -211,7 +211,7 @@ public:
     varDecisions.growTo(2*nVars());
   }
   void updateLastVarDecision(int num_props) {
-    if (lastDecision >= 0)
+    if (1 && (lastDecision >= 0))
       varDecisions[lastDecision] += num_props;
   }
 
@@ -219,21 +219,25 @@ public:
     //    varDecisions.clear();
     varConflicts.growTo(2*nVars());
   }
-  void topVarDecisions(vec<Var>& topv, vec<int>& topd, int *cnf2aig, int n,
-                       int mind, float litUnbTh) {
+  void topVar(vec<Var>& topv, vec<int>& top, int *cnf2aig, int n,
+              int mind, float litUnbTh, int decOrConfl, int unbalance) {
     topv.clear();
-    topd.clear();
-    vec<Var> myTopv; vec<int> myTopd;
+    top.clear();
+    vec<Var> myTopv; vec<int> myTop;
     myTopv.clear();
-    myTopd.clear();
+    myTop.clear();
+    vec<uint64_t>& varCnt = decOrConfl?varDecisions:varConflicts;
+
     while(n-->0) {
       Var vMax = 0;
-      int dMax = varDecisions[0]+varDecisions[1];
+      int dMax = varCnt[0]+varCnt[1];
       for (Var v=1; v<nVars(); v++) {
-        int dec0 = varDecisions[2*v]; 
-        int dec1 = varDecisions[2*v+1]; 
+        int dec0 = varCnt[2*v]; 
+        int dec1 = varCnt[2*v+1]; 
         float ratio = (dec0>dec1) ? ((float)dec0)/dec1 : ((float)dec1)/dec0;
-        if (ratio < litUnbTh) continue;
+        if (unbalance && (ratio < litUnbTh) ||
+            !unbalance && (ratio > litUnbTh)) continue;
+        if (unbalance && (ratio > litUnbTh*4)) continue;
         if (dec0+dec1>dMax) {
           vMax = v;
           dMax = dec0+dec1;
@@ -244,55 +248,21 @@ public:
           n++; // don't count it
         }
         myTopv.push(vMax);
-        myTopd.push(varDecisions[2*vMax]);
-        myTopd.push(varDecisions[2*vMax+1]);
-        varDecisions[2*vMax] = 0;
-        varDecisions[2*vMax+1] = 0;
+        myTop.push(varCnt[2*vMax]);
+        myTop.push(varCnt[2*vMax+1]);
+        varCnt[2*vMax] = 0;
+        varCnt[2*vMax+1] = 0;
       }
     }
     for (int i=0; i<myTopv.size(); i++) {
-      varDecisions[2*myTopv[i]] = myTopd[2*i];
-      varDecisions[2*myTopv[i]+1] = myTopd[2*i+1];
+      varCnt[2*myTopv[i]] = myTop[2*i];
+      varCnt[2*myTopv[i]+1] = myTop[2*i+1];
       Var v = myTopv[i];
       if (cnf2aig!=NULL && cnf2aig[v]>2) {
         topv.push(myTopv[i]);
-        topd.push(myTopd[2*i]);
-        topd.push(myTopd[2*i]+1);
+        top.push(myTop[2*i]);
+        top.push(myTop[2*i+1]);
       }
-    }
-  }
-
-  void topVarConflicts(vec<Var>& topv, vec<int>& topc, int *cnf2aig, int n,
-                       int mind, float litUnbTh) {
-    topc.clear();
-    topc.clear();
-    while(n-->0) {
-      Var vMax = 0;
-      int cMax = varConflicts[0]+varConflicts[1];
-      for (Var v=1; v<nVars(); v++) {
-        int conf0 = varConflicts[2*v]; 
-        int conf1 = varConflicts[2*v+1]; 
-        float ratio = (conf0>conf1) ? ((float)conf0)/conf1 : ((float)conf1)/conf0;
-        if (ratio < litUnbTh) continue;
-        if (conf0+conf1>cMax) {
-          vMax = v;
-          cMax = conf0+conf1;
-        }
-      }
-      if (cMax>mind) {
-        if (cnf2aig!=NULL && cnf2aig[vMax]<=2) {
-          n++; // don't count it
-        }
-        topv.push(vMax);
-        topc.push(varConflicts[2*vMax]);
-        topc.push(varConflicts[2*vMax+1]);
-        varConflicts[2*vMax] = 0;
-        varConflicts[2*vMax+1] = 0;
-      }
-    }
-    for (int i=0; i<topv.size(); i++) {
-      varConflicts[2*topv[i]] = topc[2*i];
-      varConflicts[2*topv[i]+1] = topc[2*i+1];
     }
   }
   

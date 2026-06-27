@@ -764,6 +764,11 @@ Ddi_MgrInit (
   ddiMgr->stats.aig.itpTerms=0;
   ddiMgr->stats.aig.itpPartialExist=0;
 
+  ddiMgr->stats.sat.itp.nCall = 0;
+  ddiMgr->stats.sat.itp.nProp = 0;
+  ddiMgr->stats.sat.itp.nDec = 0;
+  ddiMgr->stats.sat.itp.nConfl = 0;
+
   if (gblMgrNum<7) {
     gblMgr[gblMgrNum++] = ddiMgr;
   }
