@@ -6248,6 +6248,7 @@ FbvParseArgs(
         opt->mc.aig = 1;
         opt->mc.bmc = 100000;
         opt->pre.performAbcOpt = 0;
+	opt->pre.ternarySim = 0;
       } else if (strcmp(opt->mc.strategy, "itpb") == 0) {
         opt->mc.aig = 1;
         opt->mc.interpolant = 1;
