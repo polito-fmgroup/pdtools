@@ -557,6 +557,15 @@ struct Ddi_Mgr_t {
       int itpPartialExist;
     } aig;
 
+    struct {
+      struct {
+        int nCall;
+        float nProp;
+        float nDec;
+        float nConfl;
+      } itp;
+    } sat;
+    
   } stats;
 
   /*

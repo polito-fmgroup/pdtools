@@ -46,6 +46,9 @@
 
 #define ITP_FRONTIER_COMPOSE 1
 
+#define VARS_BY_CONFLICTS 0
+
+
 int printCompose=0;
 static int ncall=0;
 static int recDepth = 0;
@@ -82308,7 +82311,7 @@ Ddi_AigSatMinisat22WithCexAigAndAbortIncremental
       Minisat::vec<double> topa;
       int mind = 10;
       double mina = 0.0;
-      //      S22->topVarDecisions(topv22, topd, ddm->cnf.cnf2aig, nSatVars, mind);
+      //      S22->topVar(topv22, topd, ddm->cnf.cnf2aig, nSatVars, mind, 1, 1);
       S22->topVarActivity(topv22, topa, ddm->cnf.cnf2aig, nSatVars, mina);
       Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
         fprintf(dMgrO(ddm),"Top solver activity vars:");
@@ -84931,9 +84934,13 @@ aigSat22AndWithInterpolantIntern (
       Minisat22FreezeVars (S22,ddm,vA);
       //    S22->eliminate(false);
       if (timeLimit >= 0) {
+        int decisionsOrConflicts = 0; // 1: dec, 0: confl
         S22->setTimeBudget((double)timeLimit);
+#if VARS_BY_CONFLICTS
+        S22->enableVarConflicts();
+#else
         S22->enableVarDecisions();
-
+#endif
         Ddi_Bddarray_t *actAigs = ddm->aig.actVars;
         if (actAigs!=NULL) {
           int na0 = assumps22.size();
@@ -84967,6 +84974,10 @@ aigSat22AndWithInterpolantIntern (
       else {
         *psat = S22->solve(assumps22);
       }
+      ddm->stats.sat.itp.nCall++;
+      ddm->stats.sat.itp.nProp += S22->propagations;
+      ddm->stats.sat.itp.nDec += S22->decisions;
+      ddm->stats.sat.itp.nConfl += S22->conflicts;
     }
   }
   else {
@@ -84975,7 +84986,7 @@ aigSat22AndWithInterpolantIntern (
   }
 
   if (windowLits!=NULL) {
-    Ddi_Bddarray_t *newWL = Minisat22SolverTopVarsByDecisions(S22,b,5.0,16);
+    Ddi_Bddarray_t *newWL = Minisat22SolverTopVarsByDecisions(S22,b,4.0,16);
     Ddi_DataCopy(windowLits,newWL);
   }
 
@@ -89619,7 +89630,7 @@ Minisat22ConstrainSolverWithAbstrCex(
   int mind = 10;
   double mina = 0.0;
   int nv = 20;
-  //      S22->topVarDecisions(topv22, topd, ddm->cnf.cnf2aig, nSatVars, mind);
+  //      S22->topVar(topv22, topd, ddm->cnf.cnf2aig, nSatVars, mind, 1, 1);
   Minisat::vec<bool> aVar;
   aVar.growTo(pS22->nVars(),false);
   
@@ -89710,9 +89721,33 @@ Minisat22SolverTopVarsByDecisions(
   }
   bAigArrayFree(aigNodes);
   
-  pS22->topVarDecisions(topv22, topd, myCnf2Aig, nv, mind, litUnbalanceTh);
+#if VARS_BY_CONFLICTS
+  pS22->topVar(topv22, topd, myCnf2Aig, nv, mind, litUnbalanceTh, 0, 1);
+#else
+  pS22->topVar(topv22, topd, myCnf2Aig, nv, mind, litUnbalanceTh, 1, 1);
+#endif
   //pS22->topVarActivity(topv22, topa, myCnf2Aig, nv, mina);
-
+  for (int ii=0; ii<topv22.size(); ii++) {
+    int t, dmax = topd[2*ii]<topd[2*ii+1]?topd[2*ii]:topd[2*ii+1];
+    int imax = ii;
+    for (int jj=ii+1; jj<topv22.size(); jj++) {
+      int djj = topd[2*jj]<topd[2*jj+1]?topd[2*jj]:topd[2*jj+1];
+      if (djj>dmax) {
+        dmax = djj; imax=jj;
+      }
+    }
+    t = topd[2*imax]; topd[2*imax]=topd[2*ii]; topd[2*ii]=t;
+    t = topd[2*imax+1]; topd[2*imax+1]=topd[2*ii+1]; topd[2*ii+1]=t;
+    t = (int)topv22[imax]; topv22[imax]=topv22[ii]; topv22[ii]=(Minisat::Var)t;
+  }
+  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
+    printf("\ntopvar selection: ");
+    for (int ii=0; ii<topv22.size(); ii++) {
+      int d1 = topd[2*ii], d2 = topd[2*ii+1];
+      printf("(%d,%d), ", d1>d2?d2:d1,d1>d2?d1:d2);
+    }
+    printf("\n");
+  }
   for (int ii=0; ii<topv22.size(); ii++) {
     int i = (int)topv22[ii];
     int vCnf = i+1;

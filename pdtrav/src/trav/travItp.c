@@ -712,6 +712,47 @@ Ddi_Bdd_t *itpImgExactBound(
   return itpEB;
 }
 
+Ddi_Bddarray_t *mergePartsByStats(
+  Ddi_Bddarray_t *windows,
+  float *nProp,
+  int np
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(windows);
+  Ddi_Bddarray_t *newW = Ddi_BddarrayAlloc(ddm, 0);
+  float ref0, ref1 = nProp[np-1];
+  char used[np] = {(char)0};
+  int iMax=0;
+  for (int i=1; i<np-1; i++)
+    if (nProp[i]>nProp[iMax]) iMax=i;
+  ref0 = 1.2*nProp[iMax];
+  used[iMax]=used[np-1]=(char)1;
+
+  Ddi_BddarrayWrite(newW,0,Ddi_BddarrayRead(windows,iMax));
+  for (int p=1; 1; p++) {
+    int iMax=-1;
+    for (int i=1; i<np-1; i++)
+      if (!used[i] && (iMax<0 || nProp[i]>nProp[iMax])) iMax=i;
+    if (iMax<0) break;
+    used[iMax]=(char)1;
+    float estimatedCost = nProp[iMax];
+    Ddi_BddarrayInsertLast(newW,Ddi_BddarrayRead(windows,iMax));
+    Ddi_Bdd_t *part = Ddi_BddarrayRead(newW,Ddi_BddarrayNum(newW)-1);
+    while (estimatedCost < ref0) {
+      int iMin=-1;
+      for (int i=1; i<np-1; i++)
+        if (!used[i] && (iMin<0 || nProp[i]<nProp[iMin])) iMin=i;
+      if (iMin<0 || estimatedCost+nProp[iMin]>ref0) break;
+      used[iMin] = (char)1;
+      Ddi_BddOrAcc(part,Ddi_BddarrayRead(windows,iMin));
+      estimatedCost += nProp[iMin];
+    }
+  }
+  Ddi_BddarrayInsertLast(newW,Ddi_BddarrayRead(windows,np-1));
+
+  return newW;
+}
+
 
 static Ddi_Bdd_t *itpImgWithPrevTo (
   Trav_ItpTravMgr_t * itpTravMgr,
@@ -865,7 +906,8 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
   }
   else clungItpRatio = -1.0; // enforce disable
 
-  int partTh = Ddi_MgrReadAigItpPartTh(ddm);
+  int partTh = abs(Ddi_MgrReadAigItpPartTh(ddm));
+  static int tryNonPart=Ddi_MgrReadAigItpPartTh(ddm)<0;
   int enPart = 0 && (Ddi_BddSize(prevTo)>partTh);
   int nPart = 4;
   int enWindow = 1;
@@ -910,6 +952,19 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
   if (partTh>0 && enWindow && (Ddi_BddSize(prevTo)<=partTh)) {
     Ddi_Free(itpTravMgr->imgPart.windowLits);
     windowLits = itpTravMgr->imgPart.windowLits = Ddi_BddarrayAlloc(ddm, 0); 
+  }
+  if (enPartWindow2) {
+    int np = itpTravMgr->stats.imgPart.nPart = Ddi_BddarrayNum(itpTravMgr->imgPart.windows);
+    if (itpTravMgr->stats.imgPart.cnt==1 && itpTravMgr->stats.imgPart.nProp!=NULL) {
+      Ddi_Bddarray_t *newW = mergePartsByStats(itpTravMgr->imgPart.windows,
+                                               itpTravMgr->stats.imgPart.nProp,np);
+      Ddi_Free(itpTravMgr->imgPart.windows);
+      itpTravMgr->imgPart.windows = newW;
+      np = itpTravMgr->stats.imgPart.nPart = Ddi_BddarrayNum(newW);
+    }
+    itpTravMgr->stats.imgPart.cnt++;
+    Pdtutil_Free(itpTravMgr->stats.imgPart.nProp);
+    itpTravMgr->stats.imgPart.nProp = Pdtutil_Alloc(float,np);
   }
   
   for (int ii=0; again; ii++) {
@@ -969,19 +1024,19 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
     }
     else if (enPartWindow2) {
       Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
-        printf("\nA partitioned IMG in window (iter: %d)\n", ii);
+        printf("\nA partitioned IMG in window (iter: %d/%d)\n", ii,
+               Ddi_BddarrayNum(itpTravMgr->imgPart.windows));
       }
       Ddi_Bdd_t *myPartWindow=Ddi_BddarrayRead(itpTravMgr->imgPart.windows,ii);
       Ddi_BddAndAcc(myB,myPartWindow);      
       again=ii<Ddi_BddarrayNum(itpTravMgr->imgPart.windows)-1;
       //      Ddi_BddNotAcc(itpNew);
-      Ddi_BddAndAcc(myB,itpNew);
+      // Ddi_BddAndAcc(myB,itpNew);
       //      Ddi_BddNotAcc(itpNew);
     }
     
     if (enPartWindow || enPartWindow2) {
 
-      static int tryNonPart=1;
       if (tryNonPart && ii==0) {
         Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMax_c) {
           printf("\nA try nonPart\n");
@@ -1004,6 +1059,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
 
     }
 
+    float nProp0 = ddm->stats.sat.itp.nProp;
     Ddi_Bdd_t *itpNew_i = Ddi_AigSat22AndWithInterpolantAndClung(
                                                   itpTravMgr->incrSat,
                                                   myA,myB,NULL,
@@ -1014,13 +1070,29 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
                                                   clungItp,clungItpRatio,
                                                   psat, itpPart, itpOdc, 
                                                   0,timeLimit);
-
+    if (itpTravMgr->stats.imgPart.nPart>ii) {
+      itpTravMgr->stats.imgPart.nProp[ii] = ddm->stats.sat.itp.nProp-nProp0;
+    }
+    
     if (windowLits!=NULL) {
       Ddi_Bddarray_t *myWindowLits = Ddi_BddarrayDup(windowLits);
       //      for (int i=0; i<Ddi_BddarrayNum(myWindowLits);i++)
       //        Ddi_BddNotAcc(Ddi_BddarrayRead(myWindowLits,i));
       Ddi_Bddarray_t *windows = Ddi_BddarrayAlloc(ddm, 0);
-      int np=3;
+      int np=16;
+#if 0
+      if (Ddi_BddarrayNum(myWindowLits)>=4) {
+        for (int i=0; i<4; i++) {
+          Ddi_BddarrayWrite(windows,i,Ddi_BddarrayRead(myWindowLits,0));
+          if (i/2)
+            Ddi_BddNotAcc(Ddi_BddarrayRead(windows,i));
+          if (i%2)
+            Ddi_BddAndAcc(Ddi_BddarrayRead(windows,i),Ddi_BddarrayRead(myWindowLits,1));
+          else
+            Ddi_BddDiffAcc(Ddi_BddarrayRead(windows,i),Ddi_BddarrayRead(myWindowLits,1));
+        }
+      }
+#else
       Ddi_Bdd_t *wAnd = Ddi_BddMakePartConjFromArray(myWindowLits);
       for (int ii=0; ii<np; ii++) {
         Ddi_Bdd_t *w_ii = Ddi_BddMakePartDisjVoid(ddm);
@@ -1040,6 +1112,7 @@ static Ddi_Bdd_t *itpImgWithPrevTo (
         Ddi_Bdd_t *w_ii = Ddi_BddarrayRead(windows,ii);
         Ddi_BddSetAig(w_ii);
       }
+#endif
       Ddi_Free(itpTravMgr->imgPart.windows);
       itpTravMgr->imgPart.windows = windows;
       Ddi_Free(myWindowLits);

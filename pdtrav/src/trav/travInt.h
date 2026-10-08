@@ -856,6 +856,11 @@ struct TravItpTravMgr_s {
     int coneHit;
     int conePiConstrTf_i;
     int conePiConstrStep;
+    struct {
+      int cnt;
+      int nPart;
+      float *nProp;
+    } imgPart;
   } stats;
 };
 
