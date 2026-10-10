@@ -53,3 +53,15 @@ dkms.conf
 
 # Generated files
 config.local.mk
+
+# Build output
+pdtrav/bin/
+pdtrav/obj/
+pdtrav/include/
+pdtrav/lib/
+cudd-2.5.0/include/
+abc/arch_flags
+lingeling-bcj/lglcfg.h
+lingeling-bcj/lglcflags.h
+minisat-2.2.0-drup/simp/depend.mk
+*.or

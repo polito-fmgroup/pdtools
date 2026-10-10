@@ -1,0 +1,15 @@
+# Normalise line endings so Windows checkouts do not break the build.
+
+# Scripts and build files: the shell and make reject CRLF
+# ("bad interpreter", "missing separator").
+configure       text eol=lf
+*.sh            text eol=lf
+Makefile        text eol=lf
+makefile        text eol=lf
+*.mk            text eol=lf
+*.in            text eol=lf
+
+# AIGER models: the ASCII format only accepts LF, the binary format must
+# never be modified.
+*.aag           text eol=lf
+*.aig           binary
