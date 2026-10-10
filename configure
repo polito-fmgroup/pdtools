@@ -1,0 +1,319 @@
+#!/bin/sh
+# configure - detect the build environment and write config.local.mk
+#
+# Checks that the required tools and the readline headers are installed,
+# selects the newest C and C++ compilers available, and writes the result to
+# config.local.mk, which config.mk includes. If something is missing, it
+# prints the install command for the detected package manager.
+#
+# Usage: ./configure [options]
+#
+# Options:
+#   --cc=COMPILER      C compiler to use (e.g. gcc-14)
+#   --cxx=COMPILER     C++ compiler to use (e.g. g++-14)
+#   --std=STANDARD     C++ standard to request (default: c++17); falls back
+#                      to c++14 if the compiler does not support it
+#   --build-mode=MODE  build mode: default, debug or sanitize
+#                      (see config.mk)
+#   --prefix=DIR       accepted but currently unused
+#   --install-deps     install missing packages with the system package manager
+#   --help             show this message
+
+set -e
+
+##############################################################################
+# Helpers
+##############################################################################
+
+die()   { echo "configure: ERROR: $*" >&2; exit 1; }
+warn()  { echo "configure: WARNING: $*" >&2; }
+info()  { echo "configure: $*"; }
+ok()    { echo "configure: OK: $*"; }
+check() { printf "configure: checking %s... " "$1"; }
+
+##############################################################################
+# Defaults
+##############################################################################
+
+OPT_CC=
+OPT_CXX=
+OPT_STD=c++17
+OPT_MODE=default
+OPT_PREFIX=/usr/local
+OPT_INSTALL=no
+OUTPUT=config.local.mk
+
+##############################################################################
+# Argument parsing
+##############################################################################
+
+for arg in "$@"; do
+    case "$arg" in
+        --cc=*)          OPT_CC="${arg#--cc=}" ;;
+        --cxx=*)         OPT_CXX="${arg#--cxx=}" ;;
+        --std=*)         OPT_STD="${arg#--std=}" ;;
+        --build-mode=*)  OPT_MODE="${arg#--build-mode=}" ;;
+        --prefix=*)      OPT_PREFIX="${arg#--prefix=}" ;;
+        --install-deps)  OPT_INSTALL=yes ;;
+        --help|-h)
+            # Print the comment block at the top of this file.
+            sed -n '/^#/!q; 2,$s/^# \{0,1\}//p' "$0"
+            exit 0
+            ;;
+        *) die "unknown option: $arg  (try --help)" ;;
+    esac
+done
+
+case "$OPT_MODE" in
+    default|debug|sanitize) ;;
+    *) die "invalid --build-mode '$OPT_MODE' (use default, debug or sanitize)" ;;
+esac
+
+##############################################################################
+# Platform detection
+##############################################################################
+
+check "operating system"
+OS_ID=""
+OS_VERSION=""
+PKG_MANAGER=""
+PKG_INSTALL=""
+READLINE_PKG=""
+READLINE_RUNTIME_PKG=""
+
+if [ -f /etc/os-release ]; then
+    OS_ID=$(. /etc/os-release && echo "$ID")
+    OS_VERSION=$(. /etc/os-release && echo "$VERSION_ID")
+fi
+
+case "$OS_ID" in
+    ubuntu|debian|linuxmint|pop)
+        PKG_MANAGER="apt-get"
+        PKG_INSTALL="apt-get install -y"
+        READLINE_PKG="libreadline-dev"
+        # Ubuntu 24.04 and later name the runtime package libreadline8t64
+        # (64-bit time_t transition); libreadline8 does not exist there. Other
+        # derivatives with the same rename (e.g. Debian 13, Linux Mint 22) are
+        # not detected, and fall back to libreadline8. The name is only reported
+        # by `make info`; the build does not use it.
+        _major=$(echo "$OS_VERSION" | cut -d. -f1)
+        if [ "$OS_ID" = "ubuntu" ] && [ "${_major:-0}" -ge 24 ] 2>/dev/null; then
+            READLINE_RUNTIME_PKG="libreadline8t64"
+        else
+            READLINE_RUNTIME_PKG="libreadline8"
+        fi
+        ;;
+    fedora)
+        PKG_MANAGER="dnf"
+        PKG_INSTALL="dnf install -y"
+        READLINE_PKG="readline-devel"
+        READLINE_RUNTIME_PKG="readline"
+        ;;
+    rhel|centos|rocky|almalinux)
+        PKG_MANAGER="dnf"
+        PKG_INSTALL="dnf install -y"
+        READLINE_PKG="readline-devel"
+        READLINE_RUNTIME_PKG="readline"
+        ;;
+    arch|manjaro)
+        PKG_MANAGER="pacman"
+        PKG_INSTALL="pacman -S --noconfirm"
+        READLINE_PKG="readline"
+        READLINE_RUNTIME_PKG="readline"
+        ;;
+    "")
+        # macOS (no /etc/os-release)
+        if [ "$(uname)" = "Darwin" ]; then
+            OS_ID="macos"
+            PKG_MANAGER="brew"
+            PKG_INSTALL="brew install"
+            READLINE_PKG="readline"
+            READLINE_RUNTIME_PKG="readline"
+        else
+            warn "unrecognised OS — install guidance may be inaccurate"
+            OS_ID="unknown"
+        fi
+        ;;
+    *)
+        warn "unrecognised OS '$OS_ID' — install guidance may be inaccurate"
+        ;;
+esac
+
+echo "$OS_ID ${OS_VERSION} (package manager: ${PKG_MANAGER:-unknown})"
+
+##############################################################################
+# Compiler selection
+##############################################################################
+
+check "C++ compiler"
+
+# Build a preference-ordered list of C++ compilers to try.
+# Explicit --cxx wins outright; otherwise prefer newer versioned binaries.
+if [ -n "$OPT_CXX" ]; then
+    CXX_CANDIDATES="$OPT_CXX"
+else
+    CXX_CANDIDATES="g++-14 g++-13 g++-12 g++ clang++-17 clang++-16 clang++"
+fi
+
+CHOSEN_CXX=""
+for cxx in $CXX_CANDIDATES; do
+    if command -v "$cxx" >/dev/null 2>&1; then
+        CHOSEN_CXX="$cxx"
+        break
+    fi
+done
+[ -n "$CHOSEN_CXX" ] || die "no C++ compiler found. Install build-essential (Debian/Ubuntu) or gcc-c++ (Fedora/RHEL)."
+
+# Derive the matching C compiler from the chosen C++ one.
+if [ -n "$OPT_CC" ]; then
+    CHOSEN_CC="$OPT_CC"
+else
+    # Mirror the version suffix from the chosen C++ compiler where possible.
+    _suffix=$(echo "$CHOSEN_CXX" | sed 's/^g++//' | sed 's/^clang++//')
+    if echo "$CHOSEN_CXX" | grep -q "^g++"; then
+        _try="gcc${_suffix}"
+        if command -v "$_try" >/dev/null 2>&1; then
+            CHOSEN_CC="$_try"
+        else
+            CHOSEN_CC="gcc"
+        fi
+    elif echo "$CHOSEN_CXX" | grep -q "^clang++"; then
+        _try="clang${_suffix}"
+        if command -v "$_try" >/dev/null 2>&1; then
+            CHOSEN_CC="$_try"
+        else
+            CHOSEN_CC="clang"
+        fi
+    else
+        CHOSEN_CC="gcc"
+    fi
+fi
+
+CXX_VERSION=$("$CHOSEN_CXX" --version 2>&1 | head -1)
+CC_VERSION=$("$CHOSEN_CC" --version 2>&1 | head -1)
+echo "$CHOSEN_CXX  ($CXX_VERSION)"
+check "C compiler"
+echo "$CHOSEN_CC  ($CC_VERSION)"
+
+##############################################################################
+# C++ standard probe
+##############################################################################
+
+check "C++ standard $OPT_STD support"
+if printf 'int main(){return 0;}\n' | \
+        "$CHOSEN_CXX" -std="$OPT_STD" -x c++ -o /dev/null - >/dev/null 2>&1; then
+    echo "supported"
+    CHOSEN_STD="$OPT_STD"
+else
+    warn "$CHOSEN_CXX does not support -std=$OPT_STD — falling back to c++14"
+    CHOSEN_STD="c++14"
+fi
+
+##############################################################################
+# Required tool checks
+##############################################################################
+
+MISSING_TOOLS=""
+MISSING_PKGS=""
+
+for tool in make flex bison; do
+    check "$tool"
+    if command -v "$tool" >/dev/null 2>&1; then
+        echo "found ($(command -v $tool))"
+    else
+        echo "MISSING"
+        MISSING_TOOLS="$MISSING_TOOLS $tool"
+        case "$tool" in
+            flex)  MISSING_PKGS="$MISSING_PKGS flex" ;;
+            bison) MISSING_PKGS="$MISSING_PKGS bison" ;;
+            make)  MISSING_PKGS="$MISSING_PKGS build-essential" ;;
+        esac
+    fi
+done
+
+##############################################################################
+# readline header probe
+##############################################################################
+
+check "readline/readline.h"
+READLINE_OK=no
+if printf '#include <readline/readline.h>\nint main(void){return 0;}\n' | \
+        "$CHOSEN_CC" -x c -o /dev/null - >/dev/null 2>&1; then
+    echo "found"
+    READLINE_OK=yes
+else
+    echo "MISSING"
+    MISSING_TOOLS="$MISSING_TOOLS readline-headers"
+    MISSING_PKGS="$MISSING_PKGS ${READLINE_PKG:-readline-dev}"
+fi
+
+##############################################################################
+# Handle missing dependencies
+##############################################################################
+
+if [ -n "$MISSING_TOOLS" ]; then
+    echo ""
+    echo "configure: the following are missing:$MISSING_TOOLS"
+    echo ""
+    if [ -n "$PKG_INSTALL" ]; then
+        echo "  To install on this system (${OS_ID}):"
+        echo "    ${PKG_INSTALL} ${MISSING_PKGS}"
+        echo ""
+    else
+        echo "  Install the missing items for your platform and re-run ./configure."
+        echo ""
+    fi
+
+    if [ "$OPT_INSTALL" = "yes" ]; then
+        info "attempting automatic install (--install-deps)..."
+        if [ "$(id -u)" -ne 0 ]; then
+            SUDO=sudo
+        else
+            SUDO=""
+        fi
+        # shellcheck disable=SC2086
+        $SUDO $PKG_INSTALL $MISSING_PKGS || die "automatic install failed — install manually and re-run ./configure"
+        # Re-verify readline after install
+        if printf '#include <readline/readline.h>\nint main(void){return 0;}\n' | \
+                "$CHOSEN_CC" -x c -o /dev/null - >/dev/null 2>&1; then
+            READLINE_OK=yes
+            ok "readline headers now available"
+        else
+            die "readline headers still not found after install"
+        fi
+    else
+        die "missing dependencies — install them and re-run ./configure (or use --install-deps to do it automatically)"
+    fi
+fi
+
+##############################################################################
+# Write config.local.mk
+##############################################################################
+
+info "writing $OUTPUT"
+
+cat > "$OUTPUT" << EOF
+# config.local.mk — generated by ./configure on $(date)
+# Do not edit by hand; re-run ./configure to regenerate.
+# This file is -include'd by config.mk automatically.
+
+TOOLCHAIN_CC  := $CHOSEN_CC
+TOOLCHAIN_CXX := $CHOSEN_CXX
+CXX_STD       := $CHOSEN_STD
+BUILD_MODE    ?= $OPT_MODE
+
+# Platform detection results (informational, used by make info)
+CONFIGURE_OS            := $OS_ID $OS_VERSION
+CONFIGURE_READLINE_PKG  := ${READLINE_PKG:-unknown}
+CONFIGURE_READLINE_RUNTIME_PKG := ${READLINE_RUNTIME_PKG:-unknown}
+EOF
+
+ok "$OUTPUT written"
+echo ""
+echo "  CC      = $CHOSEN_CC"
+echo "  CXX     = $CHOSEN_CXX"
+echo "  STD     = $CHOSEN_STD"
+echo "  MODE    = $OPT_MODE"
+echo "  OS      = $OS_ID $OS_VERSION"
+echo ""
+echo "Run 'make' to build, or 'make help' for all options."

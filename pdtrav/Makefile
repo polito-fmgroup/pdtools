@@ -1,27 +1,30 @@
 #------------------------------------------#
-# Makefile for the PdTRAV distribution kit #*
+# Makefile for the PdTRAV distribution kit #
 # Version 3.5.0                            #
 #------------------------------------------#
 
-# Commands Available:
-# make
-#    all (the default)
-#    it makes all: compiles the external libraries, creates the pdtrav library, makes pdtrav
-# make clean
-#    it cleans pdtrav
-# make distclean
-#    it cleans pdtrav and all other packages
-
-#------------#
-# For safety #
-#------------#
+# Targets:
+#   all (default)  build the external libraries, the pdtrav library and the
+#                  pdtrav and pdtapp executables
+#   default, static, sanitize
+#                  same as all, linking dynamically (default), statically,
+#                  or with AddressSanitizer
+#   clean          remove pdtrav's build output
+#   distclean      remove the build output of pdtrav and of all the
+#                  external libraries
+#
+# The top-level Makefile normally drives this one and supplies the compilers
+# and flags from ../config.mk. This Makefile can also be run on its own.
 
 SHELL = /bin/sh
 
+# Compilers and flags shared with the top-level build. The include is
+# optional: without it, the fallback values below apply.
+-include ../config.mk
+
 .SUFFIXES:
 #----------------------------------------#
-# Configuration Section                  #
-# uncomment the desired options/sections #
+# Configuration                          #
 #----------------------------------------#
 
 .PHONY : default static 
@@ -29,19 +32,22 @@ SHELL = /bin/sh
 default: LDFLAGS = 
 static : LDFLAGS = -static
 sanitize : LDFLAGS = -fsanitize=address -static-libasan
-#sanitize : LDFLAGS = -fsanitize=leak -static-libasan
 sanitize : SANITIZER = -fsanitize=address
 
 default: all
 static : all
 sanitize : all
 
-ifdef (PDT32)
+# PDT32=yes selects a 32-bit build. DEFINE_PDT32 passes the setting on to the
+# sub-builds that support it.
+ifdef PDT32
 DEFINE_PDT32 = PDT32=yes
 else
 DEFINE_PDT32 =
 endif
 
+# DEBUG=1 selects the debug builds of MiniSat 2.2 and Lingeling. The top-level
+# build selects them through BUILD_MODE instead.
 ifdef DEBUG
 MINISAT22LIB = minisat22d
 LGL_FLAGS = CFLAGS="$(LGLDBGCFLAGS)"
@@ -50,69 +56,51 @@ MINISAT22LIB = minisat22
 LGL_FLAGS = CFLAGS="$(LGLNDBGCFLAGS)"
 endif
 
-# Memory libraries
-#MNEMLIB	=
-# MNEMLIB	= /usr/lib/libdmalloc.a
+# Compilers and compilation flags.
+#   CC          C++ compiler for pdtrav's sources, also used to link (the
+#               name is historical)
+#   CUDD_CC     C compiler for CUDD
+# Both come from config.mk and default to g++ and gcc without it.
+# CUDD_ICFLAGS is passed to CUDD only; CUDD_XCFLAGS is passed to CUDD and is
+# also added to pdtrav's CFLAGS below.
+CC :=		$(if $(TOOLCHAIN_CXX),$(TOOLCHAIN_CXX),g++)
+CUDD_CC :=	$(if $(TOOLCHAIN_CC),$(TOOLCHAIN_CC),gcc)
 
-# ReadLine Library
-#READLINEFLAGS =
-#READLINEFLAGS = -DHAVE_LIBREADLINE -DHAVE_READLINE_READLINE_H -DHAVE_READLINE_HISTORY_H
-#PDTRAVLIBS += -lreadline
-#READLINEFLAGS = -DHAVE_LIBREADLINE -DHAVE_READLINE_READLINE_H
-#PDTRAVLIBS += -lreadline
-
-# Level of Self-Checking and Verbosity of the CUDD Package
-
-#DDEBUG =
-#DDDEBUG = -DDD_DEBUG -DDD_VERBOSE -DDD_STATS -DDD_CACHE_PROFILE -DDD_UNIQUE_PROFILE -DDD_COUNT -DDDDMP_DEBUG
-#DDDEBUG = -DDDDMP_DEBUG
-
-# Specify compilation flags (ICFLAGS are for CUDD only!)
-CC =		g++
-CUDD_CC =	gcc
-#CUDD_CC =	g++
-#GCC =		gcc
-
-#LGLDBGCFLAGS =	-Wall -g -DNLGLOG -DNDEBUG -DNCHKSOL -DNLGLDRUPLIG -DNLGLYALSAT -DNLGLFILES -DNLGLDEMA 
 LGLDBGCFLAGS =	-Wall -g -DNLGLOG -DNCHKSOL -DNLGLDRUPLIG -DNLGLYALSAT -DNLGLFILES -DNLGLDEMA 
-LGLNDBGCFLAGS =	-Wall -O6 -DNLGLOG -DNCHKSOL -DNLGLDRUPLIG -DNLGLYALSAT -DNLGLFILES -DNLGLDEMA 
-#LGLNDBGCFLAGS =	-Wall -O6 -ffloat-store -mtune=native -fPIE -pthread -malign-double -DNLGLOG -DNCHKSOL -DNLGLDRUPLIG -DNLGLYALSAT -DNLGLFILES -DNLGLDEMA
+LGLNDBGCFLAGS =	$(if $(LGL_BUILD_FLAGS),$(LGL_BUILD_FLAGS),-Wall -O6 -DNLGLOG -DNCHKSOL -DNLGLDRUPLIG -DNLGLYALSAT -DNLGLFILES -DNLGLDEMA)
 
 
 ifdef PDT32
-# StQ: 32-bit (2 rows) OK x cudd-2.4.1 OK ANCHE PER cudd-2.4.2 ma compilato con gcc e non con g++
+# 32-bit build. Worked with CUDD 2.4.1, and with CUDD 2.4.2 when CUDD is
+# compiled with gcc rather than g++.
 CUDD_ICFLAGS = 	-O6 -m32 -Wall -pthread
-# TOLTE O MESSE SEMBRA NON FARE DIFFERENZA -Wall -fPIC  -pthread
 CUDD_XCFLAGS =	-mtune=native -fPIC -DHAVE_IEEE_754 -DBSD
-# TOLTE O MESSE SEMBRA NON FACCIA DIFFERENZA --> -DSTDC_HEADERS -DHAVE_STRSTR
-#XC_FLAGS = 	-pthread -m32 -mtune=native -DHAVE_IEEE_754 -DBSD
 XC_FLAGS =
-# StQ: 32-bit
-#CFLAGS =	-Wall -g3 -m32 -pthread -static
 CFLAGS =	-DLIN -g -m32 -pthread
 else
-# StQ: 64-bit (2 rows)
-CUDD_ICFLAGS = 	-O6 -Wall -fPIE -pthread -std=c++14
-#CUDD_ICFLAGS = 	-g -Wall -fPIC -pthread
-CUDD_XCFLAGS =	-ffloat-store -mtune=native -malign-double -DHAVE_IEEE_754 -DBSD -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4
-#ICFLAGS = 	-Wall -O6 -fPIC -pthread -mtune=native -malign-double -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8
+# 64-bit build. CUDD_ICFLAGS and CUDD_XCFLAGS come from config.mk when it is
+# included; the values below are the fallback for running this Makefile on its
+# own. Host-specific flags such as -mtune=native and -malign-double are not
+# part of the defaults; see ARCH_FLAGS in config.mk.
+CUDD_ICFLAGS ?= 	-O6 -Wall -fPIE -pthread -std=c++14
+CUDD_XCFLAGS ?=	-ffloat-store -DHAVE_IEEE_754 -DBSD -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4
 XC_FLAGS =	-DHAVE_IEEE_754=1 -DBSD=1 -DSTDC_HEADERS=1 -DHAVE_STRSTR=1
+# Optimisation and debug flags come from OPT_FLAGS in config.mk (set by
+# BUILD_MODE). Without config.mk, PDTOPT=1 selects -O6 and the default is -g.
+ifdef OPT_FLAGS
+CFLAGS =	-DLIN64 $(OPT_FLAGS) -Wall -fPIE -pthread $(SANITIZER) -Wno-error=implicit-function-declaration
+else
 ifdef PDTOPT
 CFLAGS =	-DLIN64 -O6 -Wall -fPIE -pthread $(SANITIZER) -Wno-error=implicit-function-declaration
 else
 CFLAGS =	-DLIN64 -g -Wall -fPIE -pthread $(SANITIZER) -Wno-error=implicit-function-declaration
 endif
 endif
-LINKER =	g++
-#LDFLAGS =	-pthread -static --enable-static --disable-shared
-#LDFLAGS =	-pthread -static -ltcmalloc
-#LDFLAGS =	-pthread -static
-#LDFLAGS =	-pthread
-#LDFLAGS =	-static
+endif
+LINKER =	$(CC)
 
 CFLAGS += 	$(CUDD_XCFLAGS) -std=c++14
 OTHERLIBS =	-lreadline -lncurses -ltermcap -ldl -lrt -lm
-#OTHERLIBS =	-lreadline -ldl -lrt -lm
 YACC =		bison -y
 LEX =		flex
 NAWK =		gawk
@@ -121,6 +109,7 @@ RANLIB =	ranlib
 RM =		rm -f
 FIND =		find
 
+# -D_GLIBCXX_DEBUG enables libstdc++'s checked containers in every build mode.
 ALLCFLAGS = $(CFLAGS) $(XC_FLAGS) -D_GLIBCXX_DEBUG
 
 #-------------#
@@ -191,7 +180,6 @@ lgllib = $(LGL_DIR)/liblgl.a
 minisatlib = $(MINISAT_DIR)/libminisat.a
 
 minisat22lib = $(MINISAT22_DIR)/simp/lib.a
-#minisat22lib = $(MINISAT22_DIR)/coreDir/lib.a
 
 abclib = $(ABC_DIR)/libabc.a
 
@@ -253,7 +241,7 @@ EXEOBJ = $(EXESRC:.c=.o)
 APPOBJ = $(APPSRC:.c=.o)
 
 #--------------------------------------------------------------#
-# Form the the list of directories to search for header files. #
+# Form the list of directories to search for header files.     #
 #--------------------------------------------------------------#
 
 VPATH = $(PDTRAV_DIR): \
@@ -315,7 +303,6 @@ $(includedir) :
 	ln -s $(ABC_DIR)/src/misc/vec/*.h $(includedir)
 	ln -s $(ABC_DIR)/src/misc/mem/*.h $(includedir)
 	ln -s $(ABC_DIR)/src/misc/nm/*.h $(includedir)
-	#ln -s $(ABC_DIR)/src/misc/st/*.h $(includedir)
 	ln -s $(ABC_DIR)/src/opt/dar/*.h $(includedir)
 	ln -s $(ABC_DIR)/src/misc/util/abc_global.h $(includedir)
 	ln -s $(ABC_DIR)/src/misc/util/utilCex.h $(includedir)
@@ -358,38 +345,36 @@ $(PDTLIB): $(OBJECTS)
 
 cudd:
 	${MAKE} CC=$(CUDD_CC) RANLIB=$(RANLIB) ICFLAGS="$(CUDD_ICFLAGS)" XCFLAGS="$(CUDD_XCFLAGS)" -C ${CUDD_DIR} cuddlibs
-# x cudd-2.4.2
-#	${MAKE} CC=$(GCC) XCFLAGS="$(XC_FLAGS)" -C ${CUDD_DIR} cuddlibs
 
 abc:
-	${MAKE} -C ${ABC_DIR} $(DEFINE_PDT32) libabc.a
+	${MAKE} -C ${ABC_DIR} $(DEFINE_PDT32) CC=$(or $(TOOLCHAIN_CC),gcc) CXX=$(or $(TOOLCHAIN_CXX),g++) LD=$(or $(TOOLCHAIN_CXX),g++) libabc.a
 
 aiger:
 	@if [ -e ${AIGER_DIR}/makefile ] ; then \
 		(echo -n "") ; \
 	else \
-	        (echo "Configuring aiger"; cd ${AIGER_DIR}; ./configure $(DEFINE_PDT32)) \
+	        (echo "Configuring aiger"; cd ${AIGER_DIR}; CC=$(or $(TOOLCHAIN_CC),gcc) ./configure $(DEFINE_PDT32)) \
 	fi
-	${MAKE} -C ${AIGER_DIR} libaiger.a
+	${MAKE} -C ${AIGER_DIR} CC=$(or $(TOOLCHAIN_CC),gcc) libaiger.a
 
 lgl:
 	@if [ -e ${LGL_DIR}/makefile ] ; then \
 		(echo -n "") ; \
 	else \
-	        (echo "Configuring lgl"; cd ${LGL_DIR}; ./configure.sh $(DEFINE_PDT32)) \
+	        (echo "Configuring lgl"; cd ${LGL_DIR}; CC=$(or $(TOOLCHAIN_CC),gcc) ./configure.sh $(DEFINE_PDT32)) \
 	fi
 
-	${MAKE} $(LGL_FLAGS) -C ${LGL_DIR} liblgl.a
+	${MAKE} $(LGL_FLAGS) -C ${LGL_DIR} CC=$(or $(TOOLCHAIN_CC),gcc) liblgl.a
 
 minisat:
-	${MAKE} -C ${MINISAT_DIR} $(DEFINE_PDT32) libminisat.a
+	${MAKE} -C ${MINISAT_DIR} $(DEFINE_PDT32) CXX=$(or $(TOOLCHAIN_CXX),g++) libminisat.a
 minisat22s:
-	${MAKE} MROOT=${MINISAT22_DIR} -C ${MINISAT22_DIR}/simp $(DEFINE_PDT32) libr
+	${MAKE} MROOT=${MINISAT22_DIR} -C ${MINISAT22_DIR}/simp $(DEFINE_PDT32) CXX=$(or $(TOOLCHAIN_CXX),g++) libr
 minisat22:
-	${MAKE} MROOT=${MINISAT22_DIR} -C ${MINISAT22_DIR}/coreDir -C ${MINISAT22_DIR}/simp $(DEFINE_PDT32) libr
+	${MAKE} MROOT=${MINISAT22_DIR} -C ${MINISAT22_DIR}/coreDir -C ${MINISAT22_DIR}/simp $(DEFINE_PDT32) CXX=$(or $(TOOLCHAIN_CXX),g++) libr
 
 minisat22d:
-	${MAKE} MROOT=${MINISAT22_DIR} -C ${MINISAT22_DIR}/coreDir -C ${MINISAT22_DIR}/simp $(DEFINE_PDT32) libd
+	${MAKE} MROOT=${MINISAT22_DIR} -C ${MINISAT22_DIR}/coreDir -C ${MINISAT22_DIR}/simp $(DEFINE_PDT32) CXX=$(or $(TOOLCHAIN_CXX),g++) libd
 
 pdtlib:	$(objectdir) $(libdir) $(bindir) $(includedir) $(PDTLIB)
 
@@ -399,13 +384,8 @@ $(EXE): $(EXESRC) $(EXEHDR) $(EXEOBJ) $(PDTLIB) $(LIBS)
 $(APP): $(APPSRC) $(APPHDR) $(APPOBJ) $(PDTLIB) $(LIBS)
 	umask 2 ; $(LINKER) $(ALLCFLAGS) $(LDFLAGS) -o $(bindir)/$(APP) $(INCLUDEDIRS) $(APPOBJ) $(PDTLIB) $(LIBS) $(OTHERLIBS)
 
-#$(EXE): $(EXESRC) $(EXEHDR) $(EXEOBJ) $(PDTLIB) $(LIBS)
-#	umask 2 ; $(LINKER) $(ALLCFLAGS) -o $(bindir)/$(EXE) $(INCLUDEDIRS) $(EXESRC) $(PDTLIB) $(LIBS) $(OTHERLIBS)
-
 all : abc aiger lgl minisat $(MINISAT22LIB) cudd pdtlib $(EXE) $(APP)
 	  (echo "using $(MINISAT22LIB)")
-
-#all : abc aiger minisat minisat22s cudd pdtlib $(EXE)
 
 #--------------------#
 # Rules for cleaning #
@@ -413,7 +393,6 @@ all : abc aiger lgl minisat $(MINISAT22LIB) cudd pdtlib $(EXE) $(APP)
 
 clean: pdtrav_clean
 
-#distclean: aiger_clean cudd_clean minisat_clean pdtrav_clean
 distclean: abc_clean aiger_clean lgl_clean cudd_clean minisat_clean minisat22_clean pdtrav_clean
 	${FIND} $(PDTOOLS_DIR) -name "#*" -exec rm -f '{}' \; 
 	${FIND} $(PDTOOLS_DIR) -name "*~" -exec rm -f '{}' \;
