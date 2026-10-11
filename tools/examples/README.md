@@ -14,7 +14,7 @@ The AIGER files are copies of the files in AIGER's own directories and remain un
 
 ## Recorded results
 
-What `pdtrav` prints for each model. These are baselines for detecting changes in behaviour; they do not independently establish correctness.
+What `pdtrav` prints for each model. These are baselines for detecting changes in behaviour: they do not independently establish correctness.
 
 | Model | `-f` | `-b` | `-bmc 5` | `-strategy ic3` | IC3 invariant certified by `pdtapp certify` |
 |-------|------|------|----------|-----------------|---------------------------------------------|
@@ -32,7 +32,7 @@ Notes on the table:
 - **`-f`/`-b` and `-strategy ic3` do not agree on `mod3.aag` and `mult2.aig`.** Plain runs print `Property: o0.`, while `-strategy ic3` prints `Property: !o0.`. This is consistent with the first output being read as a property that must hold in plain runs and as a bad-state signal with IC3. The verdicts of the two groups are therefore not comparable.
 - **Models where IC3 reports FAIL** get a constant-false invariant, and `certify` prints `Check Done for init disproved`. It also prints `invariant proved` and `property proved`, because a false invariant is trivially inductive. Certification is only meaningful when IC3 reports PASS.
 - **`s2cfair.aig` and `s2cunfair.aig`**: IC3 reports PASS and writes an empty (constant-true) invariant, and `pdtapp certify` then aborts with an assertion in `ddiArray.c`.
-- **`-bmc 5`** prints no `Verification Result` line for these models; it is included as a smoke test.
+- **`-bmc 5`** prints no `Verification Result` line for these models, as it does not reach a fix-point for the verification.
 
 ## Running
 

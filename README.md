@@ -89,13 +89,13 @@ export PATH="$PWD/pdtrav/bin:$PATH"
 | `debug` | Debug builds throughout (`make BUILD_MODE=debug`). |
 | `sanitize` | AddressSanitizer build (`make BUILD_MODE=sanitize`). |
 
-`pdtrav`'s own sources are built without optimisation in every mode. With `-O6`, `pdtrav` fails an internal assertion on several of the example models with GCC 13 (also noted in `config.mk`).
+`pdtrav`'s own sources are built without optimisation in all modes. Note that `-O6` may trigger an internal assertion failure on some example models with GCC 13 (see also `config.mk`).
 
 ### Notes
 
 - The Makefile tracks source changes only. After changing the compiler, the build mode or other flags, run `make distclean` before building again.
 - Build serially: run `make` without `-j`.
-- `make distclean` deletes the tracked files `aiger-1.9.3/makefile` and `lingeling-bcj/makefile`. The next build regenerates them. Do not commit the deletion; `git restore` brings the files back.
+- `make distclean` deletes `aiger-1.9.3/makefile` and `lingeling-bcj/makefile`, which are regenerated during the next build. Those file can also be restored from the source distribution if needed.
 
 ## Checking the build
 
@@ -187,7 +187,7 @@ pdtapp certify -t <T> <input_model_filename> <input_invar_filename>
 
 #### Rewriting models with ABC
 
-The two commands below use a standalone `abc` executable. The ABC in this repository is built only as a library (`libabc.a`) that is linked into `pdtrav`; it cannot be run on its own. Install or build ABC separately (<https://github.com/berkeley-abc/abc>).
+The two commands below use a standalone `abc` executable. The ABC in this repository is built only as a library (`libabc.a`) that is linked into `pdtrav`, and it cannot be run on its own. Install or build ABC separately (<https://github.com/berkeley-abc/abc>).
 
 It can be convenient to include an explicit symbol table, in order to uniquely identify all the components of a model regardless of the sequence of transformations applied. ABC's rewriting capabilities can do this:
 
@@ -209,7 +209,7 @@ abc -c "read <input_file>;frames -F <F>;orpos;write <output_file>;"
 
 **`pdtrav` crashes or behaves differently after pulling changes or changing the compiler or flags.** Existing libraries are not rebuilt when only the flags change. Run `make distclean && ./configure && make`.
 
-**`git status` shows `aiger-1.9.3/makefile` and `lingeling-bcj/makefile` as deleted.** This is the effect of `make distclean`; see [Notes](#notes). Restore them with `git restore` instead of committing the deletion.
+**`git status` shows `aiger-1.9.3/makefile` and `lingeling-bcj/makefile` as deleted.** This is the effect of `make distclean`, see [Notes](#notes). Restore them with `git restore` if need be.
 
 Known behaviours of the example models, such as `pdtapp certify` aborting on two of them, are listed in [`tools/examples/README.md`](tools/examples/README.md).
 
