@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+title: pdtools
+message: If you use pdtools in academic work, please cite the article below.
+type: software
+authors:
+  - name: Formal Methods Group, Politecnico di Torino
+repository-code: https://github.com/polito-fmgroup/pdtools
+license: MIT
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Cabodi
+      given-names: Gianpiero
+    - family-names: Nocco
+      given-names: Sergio
+    - family-names: Quer
+      given-names: Stefano
+  title: Benchmarking a model checker for algorithmic improvements and tuning for performance
+  journal: Formal Methods in System Design
+  volume: 39
+  issue: 2
+  start: 205
+  end: 227
+  year: 2011
+  doi: 10.1007/s10703-011-0123-3

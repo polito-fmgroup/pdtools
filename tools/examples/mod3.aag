@@ -1,0 +1,10 @@
+aag 4 0 2 0 2 1
+2 6
+4 2
+8
+6 3 5
+8 2 4
+c
+mod3: two-bit counter 00 -> 01 -> 10 -> 00.
+The bad state 11 is unreachable, so the safety property holds.
+Written for the pdtools quick start; not taken from AIGER.

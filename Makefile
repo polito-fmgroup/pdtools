@@ -9,6 +9,12 @@
 # Run `make help` for the available targets. Compilers and flags come from
 # config.mk.
 
+# Grouped targets (`&:`, used for the CUDD libraries below) need GNU Make 4.3
+# or later. Stop here with a clear message instead of failing on the syntax.
+ifeq ($(filter grouped-target,$(.FEATURES)),)
+$(error GNU Make 4.3 or newer is required (this is $(MAKE_VERSION)))
+endif
+
 include config.mk
 
 .PHONY: all check-deps vendor-libs pdtrav-bin clean distclean help info
