@@ -141,6 +141,95 @@ Check Done property proved
 
 (each `Check Done` line is followed by timing information in the real output).
 
+## Options reference
+
+This is a selection of the most commonly used options. `pdtrav` has many more: run `pdtrav` without arguments to list all option names, and `pdtrav -h <option>` for the description of an option. The leading dash is optional and options are matched by prefix, so `pdtrav -h bmc` describes every option starting with `-bmc`.
+
+The synopsis is `pdtrav [options] <model>`. Options are processed in the order given, which matters in the cases noted below.
+
+### Engines
+
+| Option | Description |
+|--------|-------------|
+| `-strategy <s>`, `-engine <s>` | Select an engine using either of the two available aliases. The values of `<s>` are listed below. Like `-ni`, it complements the property (see [Selecting the property](#selecting-the-property)). |
+| `-bmc <k>` | SAT-based bounded model checking up to bound `k`. |
+| `-inductive <s>` | SAT-based inductive model checking with step `s`. |
+| `-interpolant` | SAT-based interpolation-based model checking. |
+
+Values of `-strategy`:
+
+- `bdd`: BDD-based verification.
+- `ic3`: IC3.
+- `itp<n>`: interpolation-based model checking. The digit `n` (0 to 6, default 0) selects the interpolation effort.
+- `igr<n>`: interpolation with guided refinement, with the same digit.
+- `thrd`: several engines running in threads.
+
+Letters after the digit of `itp` and `igr` enable variants: `c` applies phase abstraction, `p` pushes interpolant components to the next iteration, e.g., `itp3` or `igr1p`.
+
+### BDD-based verification
+
+Without any of these options, `pdtrav` runs `-fb`.
+
+| Option | Description |
+|--------|-------------|
+| `-f` | Exact forward verification. |
+| `-b` | Exact backward verification. |
+| `-fb` | Approximate forward, exact backward verification (default). |
+| `-bf` | Approximate backward, exact forward verification. |
+| `-fbf` | Approximate forward, approximate backward, then exact forward verification. |
+| `-t` | Compute the forward reachable states only, without verifying. |
+| `-bt` | Compute the backward reachable states only, without verifying. |
+
+### Selecting the property
+
+| Option | Description |
+|--------|-------------|
+| `-ni` | Complement the invariant specification. |
+| `-ilambda <i>` | Use the `i`-th output as the invariant specification. |
+| `-nlambda <name>` | Use the output with the given name as the invariant specification. |
+| `-invarspec <file>` | Read the invariant specification from a file. |
+
+By default the first output is the invariant that must hold, and `pdtrav` prints `Property: o0.`. The options `-ni`, `-strategy` and `-engine` complement it (`Property: !o0.`), so that the output is read as a bad-state signal. On the models in `tools/examples`, `-f -ni` and `-b -ni` give the same verdicts as `-strategy ic3`.
+
+### Model reductions
+
+| Option | Description |
+|--------|-------------|
+| `-peripheralLatches` | Enable peripheral latch reduction. `-noPeripheralLatches` disables it. |
+| `-retime <s>` | Min-register retiming with strategy `s` (0: no retiming). |
+| `-coi` | Functional cone-of-influence reduction. |
+| `-cois` | Structural and functional cone-of-influence reduction. |
+| `-noTernary` | Skip ternary simulation. |
+
+`-strategy ic3` enables peripheral latch reduction and `-writeInvar` disables it. To keep the reduction while writing an invariant, give `-peripheralLatches` after `-writeInvar`, as in the temporal decomposition workflow above.
+
+### Output
+
+| Option | Description |
+|--------|-------------|
+| `-writeInvar <file>` | Write the inductive invariant found to `<file>` in AIGER format. |
+| `-wres <file>` | Write the verification result to `<file>`. With `-strategy ic3`, a property that holds writes `0` and a failing property writes `1`. On failure a counterexample in AIGER witness format is also written to `<file>.cex`. |
+| `-printNtkStats` | Print the size of the design and stop. |
+
+### Verbosity and limits
+
+| Option | Description |
+|--------|-------------|
+| `-verbosity <v>` | Verbosity level, from 0 (none) to 8 (debug). |
+| `-itpTimeLimit <t>` | Time limit for the interpolation-based engines, in seconds. |
+| `-totMemoryLimit <m>` | Memory limit, in megabytes. |
+| `-satTimeLimit <t>` | Time limit for each SAT call, in seconds (default 30). |
+
+### `pdtapp certify`
+
+The synopsis is `pdtapp certify [options] <model> <invariant>`, with both files in AIGER format.
+
+| Option | Description |
+|--------|-------------|
+| `-f <k>` | Number of phases or frames, as used by phase abstraction (default 1). |
+| `-t <k>` | Steps of temporal decomposition (default 0). |
+| `-s <file>` | An additional invariant, read from an AIGER file and used together with the invariant file. |
+
 ## Workflows
 
 #### Generating an invariant with IC3 and checking it against the original model
