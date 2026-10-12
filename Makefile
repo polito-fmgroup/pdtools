@@ -36,11 +36,16 @@ check-deps:
 		echo "MISSING: readline development headers (e.g. 'libreadline-dev' on Debian/Ubuntu)"; \
 		status=1; \
 	fi; \
+	if ! printf '#include <zlib.h>\nint main(void){return zlibVersion() == 0;}\n' | \
+		$(TOOLCHAIN_CC) -x c -o /dev/null - -lz >/dev/null 2>&1; then \
+		echo "MISSING: zlib development files (Debian/Ubuntu: zlib1g-dev)"; \
+		status=1; \
+	fi; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
 		echo "Preflight check failed: install the missing item(s) above before building."; \
 		echo "On Debian/Ubuntu:"; \
-		echo "    apt-get install -y build-essential flex bison libreadline-dev"; \
+		echo "    apt-get install -y build-essential flex bison libreadline-dev zlib1g-dev"; \
 		exit 1; \
 	fi; \
 	echo "check-deps: all required tools and headers found."

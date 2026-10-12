@@ -15,6 +15,7 @@ Two executables are built from the sources in `pdtrav/`:
 - [Requirements](#requirements)
 - [Building](#building)
 - [Checking the build](#checking-the-build)
+- [Docker](#docker)
 - [Quick start](#quick-start)
 - [Workflows](#workflows)
 - [Troubleshooting](#troubleshooting)
@@ -110,6 +111,56 @@ runs: 42, failed: 0
 ```
 
 and exit status 0. With `-r REFERENCE` it also compares the output with that of another `pdtrav` build, for example one from a different revision or built with different flags. See the header of the script for details.
+
+## Docker
+
+A Dockerfile is available to build both `pdtrav` and `pdtapp` inside a container, so the host needs neither a compiler nor any of the libraries listed under [Requirements](#requirements). Only Docker is required.
+
+### Build the image
+
+```bash
+docker build -t pdtrav .
+```
+
+The first stage compiles the project. The final image keeps only the two executables and their run-time libraries. The build takes several minutes, for the same reason as a native build. A local `./configure` run does not affect it: the build context excludes `config.local.mk`, so the image always uses its own toolchain.
+
+### Run
+
+The entry point of the image is `pdtrav`, and without arguments it prints a sample help for strategy selection:
+
+```bash
+docker run --rm pdtrav
+```
+
+Model files are passed to the container by mounting a directory on `/data`, which is the working directory inside the container. Paths are then relative to the mounted directory. This runs the [quick start](#quick-start) from the repository root:
+
+```bash
+docker run --rm -v "$PWD":/data pdtrav -strategy ic3 -writeInvar mod3-invar.aig tools/examples/mod3.aag
+docker run --rm -v "$PWD":/data --entrypoint pdtapp pdtrav certify tools/examples/mod3.aag mod3-invar.aig
+```
+
+The output is the same as in the quick start, and `mod3-invar.aig` is written to the current directory of the host. Everything after the image name is passed to `pdtrav`, so any option from the [options reference](#options-reference) works, for example `docker run --rm pdtrav -h strategy`. To run `pdtapp` instead, add `--entrypoint pdtapp` before the image name, as above.
+
+### Notes
+
+- The container runs as an unprivileged user. On Linux, add `--user "$(id -u):$(id -g)"` to `docker run` so that the container can write to the mounted directory and the files it creates belong to you.
+- In PowerShell, write `${PWD}` instead of `$PWD`. In `cmd.exe`, write `%cd%`.
+- To avoid retyping the options, define shortcuts in your shell:
+
+```bash
+  alias pdtrav='docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/data pdtrav'
+  alias pdtapp='docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/data --entrypoint pdtapp pdtrav'
+```
+
+### Image details
+
+| | |
+|---|---|
+| Base image | `ubuntu:24.04` |
+| Executables | `/usr/local/bin/pdtrav`, `/usr/local/bin/pdtapp` |
+| Working directory | `/data` |
+| User | `pdtrav` (unprivileged) |
+| Default command | `pdtrav -version` |
 
 ## Quick start
 

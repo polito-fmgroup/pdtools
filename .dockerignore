@@ -1,0 +1,23 @@
+# Version control metadata
+.git
+
+# Build output. Objects, archives and the generated pdtrav directories are
+# recreated inside the image, and stale host copies could be reused by make.
+*.o
+*.a
+*.or
+*.od
+*.op
+*.os
+pdtrav/bin
+pdtrav/lib
+pdtrav/obj
+pdtrav/include
+
+# Per-machine output of ./configure. It would pin the host compiler, which
+# the image may not have; the image builds with the default toolchain.
+config.local.mk
+
+# Editor backup files and autosaves (the leading # is escaped).
+**/*~
+**/\#*
