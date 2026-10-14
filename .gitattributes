@@ -8,6 +8,8 @@ Makefile        text eol=lf
 makefile        text eol=lf
 *.mk            text eol=lf
 *.in            text eol=lf
+*.py            text eol=lf
+*.toml          text eol=lf
 
 # AIGER models: the ASCII format only accepts LF, the binary format must
 # never be modified.

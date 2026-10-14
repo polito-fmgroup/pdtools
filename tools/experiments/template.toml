@@ -1,0 +1,109 @@
+# Experiment template for tools/run-experiments.py
+#
+# Copy this file into the folder of your experiment, edit it, and run it from
+# anywhere:
+#
+#   tools/run-experiments.py --new /data/exp42/experiment.toml   # make the copy
+#   tools/run-experiments.py /data/exp42/experiment.toml --dry-run
+#   tools/run-experiments.py /data/exp42/experiment.toml -j 4
+#
+# Relative paths in this file (benchmarks, output, programs) are relative to the
+# folder that contains the file, so an experiment keeps its results next to its
+# definition. Two names are always available in paths and commands:
+#   {here}   the folder of this file
+#   {repo}   the root of the pdtools repository
+#
+# As it stands the template runs on the example models in tools/examples.
+# A run is one strategy applied to one benchmark. Every run gets its own
+# directory with a log (run.log) and a result (result.json); summary.csv
+# collects one row per run, and runner.log keeps the progress messages.
+
+name    = "template"   # results go to <output>/<name>/
+output  = "results"    # base output directory, relative to this file
+timeout = 60           # seconds allowed for each command (0: no limit)
+jobs    = 1            # runs executed in parallel (also -j). Timings are only
+                       # comparable between experiments that use the same value.
+
+# Programs. Every entry is available as a placeholder: {pdtrav}, {pdtapp}, ...
+# By default pdtrav and pdtapp are the ones found on PATH, else the build in
+# this repository. The runner prints the programs it uses when it starts. To
+# choose others, give a name (looked up on PATH) or a path (relative to this
+# file; write ./tool for a file next to it), or override from the command line,
+# where paths are relative to the current directory. For example, to compare two
+# builds:
+#   --tool pdtrav=../other-build/pdtrav/bin/pdtrav --name other-build
+[tools]
+# pdtrav = "/opt/pdtools/pdtrav/bin/pdtrav"
+
+# Your own values, available as {key} in every strategy and in the paths of this
+# file. They may use {here} and {repo}. Override one from the command line with
+# --set key=value, for example --set examples=/data/hwmcc.
+[vars]
+verbosity = 1
+examples  = "{repo}/tools/examples"   # where the benchmarks are
+
+[benchmarks]
+# Files or glob patterns, relative to this file. "**" matches any number of
+# directories. The benchmarks can live anywhere; the runner never copies them.
+paths   = ["{examples}/*.aag", "{examples}/*.aig"]
+exclude = []   # patterns to leave out
+
+# Extra columns for summary.csv: the last match of a regular expression in the
+# log of the run. The value is the first capture group, or "yes" when the
+# pattern has none. The column "verdict" (PASS or FAIL) is always present.
+[[extract]]
+name  = "certified"
+regex = "Check Done for init proved"
+
+
+# ---------------------------------------------------------------------------
+# Strategies
+#
+# A strategy is a list of commands, run one after the other in the directory of
+# the run. A command that fails (non-zero exit code, timeout) ends the run.
+# Placeholders in a command are written {like_this}:
+#
+#   {benchmark}   path of the benchmark file
+#   {name}        name of the benchmark, without directory and extension
+#   {strategy}    name of the strategy, including its parameters
+#   {outdir}      directory of the run: write the output files there
+#   {repo}        root of this repository
+#   {here}        folder of this experiment file
+#   plus every entry of [tools], every entry of [vars] and the parameters of
+#   the strategy.
+#
+# A placeholder stands for one argument, even if its value contains spaces. To
+# write a literal brace, double it: {{ and }}.
+# ---------------------------------------------------------------------------
+
+# One command: "args" is shorthand for a single "{pdtrav} ..." command.
+[[strategy]]
+name = "bdd-forward"
+args = "-f -ni -verbosity {verbosity} {benchmark}"
+
+# Several commands: IC3 writes an invariant, pdtapp certifies it. "only" limits
+# the strategy to benchmarks whose name matches one of the patterns.
+[[strategy]]
+name  = "ic3-certify"
+only  = ["mod3", "mult2"]
+steps = [
+  "{pdtrav} -strategy ic3 -verbosity {verbosity} -writeInvar {outdir}/invar.aig {benchmark}",
+  "{pdtapp} certify {benchmark} {outdir}/invar.aig",
+]
+
+# A parameter sweep: one run per combination of values. This strategy becomes
+# the runs bmc-k=5 and bmc-k=10 (and a directory for each).
+[[strategy]]
+name = "bmc"
+args = "-bmc {k} {benchmark}"
+[strategy.params]
+k = [5, 10]
+
+# Parameters can select engines too. A value that is a list is expanded into
+# several arguments when it stands alone, for example opts = [["-f", "-ni"],
+# ["-b", "-ni"]] with the command "{pdtrav} {opts} {benchmark}".
+[[strategy]]
+name = "interpolation"
+args = "-strategy {engine} {benchmark}"
+[strategy.params]
+engine = ["itp0", "itp3", "igr0"]
