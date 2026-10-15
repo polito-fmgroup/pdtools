@@ -32,7 +32,7 @@ Two executables are built from the sources in `pdtrav/`:
 | `aiger-1.9.3/` | AIGER 1.9.3, the AIGER format library and tools. |
 | `lingeling-bcj/` | Lingeling, a SAT solver. |
 | `minisat-p_v1.14/`, `minisat-2.2.0-drup/` | Two MiniSat variants. |
-| `tools/` | [`pdtrav-regress.sh`](tools/pdtrav-regress.sh) and the [example models](tools/examples/README.md) it runs. |
+| `utils/` | [`pdtrav-regress.sh`](utils/pdtrav-regress.sh) and the [example models](utils/examples/README.md) it runs. |
 | `configure`, `config.mk`, `Makefile` | The build system, described below. |
 
 ## Requirements
@@ -102,10 +102,10 @@ export PATH="$PWD/pdtrav/bin:$PATH"
 ## Checking the build
 
 ```bash
-tools/pdtrav-regress.sh pdtrav/bin/pdtrav
+utils/pdtrav-regress.sh pdtrav/bin/pdtrav
 ```
 
-The script runs `pdtrav` on the models in [`tools/examples`](tools/examples/README.md) with several option sets, and runs the IC3 → invariant → certify flow on two of them. A good build ends with:
+The script runs `pdtrav` on the models in [`utils/examples`](utils/examples/README.md) with several option sets, and runs the IC3 → invariant → certify flow on two of them. A good build ends with:
 
 ```
 runs: 42, failed: 0
@@ -136,8 +136,8 @@ docker run --rm pdtrav
 Model files are passed to the container by mounting a directory on `/data`, which is the working directory inside the container. Paths are then relative to the mounted directory. This runs the [quick start](#quick-start) from the repository root:
 
 ```bash
-docker run --rm -v "$PWD":/data pdtrav -strategy ic3 -writeInvar mod3-invar.aig tools/examples/mod3.aag
-docker run --rm -v "$PWD":/data --entrypoint pdtapp pdtrav certify tools/examples/mod3.aag mod3-invar.aig
+docker run --rm -v "$PWD":/data pdtrav -strategy ic3 -writeInvar mod3-invar.aig utils/examples/mod3.aag
+docker run --rm -v "$PWD":/data --entrypoint pdtapp pdtrav certify utils/examples/mod3.aag mod3-invar.aig
 ```
 
 The output is the same as in the quick start, and `mod3-invar.aig` is written to the current directory of the host. Everything after the image name is passed to `pdtrav`, so any option from the [options reference](#options-reference) works, for example `docker run --rm pdtrav -h strategy`. To run `pdtapp` instead, add `--entrypoint pdtapp` before the image name, as above.
@@ -165,10 +165,10 @@ The output is the same as in the quick start, and `mod3-invar.aig` is written to
 
 ## Quick start
 
-With `pdtrav` and `pdtapp` on your `PATH`, run IC3 on the example model `tools/examples/mod3.aag` and write the invariant it finds:
+With `pdtrav` and `pdtapp` on your `PATH`, run IC3 on the example model `utils/examples/mod3.aag` and write the invariant it finds:
 
 ```bash
-pdtrav -strategy ic3 -writeInvar mod3-invar.aig tools/examples/mod3.aag
+pdtrav -strategy ic3 -writeInvar mod3-invar.aig utils/examples/mod3.aag
 ```
 
 The output includes:
@@ -180,7 +180,7 @@ Verification Result: PASS.
 Then certify the invariant against the model:
 
 ```bash
-pdtapp certify tools/examples/mod3.aag mod3-invar.aig
+pdtapp certify utils/examples/mod3.aag mod3-invar.aig
 ```
 
 A successful certification prints:
@@ -241,7 +241,7 @@ Without any of these options, `pdtrav` runs `-fb`.
 | `-nlambda <name>` | Use the output with the given name as the invariant specification. |
 | `-invarspec <file>` | Read the invariant specification from a file. |
 
-By default the first output is the invariant that must hold, and `pdtrav` prints `Property: o0.`. The options `-ni`, `-strategy` and `-engine` complement it (`Property: !o0.`), so that the output is read as a bad-state signal. On the models in `tools/examples`, `-f -ni` and `-b -ni` give the same verdicts as `-strategy ic3`.
+By default the first output is the invariant that must hold, and `pdtrav` prints `Property: o0.`. The options `-ni`, `-strategy` and `-engine` complement it (`Property: !o0.`), so that the output is read as a bad-state signal. On the models in `utils/examples`, `-f -ni` and `-b -ni` give the same verdicts as `-strategy ic3`.
 
 ### Model reductions
 
@@ -352,7 +352,7 @@ abc -c "read <input_file>;frames -F <F>;orpos;write <output_file>;"
 
 **`git status` shows `aiger-1.9.3/makefile` and `lingeling-bcj/makefile` as deleted.** This is the effect of `make distclean`, see [Notes](#notes). Restore them with `git restore` if need be.
 
-Known behaviours of the example models, such as `pdtapp certify` aborting on two of them, are listed in [`tools/examples/README.md`](tools/examples/README.md).
+Known behaviours of the example models, such as `pdtapp certify` aborting on two of them, are listed in [`utils/examples/README.md`](utils/examples/README.md).
 
 ## Citing pdtools
 

@@ -7,15 +7,15 @@ results. This script expands the benchmark x strategy (x parameter) matrix,
 runs every combination in its own directory, keeps one log per run and writes a
 summary table.
 
-    tools/run-experiments.py --new my-experiment.toml     # start from the template
-    tools/run-experiments.py my-experiment.toml --dry-run # show what would run
-    tools/run-experiments.py my-experiment.toml -j 4      # run, 4 runs at a time
+    utils/run-experiments.py --new my-experiment.toml     # start from the template
+    utils/run-experiments.py my-experiment.toml --dry-run # show what would run
+    utils/run-experiments.py my-experiment.toml -j 4      # run, 4 runs at a time
 
 It can be run from any directory. Relative paths in the experiment file
 (benchmarks, tools, output) are relative to the directory of the file, so an
 experiment keeps everything in its own folder; {here} stands for that directory
 and {repo} for the root of this repository. Paths given on the command line are
-relative to the current directory. The template (tools/experiments/template.toml)
+relative to the current directory. The template (utils/experiments/template.toml)
 documents every setting.
 
 A timeout (seconds) and a memory limit can be set for every command. A command
@@ -689,7 +689,7 @@ def print_overview(results):
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Run pdtrav / pdtapp over a set of benchmarks and strategies.",
-        epilog="See tools/experiments/template.toml for every setting.")
+        epilog="See utils/experiments/template.toml for every setting.")
     parser.add_argument("experiment", nargs="?", help="experiment file (.toml or .json)")
     parser.add_argument("--new", metavar="FILE", help="write a copy of the template to FILE and exit")
     parser.add_argument("-j", "--jobs", type=int, help="runs executed in parallel")

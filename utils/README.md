@@ -20,7 +20,7 @@ Scripts and data for working with a built `pdtrav`: checking a build, and runnin
 ## Checking a build
 
 ```bash
-tools/pdtrav-regress.sh pdtrav/bin/pdtrav
+utils/pdtrav-regress.sh pdtrav/bin/pdtrav
 ```
 
 The script runs every example model with five option sets, and runs the IC3 → invariant → certify flow on `mod3.aag` and `mult2.aig`: 42 runs in total. A good build ends with:
@@ -34,7 +34,7 @@ The exit status is 0 in that case and 1 when any run fails. A run fails when `pd
 To compare a build with a reference build, for example one made from another revision or with other flags, pass the reference with `-r`:
 
 ```bash
-tools/pdtrav-regress.sh -r /path/to/reference/pdtrav/bin/pdtrav pdtrav/bin/pdtrav
+utils/pdtrav-regress.sh -r /path/to/reference/pdtrav/bin/pdtrav pdtrav/bin/pdtrav
 ```
 
 The complete output of every run must then match, ignoring timings, dates, host names and build paths, and the invariant files written by the certify flow must be identical. Any difference makes the script fail and is shown next to the run.
@@ -46,9 +46,9 @@ The model set is small. The script catches gross breakage such as crashes and ch
 The runner is driven by a small experiment file that lists the benchmarks and the strategies. It runs every combination in its own directory, keeps a log per run and writes a summary.
 
 ```bash
-tools/run-experiments.py --new /data/exp42/experiment.toml
-tools/run-experiments.py /data/exp42/experiment.toml --dry-run
-tools/run-experiments.py /data/exp42/experiment.toml -j 4
+utils/run-experiments.py --new /data/exp42/experiment.toml
+utils/run-experiments.py /data/exp42/experiment.toml --dry-run
+utils/run-experiments.py /data/exp42/experiment.toml -j 4
 ```
 
 The runner works from any directory and keeps the results next to the experiment file. Strategies can have parameters, several commands (for example IC3 followed by certification) and their own limits. The [documentation](experiments/README.md) covers the experiment file, the options, the layout of the results and recipes such as comparing two builds. [`experiments/template.toml`](experiments/template.toml) is a commented starting point that runs on the example models.

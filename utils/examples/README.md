@@ -39,7 +39,7 @@ Notes on the table:
 From the repository root, after building:
 
 ```bash
-tools/pdtrav-regress.sh pdtrav/bin/pdtrav
+utils/pdtrav-regress.sh pdtrav/bin/pdtrav
 ```
 
 The script runs every model with five option sets and runs the IC3 → invariant → certify flow on `mod3.aag` and `mult2.aig`. See the header of the script for comparing two builds with `-r`.

@@ -1,6 +1,6 @@
 # Experiment runner
 
-`tools/run-experiments.py` runs `pdtrav` and `pdtapp` over many benchmarks and strategies and collects the results. An experiment is described in a small file: the benchmarks, the strategies, the limits and where the results go. The runner expands the benchmark × strategy matrix, runs every combination in its own directory with its own log, and writes a summary table.
+`utils/run-experiments.py` runs `pdtrav` and `pdtapp` over many benchmarks and strategies and collects the results. An experiment is described in a small file: the benchmarks, the strategies, the limits and where the results go. The runner expands the benchmark × strategy matrix, runs every combination in its own directory with its own log, and writes a summary table.
 
 It is meant as a starting point to facilitate setting up the runs, applying a timeout and a memory limit, keeping the logs, and finding the results afterwards.
 
@@ -25,7 +25,7 @@ It is meant as a starting point to facilitate setting up the runs, applying a ti
 
 ## Quick start
 
-In the examples the script is called `run-experiments.py`. From the repository root use `tools/run-experiments.py`, or put a symlink to it on your `PATH`; the script finds its repository through the symlink.
+In the examples the script is called `run-experiments.py`. From the repository root use `utils/run-experiments.py`, or put a symlink to it on your `PATH`; the script finds its repository through the symlink.
 
 Create the folder of an experiment from the template, look at what would run, then run it:
 
@@ -40,10 +40,10 @@ run-experiments.py /data/exp42/experiment.toml -j 4
 ```
 tools: pdtrav=/usr/local/bin/pdtrav, pdtapp=/usr/local/bin/pdtapp
 [ic3-certify / mod3]  (timeout 60 s)
-  $ /usr/local/bin/pdtrav -strategy ic3 -verbosity 1 -writeInvar /data/exp42/results/template/ic3-certify/mod3/invar.aig /repo/tools/examples/mod3.aag
-  $ /usr/local/bin/pdtapp certify /repo/tools/examples/mod3.aag /data/exp42/results/template/ic3-certify/mod3/invar.aig
+  $ /usr/local/bin/pdtrav -strategy ic3 -verbosity 1 -writeInvar /data/exp42/results/template/ic3-certify/mod3/invar.aig /repo/utils/examples/mod3.aag
+  $ /usr/local/bin/pdtapp certify /repo/utils/examples/mod3.aag /data/exp42/results/template/ic3-certify/mod3/invar.aig
 [bmc-k=5 / mod3]  (timeout 60 s)
-  $ /usr/local/bin/pdtrav -bmc 5 /repo/tools/examples/mod3.aag
+  $ /usr/local/bin/pdtrav -bmc 5 /repo/utils/examples/mod3.aag
 2 runs
 ```
 
@@ -63,7 +63,7 @@ ic3-certify     2   2     0        0       0      0     2     0
 results: /data/exp42/results/template  (8 runs in summary.csv)
 ```
 
-As it comes, the template runs on the example models in `tools/examples`. Edit the copy to point at your own benchmarks and strategies. [`template.toml`](template.toml) documents every setting.
+As it comes, the template runs on the example models in `utils/examples`. Edit the copy to point at your own benchmarks and strategies. [`template.toml`](template.toml) documents every setting.
 
 ## Concepts
 

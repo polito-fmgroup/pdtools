@@ -1,11 +1,11 @@
-# Experiment template for tools/run-experiments.py
+# Experiment template for utils/run-experiments.py
 #
 # Copy this file into the folder of your experiment, edit it, and run it from
 # anywhere:
 #
-#   tools/run-experiments.py --new /data/exp42/experiment.toml   # make the copy
-#   tools/run-experiments.py /data/exp42/experiment.toml --dry-run
-#   tools/run-experiments.py /data/exp42/experiment.toml -j 4
+#   utils/run-experiments.py --new /data/exp42/experiment.toml   # make the copy
+#   utils/run-experiments.py /data/exp42/experiment.toml --dry-run
+#   utils/run-experiments.py /data/exp42/experiment.toml -j 4
 #
 # Relative paths in this file (benchmarks, output, programs) are relative to the
 # folder that contains the file, so an experiment keeps its results next to its
@@ -13,7 +13,7 @@
 #   {here}   the folder of this file
 #   {repo}   the root of the pdtools repository
 #
-# As it stands the template runs on the example models in tools/examples.
+# As it stands the template runs on the example models in utils/examples.
 # A run is one strategy applied to one benchmark. Every run gets its own
 # directory with a log (run.log) and a result (result.json); summary.csv
 # collects one row per run (with the peak memory, peak_mb), and runner.log keeps
@@ -45,7 +45,7 @@ jobs    = 1            # runs executed in parallel (also -j). Timings are only
 # --set key=value, for example --set examples=/data/hwmcc.
 [vars]
 verbosity = 1
-examples  = "{repo}/tools/examples"   # where the benchmarks are
+examples  = "{repo}/utils/examples"   # where the benchmarks are
 
 [benchmarks]
 # Files or glob patterns, relative to this file. "**" matches any number of
