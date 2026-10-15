@@ -1,18 +1,27 @@
 # Version control metadata
 .git
 
-# Build output. Objects, archives and the generated pdtrav directories are
-# recreated inside the image, and stale host copies could be reused by make.
-*.o
-*.a
-*.or
-*.od
-*.op
-*.os
+# Build output. Objects, archives, dependency files and generated headers are
+# recreated inside the image. Some of them, such as the .d files, contain
+# absolute paths of the host. Docker matches a pattern like *.o only in the
+# root of the build context, so the patterns that apply to every directory
+# start with **/.
+**/*.o
+**/*.a
+**/*.d
+**/*.or
+**/*.od
+**/*.op
+**/*.os
 pdtrav/bin
 pdtrav/lib
 pdtrav/obj
 pdtrav/include
+cudd-2.5.0/include
+abc/arch_flags
+lingeling-bcj/lglcfg.h
+lingeling-bcj/lglcflags.h
+minisat-2.2.0-drup/simp/depend.mk
 
 # Per-machine output of ./configure. It would pin the host compiler, which
 # the image may not have; the image builds with the default toolchain.

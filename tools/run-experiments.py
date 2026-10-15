@@ -18,6 +18,10 @@ and {repo} for the root of this repository. Paths given on the command line are
 relative to the current directory. The template (tools/experiments/template.toml)
 documents every setting.
 
+A timeout (seconds) and a memory limit can be set for every command. A command
+that exceeds the memory limit is killed and the run is marked "memout"; memory
+limits need Linux. The peak memory of each run is recorded in summary.csv.
+
 Results are written to <output>/<name>/, by default results/<name>/ next to the
 experiment file:
 
@@ -94,6 +98,28 @@ def show(value):
     return "+".join(map(str, value)) if isinstance(value, list) else str(value)
 
 
+MB = 1024 * 1024
+
+
+def parse_memory(value, where):
+    """Bytes for a memory limit: a number of gigabytes, or a string with a unit such as
+    "512M" or "32G" (binary units). 0 or None means no limit."""
+    if value is None:
+        return 0
+    if isinstance(value, bool):
+        die(f"{where}: the memory limit must be a number or a string such as \"32G\"")
+    if isinstance(value, (int, float)):
+        amount, unit = float(value), "G"
+    else:
+        match = re.fullmatch(r"\s*(\d*\.?\d+)\s*(?:([KMGT])(?:i?B)?)?\s*", str(value), re.I)
+        if not match:
+            die(f"{where}: cannot read the memory limit '{value}' (use for example 32, 32G or 512M)")
+        amount, unit = float(match.group(1)), (match.group(2) or "G").upper()
+    if amount < 0:
+        die(f"{where}: the memory limit cannot be negative")
+    return int(amount * 1024 ** ("KMGT".index(unit) + 1))
+
+
 def fmt(text, context, where):
     """Substitute {placeholders} in a string; report unknown ones clearly."""
     try:
@@ -151,6 +177,7 @@ class Settings:
     name: str
     out: Path
     timeout: float
+    memory: int
     jobs: int
     tools: dict
     variables: dict
@@ -165,6 +192,7 @@ def build_settings(cfg, args, here):
     base = {"repo": str(REPO), "here": str(here)}
     name = sanitize(args.name or cfg.get("name") or cfg_path.stem)
     timeout = args.timeout if args.timeout is not None else float(cfg.get("timeout", 3600))
+    memory = parse_memory(args.memory if args.memory is not None else cfg.get("memory"), "memory")
     jobs = args.jobs or int(cfg.get("jobs", 1))
     if jobs < 1:
         die("the number of jobs must be at least 1")
@@ -216,7 +244,7 @@ def build_settings(cfg, args, here):
         except re.error as exc:
             die(f"[[extract]] '{rule['name']}': bad regular expression ({exc})")
 
-    return Settings(name, Path(os.path.abspath(out_base)) / name, timeout, jobs, tools,
+    return Settings(name, Path(os.path.abspath(out_base)) / name, timeout, memory, jobs, tools,
                     variables, list(rules.values()), cfg_path, here, context)
 
 
@@ -265,10 +293,11 @@ class Strategy:
     params: dict
     spec: list
     timeout: float
+    memory: int
     only: list = field(default_factory=list)
 
 
-def build_strategies(cfg, default_timeout):
+def build_strategies(cfg, default_timeout, default_memory):
     entries = cfg.get("strategy") or []
     if not entries:
         die("the experiment file defines no strategy ([[strategy]])")
@@ -291,6 +320,8 @@ def build_strategies(cfg, default_timeout):
             if not isinstance(values, list) or not values:
                 die(f"strategy '{name}': parameter '{key}' must be a non-empty list")
         timeout = float(entry.get("timeout", default_timeout))
+        memory = (parse_memory(entry["memory"], f"strategy '{name}': memory")
+                  if "memory" in entry else default_memory)
         only = as_list(entry.get("only"))
         keys = list(params)
         for combo in itertools.product(*(params[k] for k in keys)):
@@ -300,7 +331,7 @@ def build_strategies(cfg, default_timeout):
             if variant in seen:
                 die(f"duplicate strategy name '{variant}'")
             seen.add(variant)
-            strategies.append(Strategy(variant, chosen, spec, timeout, only))
+            strategies.append(Strategy(variant, chosen, spec, timeout, memory, only))
     return strategies
 
 
@@ -321,6 +352,7 @@ class Run:
     outdir: Path
     steps: list
     timeout: float
+    memory: int
 
 
 def plan_runs(settings, benchmarks, strategies):
@@ -343,7 +375,7 @@ def plan_runs(settings, benchmarks, strategies):
                     command += expand_token(token, context, where)
                 steps.append(command)
             runs.append(Run(strategy.name, strategy.params, path, name, outdir, steps,
-                            strategy.timeout))
+                            strategy.timeout, strategy.memory))
     return runs
 
 
@@ -363,6 +395,85 @@ def say(message, stream=None):
     if RUNNER_LOG["path"]:
         with open(RUNNER_LOG["path"], "a", encoding="utf-8") as handle:
             handle.write(f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S} {message}\n")
+
+
+PROC = "/proc"
+PAGE_SIZE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
+
+
+def group_memory():
+    """Resident memory in bytes of every process group, from one scan of /proc."""
+    totals = {}
+    for entry in os.listdir(PROC):
+        if not entry.isdigit():
+            continue
+        try:
+            with open(f"{PROC}/{entry}/stat") as handle:
+                data = handle.read()
+        except OSError:
+            continue                    # the process ended meanwhile
+        fields = data[data.rindex(")") + 2:].split()   # after "pid (command)": state first
+        pgid, rss_pages = int(fields[2]), int(fields[21])
+        totals[pgid] = totals.get(pgid, 0) + rss_pages * PAGE_SIZE
+    return totals
+
+
+class Watch:
+    def __init__(self, limit):
+        self.limit = limit
+        self.peak = 0
+        self.exceeded = False
+
+
+class MemoryMonitor(threading.Thread):
+    """Samples the resident memory of every running step (the sum over all the processes
+    of its process group) and kills a step that exceeds its limit. The figures are
+    approximate: shared pages of forked processes are counted once per process, and a
+    spike shorter than the sampling interval can be missed."""
+
+    def __init__(self, interval=0.5):
+        super().__init__(daemon=True)
+        self.interval = interval
+        self.watches = {}
+        self.guard = threading.Lock()
+        self.done = threading.Event()
+
+    @staticmethod
+    def available():
+        return os.name == "posix" and os.path.isdir(f"{PROC}/self")
+
+    def add(self, pgid, limit):
+        watch = Watch(limit)
+        with self.guard:
+            self.watches[pgid] = watch
+        return watch
+
+    def remove(self, pgid):
+        with self.guard:
+            self.watches.pop(pgid, None)
+
+    def run(self):
+        while not self.done.wait(self.interval):
+            self.sample()
+
+    def sample(self):
+        with self.guard:
+            watches = dict(self.watches)
+        if not watches:
+            return
+        usage = group_memory()
+        for pgid, watch in watches.items():
+            used = usage.get(pgid, 0)
+            watch.peak = max(watch.peak, used)
+            if watch.limit and used > watch.limit and not watch.exceeded:
+                watch.exceeded = True
+                try:
+                    os.killpg(pgid, signal.SIGKILL)   # no grace: the memory is still growing
+                except ProcessLookupError:
+                    pass
+
+
+MONITOR = MemoryMonitor()
 
 
 def signal_group(proc, sig):
@@ -402,15 +513,18 @@ def kill_all(grace=3.0):
             signal_group(proc, signal.SIGKILL)
 
 
-def run_step(command, log, timeout, cwd):
-    """Run one command with its output appended to 'log'. Returns (status, exit code)."""
+def run_step(command, log, timeout, cwd, memory=0):
+    """Run one command with its output appended to 'log'.
+    Returns (status, exit code, peak resident memory in bytes, 0 if not measured)."""
     options = {"start_new_session": True} if os.name == "posix" else {}
     try:
         proc = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
                                 stdin=subprocess.DEVNULL, cwd=cwd, **options)
     except OSError as exc:
         log.write(f"[cannot start the command: {exc}]\n")
-        return "error", None
+        return "error", None, 0
+    # With start_new_session the process group id equals the process id.
+    watch = MONITOR.add(proc.pid, memory) if MONITOR.is_alive() else Watch(memory)
     with LOCK:
         RUNNING.add(proc)
     try:
@@ -418,11 +532,14 @@ def run_step(command, log, timeout, cwd):
             proc.wait(timeout=timeout or None)
         except subprocess.TimeoutExpired:
             terminate(proc)
-            return "timeout", proc.returncode
-        return ("ok" if proc.returncode == 0 else "fail"), proc.returncode
+            return "timeout", proc.returncode, watch.peak
+        if watch.exceeded:
+            return "memout", proc.returncode, watch.peak
+        return ("ok" if proc.returncode == 0 else "fail"), proc.returncode, watch.peak
     finally:
         with LOCK:
             RUNNING.discard(proc)
+        MONITOR.remove(proc.pid)
 
 
 def extract_values(text, rules):
@@ -447,7 +564,7 @@ def execute(run, settings):
     log_path = run.outdir / "run.log"
     started = datetime.datetime.now().isoformat(timespec="seconds")
     begin = time.monotonic()
-    status, codes = "ok", []
+    status, codes, peak = "ok", [], 0
     with open(log_path, "w", encoding="utf-8", errors="replace") as log:
         for number, command in enumerate(run.steps, 1):
             if STOP.is_set():
@@ -456,9 +573,14 @@ def execute(run, settings):
             log.write(f"$ {shlex.join(command)}\n")
             log.flush()
             step_begin = time.monotonic()
-            step_status, code = run_step(command, log, run.timeout, run.outdir)
+            step_status, code, step_peak = run_step(command, log, run.timeout, run.outdir,
+                                                    run.memory)
+            peak = max(peak, step_peak)
             if STOP.is_set() and step_status != "ok":
                 step_status = "interrupted"
+            if step_status == "memout":
+                log.write(f"\n[memory limit exceeded: {step_peak / MB:.0f} MB used, "
+                          f"limit {run.memory / MB:.0f} MB]")
             log.write(f"\n[step {number}: {step_status}, exit code {code}, "
                       f"{time.monotonic() - step_begin:.2f} s]\n\n")
             log.flush()
@@ -475,6 +597,8 @@ def execute(run, settings):
         "status": status,
         "seconds": round(time.monotonic() - begin, 3),
         "exit_codes": codes,
+        "peak_mb": round(peak / MB, 1) if peak else None,
+        "memory_limit_mb": round(run.memory / MB) if run.memory else None,
         "started": started,
         "commands": [shlex.join(c) for c in run.steps],
         "outdir": str(run.outdir),
@@ -527,7 +651,7 @@ def collect_results(settings):
 
 def write_summary(settings, results):
     extra = [rule["name"] for rule in settings.extract]
-    columns = ["strategy", "benchmark", "params", "status", "seconds"] + extra + ["outdir"]
+    columns = ["strategy", "benchmark", "params", "status", "seconds", "peak_mb"] + extra + ["outdir"]
     with open(settings.out / "summary.csv", "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
         writer.writeheader()
@@ -538,6 +662,7 @@ def write_summary(settings, results):
                 "params": " ".join(f"{k}={show(v)}" for k, v in r["params"].items()),
                 "status": r["status"],
                 "seconds": r["seconds"],
+                "peak_mb": "" if r.get("peak_mb") is None else r["peak_mb"],
                 "outdir": os.path.relpath(r["outdir"], settings.out),
             }
             row.update({name: r["values"].get(name, "") for name in extra})
@@ -553,10 +678,11 @@ def print_overview(results):
             row[key] = row.get(key, 0) + 1
         row["runs"] = row.get("runs", 0) + 1
     width = max(len(s) for s in rows)
-    print(f"\n{'strategy':{width}}  runs  ok  fail  timeout  error  PASS  FAIL")
+    print(f"\n{'strategy':{width}}  runs  ok  fail  timeout  memout  error  PASS  FAIL")
     for strategy, row in rows.items():
         print(f"{strategy:{width}}  {row['runs']:4d}  {row.get('ok', 0):2d}  "
-              f"{row.get('fail', 0):4d}  {row.get('timeout', 0):7d}  {row.get('error', 0):5d}  "
+              f"{row.get('fail', 0):4d}  {row.get('timeout', 0):7d}  {row.get('memout', 0):6d}  "
+              f"{row.get('error', 0):5d}  "
               f"{row.get('verdict:PASS', 0):4d}  {row.get('verdict:FAIL', 0):4d}")
 
 
@@ -570,6 +696,9 @@ def main(argv=None):
     parser.add_argument("-o", "--output", help="base output directory")
     parser.add_argument("--name", help="experiment name (output subdirectory)")
     parser.add_argument("--timeout", type=float, help="seconds allowed for each step (0: no limit)")
+    parser.add_argument("--memory", metavar="LIMIT",
+                        help="memory limit for each step: a number of gigabytes, or for example "
+                             "512M or 32G (0: no limit); Linux only")
     parser.add_argument("--tool", action="append", default=[], metavar="NAME=PATH",
                         help="override a program, e.g. --tool pdtrav=build2/pdtrav/bin/pdtrav")
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
@@ -612,7 +741,7 @@ def main(argv=None):
         print(f"\nsummary rebuilt: {settings.out / 'summary.csv'}  ({len(everything)} runs)")
         return 0
     benchmarks = find_benchmarks(cfg, settings)
-    strategies = build_strategies(cfg, settings.timeout)
+    strategies = build_strategies(cfg, settings.timeout, settings.memory)
     if args.benchmark:
         benchmarks = [b for b in benchmarks if any(fnmatch.fnmatch(b[0], p) for p in args.benchmark)]
     if args.strategy:
@@ -626,11 +755,16 @@ def main(argv=None):
             print(f"{run.strategy}\t{run.name}")
         print(f"{len(runs)} runs", file=sys.stderr)
         return 0
+    if any(run.memory for run in runs) and not MemoryMonitor.available():
+        die("memory limits need Linux (/proc is not available on this system)")
     tool_list = ", ".join(f"{k}={v}" for k, v in settings.tools.items())
     if args.dry_run:
         print(f"tools: {tool_list}")
         for run in runs:
-            print(f"[{run.strategy} / {run.name}]  (timeout {run.timeout:g} s)")
+            limits = f"timeout {run.timeout:g} s"
+            if run.memory:
+                limits += f", memory {run.memory / MB:g} MB"
+            print(f"[{run.strategy} / {run.name}]  ({limits})")
             for command in run.steps:
                 print(f"  $ {shlex.join(command)}")
         print(f"{len(runs)} runs", file=sys.stderr)
@@ -668,6 +802,8 @@ def main(argv=None):
         previous = load_finished(run) if args.resume else None
         return (previous, True) if previous else (execute(run, settings), False)
 
+    if MemoryMonitor.available():
+        MONITOR.start()
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=settings.jobs)
     futures = {executor.submit(task, run): run for run in runs}
     try:
@@ -692,6 +828,7 @@ def main(argv=None):
             kill_all(grace=0)
     finally:
         executor.shutdown(wait=True, cancel_futures=True)
+        MONITOR.done.set()
 
     ordered = [results[id(run)] for run in runs if id(run) in results]
     if ordered:

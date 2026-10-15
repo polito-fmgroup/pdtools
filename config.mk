@@ -84,6 +84,6 @@ CUDD_ICFLAGS = $(CUDD_OPT_FLAGS) $(WARN_FLAGS) -fPIE -pthread -std=$(CXX_STD)
 CUDD_XCFLAGS = -ffloat-store $(ARCH_FLAGS) -DHAVE_IEEE_754 -DBSD \
                -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4
 
-# Programs checked by `make check-deps`. The readline header is probed
-# separately by that target.
+# Programs checked by `make check-deps`. The readline and zlib headers are
+# probed separately by that target.
 REQUIRED_TOOLS = $(TOOLCHAIN_CC) $(TOOLCHAIN_CXX) make flex bison

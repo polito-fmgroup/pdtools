@@ -41,6 +41,7 @@ Two executables are built from the sources in `pdtrav/`:
 - GNU Make 4.3 or newer
 - `flex` and `bison`
 - The development files for GNU Readline (`readline/readline.h`)
+- The development files for zlib (`zlib.h`)
 
 `./configure` checks for the tools and headers. If something is missing, it prints the install command for your distribution, and `./configure --install-deps` runs it for you (using `sudo` if you are not root). The Makefile itself stops with a clear message if GNU Make is older than 4.3.
 

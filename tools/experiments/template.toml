@@ -16,11 +16,16 @@
 # As it stands the template runs on the example models in tools/examples.
 # A run is one strategy applied to one benchmark. Every run gets its own
 # directory with a log (run.log) and a result (result.json); summary.csv
-# collects one row per run, and runner.log keeps the progress messages.
+# collects one row per run (with the peak memory, peak_mb), and runner.log keeps
+# the progress messages. Peak memory is the resident memory of the command and the
+# processes it starts, sampled every half second: a shorter spike can be missed.
 
 name    = "template"   # results go to <output>/<name>/
 output  = "results"    # base output directory, relative to this file
 timeout = 60           # seconds allowed for each command (0: no limit)
+memory  = 0            # memory limit for each command: a number of gigabytes, or a
+                       # string such as "512M" or "32G" (0: no limit). A command that
+                       # exceeds it is killed and the run is marked "memout". Linux only.
 jobs    = 1            # runs executed in parallel (also -j). Timings are only
                        # comparable between experiments that use the same value.
 
@@ -71,6 +76,9 @@ regex = "Check Done for init proved"
 #   {here}        folder of this experiment file
 #   plus every entry of [tools], every entry of [vars] and the parameters of
 #   the strategy.
+#
+# A strategy can set its own "timeout" and "memory", which replace the global
+# values for that strategy.
 #
 # A placeholder stands for one argument, even if its value contains spaces. To
 # write a literal brace, double it: {{ and }}.
