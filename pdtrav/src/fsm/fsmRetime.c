@@ -6064,12 +6064,23 @@ retimePeriferalLatches(
 
   Ddi_VararrayWriteMark (pi, 1);
 
+  Ddi_Var_t *pvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVARSPEC_VAR$PS");
+  Ddi_Var_t *cvarPs = Ddi_VarFromName(ddm, "PDT_BDD_INVAR_VAR$PS");
+
   for (i = nstate - 1; i >= 0; i--) {
     Ddi_Bdd_t *d_i = Ddi_BddarrayRead(delta, i);
-    Ddi_Vararray_t *supp_i = Ddi_BddSuppVararray(d_i);  
+    Ddi_Var_t *v_i = Ddi_VararrayRead(ps, i);
     int j, allPis=1;
 
     latchSupps[i] = NULL;
+
+    if (v_i==pvarPs || v_i==cvarPs) {
+      // skip property/constr folding vars 
+      doRetime[i] = 0;
+      continue;
+    }
+    
+    Ddi_Vararray_t *supp_i = Ddi_BddSuppVararray(d_i);  
 
     for (j=0; j<Ddi_VararrayNum(supp_i);j++) {
       if (Ddi_VarReadMark(Ddi_VararrayRead(supp_i,j))!=1) {
@@ -6080,6 +6091,7 @@ retimePeriferalLatches(
 
     doRetime[i] = 0;
 
+    
     if (allPis) {
       int j;
       Ddi_Vararray_t *vA = latchSupps[i] =
