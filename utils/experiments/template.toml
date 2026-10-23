@@ -1,11 +1,11 @@
-# Experiment template for tools/run-experiments.py
+# Experiment template for utils/run-experiments.py
 #
 # Copy this file into the folder of your experiment, edit it, and run it from
 # anywhere:
 #
-#   tools/run-experiments.py --new /data/exp42/experiment.toml   # make the copy
-#   tools/run-experiments.py /data/exp42/experiment.toml --dry-run
-#   tools/run-experiments.py /data/exp42/experiment.toml -j 4
+#   utils/run-experiments.py --new /data/exp42/experiment.toml   # make the copy
+#   utils/run-experiments.py /data/exp42/experiment.toml --dry-run
+#   utils/run-experiments.py /data/exp42/experiment.toml -j 4
 #
 # Relative paths in this file (benchmarks, output, programs) are relative to the
 # folder that contains the file, so an experiment keeps its results next to its
@@ -13,14 +13,19 @@
 #   {here}   the folder of this file
 #   {repo}   the root of the pdtools repository
 #
-# As it stands the template runs on the example models in tools/examples.
+# As it stands the template runs on the example models in utils/examples.
 # A run is one strategy applied to one benchmark. Every run gets its own
 # directory with a log (run.log) and a result (result.json); summary.csv
-# collects one row per run, and runner.log keeps the progress messages.
+# collects one row per run (with the peak memory, peak_mb), and runner.log keeps
+# the progress messages. Peak memory is the resident memory of the command and the
+# processes it starts, sampled every half second: a shorter spike can be missed.
 
 name    = "template"   # results go to <output>/<name>/
 output  = "results"    # base output directory, relative to this file
 timeout = 60           # seconds allowed for each command (0: no limit)
+memory  = 0            # memory limit for each command: a number of gigabytes, or a
+                       # string such as "512M" or "32G" (0: no limit). A command that
+                       # exceeds it is killed and the run is marked "memout". Linux only.
 jobs    = 1            # runs executed in parallel (also -j). Timings are only
                        # comparable between experiments that use the same value.
 
@@ -40,7 +45,7 @@ jobs    = 1            # runs executed in parallel (also -j). Timings are only
 # --set key=value, for example --set examples=/data/hwmcc.
 [vars]
 verbosity = 1
-examples  = "{repo}/tools/examples"   # where the benchmarks are
+examples  = "{repo}/utils/examples"   # where the benchmarks are
 
 [benchmarks]
 # Files or glob patterns, relative to this file. "**" matches any number of
@@ -71,6 +76,9 @@ regex = "Check Done for init proved"
 #   {here}        folder of this experiment file
 #   plus every entry of [tools], every entry of [vars] and the parameters of
 #   the strategy.
+#
+# A strategy can set its own "timeout" and "memory", which replace the global
+# values for that strategy.
 #
 # A placeholder stands for one argument, even if its value contains spaces. To
 # write a literal brace, double it: {{ and }}.

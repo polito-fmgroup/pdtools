@@ -1,7 +1,7 @@
 #!/bin/bash
 # pdtrav-regress.sh - regression check for pdtrav builds
 #
-# Runs pdtrav on the models in tools/examples with several option sets, and
+# Runs pdtrav on the models in utils/examples with several option sets, and
 # runs the IC3 -> invariant -> certify flow on the models that support it.
 # It either prints a result table for one build or compares two builds.
 #
@@ -19,7 +19,7 @@
 #
 # Typical use after changing build flags or compilers: build unmodified
 # upstream in a separate checkout, then
-#   tools/pdtrav-regress.sh -r /path/to/upstream/pdtrav/bin/pdtrav pdtrav/bin/pdtrav
+#   utils/pdtrav-regress.sh -r /path/to/upstream/pdtrav/bin/pdtrav pdtrav/bin/pdtrav
 #
 # Environment:
 #   TIMEOUT  seconds allowed for each run (default 60)
@@ -37,7 +37,7 @@ MODELS="mod3.aag cnt1.aag cnt1e.aag notcnt1.aag toggle.aag s2cfair.aig s2cunfair
 OPTION_SETS=("-f" "-b" "-bmc 5" "-f -verbosity 3" "-strategy ic3")
 
 # Models for which the IC3 -> invariant -> certify flow must succeed. The other
-# models are left out on purpose (see tools/examples/README.md): for those where
+# models are left out on purpose (see utils/examples/README.md): for those where
 # IC3 finds a counterexample the invariant is constant false, and pdtapp aborts
 # on the empty invariant IC3 writes for s2cfair and s2cunfair.
 FLOW_MODELS="mod3.aag mult2.aig"

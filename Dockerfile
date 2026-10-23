@@ -14,7 +14,7 @@
 FROM ubuntu:24.04 AS builder
 
 # Build dependencies: the compiler toolchain, flex and bison (used to
-# generate the expression parser) and the readline headers. `make check-deps`
+# generate the expression parser) and the readline and zlib headers. `make check-deps`
 # verifies the same set.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
