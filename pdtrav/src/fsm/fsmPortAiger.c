@@ -286,7 +286,7 @@ Fsm_MgrLoadAiger(
 
     /* next state vars */
 
-    sprintf(buf, "%s$NS", name);
+    strcat(buf, "$NS");
 
     /* Create array of next state var */
     //    varNs = Ddi_VarFindOrAddAfterVar(dd,buf,useBddVars,var);
