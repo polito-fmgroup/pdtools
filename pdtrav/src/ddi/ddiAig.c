@@ -15273,7 +15273,7 @@ aigNnfClustNormalize2 (
   return(a2);
 }
 
-static int printCut (
+static void printCut ( 
   nnfGate_t *nnfGates,
   int ldr
 )
@@ -15315,13 +15315,13 @@ static int resortCut (
   for (k=k0; k<n; k++) {
     int in = nnfGates[ldr].ldrCut[k];
     if (in==i) {
-      Pdtutil_Assert(found0==0,"dupòicate in cut");
+      Pdtutil_Assert(found0==0,"duplicate in cut");
       found0++;
       if (k>k0)
 	nnfGates[ldr].ldrCut[k] = nnfGates[ldr].ldrCut[k0];
     }
     else if (in==j) {
-      Pdtutil_Assert(found1==0,"dupòicate in cut");
+      Pdtutil_Assert(found1==0,"duplicate in cut");
       found1++;
       if (k!=(k0+1))
 	nnfGates[ldr].ldrCut[k] = nnfGates[ldr].ldrCut[k0+1];
@@ -26956,6 +26956,7 @@ Ddi_AigOptByBddSweepTop(
     if (size > mySize0 * 0.95) break;
     bddMergeTh *=2;
   }
+  return 0; /* Added to silence -Wreturn-type warning */
 }
 
 
@@ -29527,7 +29528,7 @@ Ddi_AigOptByPart(
   Ddi_Free(orComponent);
   Ddi_Free(zero);
   Ddi_Free(constraint);
-
+  return 0; /* Added to silence -Wreturn-type warning */
 }
 
 /**Function********************************************************************
@@ -29643,7 +29644,7 @@ Ddi_AigOptByImpl(
   Ddi_DataCopy(f,newF);
 
   Ddi_Free(newF);
-
+  return 0; /* Added to silence -Wreturn-type warning */
 }
 
 /**Function********************************************************************
@@ -45951,7 +45952,7 @@ aigNnfOptBySatSimplifyAcc (
   Ddi_Free(myCarePlus);
   Ddi_Free(iCore);
 
-  itp;
+  return itp; /* Changed to solve -Wreturn-type warning */
 }
 
 /**Function********************************************************************
@@ -51882,7 +51883,10 @@ Ddi_Bddarray_t *Ddi_AigFunctionalDecomp
   Ddi_Bdd_t *aPart = Ddi_AigPartitionTop(a,0);
 
   Ddi_Free(aPart);
-
+  /* [CHECK]  Was this function ever completed? 
+   * Missing return value
+   * Does not seems to do much at all...
+   */
 }
 
 /**Function********************************************************************
@@ -59456,6 +59460,7 @@ aig2CnfIdLoad(
     }
     Pdtutil_Assert(vCnf==i,"error in cnf mapping load");
   }
+  return 0; /* Added to silence -Wreturn-type warning */
 }
 
 /**Function********************************************************************
@@ -59689,6 +59694,8 @@ static int satActivity(
     act = up ? ((double) (-i) / norm) + 1.0 :((double) (i) / norm) ;
     S->varBumpActivityExternal(MinisatLit(i),act);
   }
+  
+  return 0; /* Added to silence -Wreturn-type warning */
 }
 
 /**Function********************************************************************
@@ -59723,6 +59730,8 @@ static int aig2SatActivity(
       }
     }
   }
+
+  return 0; /* Added to silence -Wreturn-type warning */
 }
 
 /**Function********************************************************************
@@ -68077,11 +68086,12 @@ struct Checker : public ProofTraverser {
 
         }
       }
-
+      
       Pdtutil_VerbosityMgr(ddiMgr, Pdtutil_VerbLevelUsrMax_c,
         printf("ITP proof preproc red impl/tot: %d/%d\n",
-               cntImpliedUsedVars, cntDup));
-      
+          cntImpliedUsedVars, cntDup));
+          
+      return cntDup; /* Updated to silence -Wreturn-type warning */
     }
 
     int topLevelImply(int id, int phase, int enRecur=1) {
@@ -80666,7 +80676,7 @@ static int getEquivFromClauses(
 #endif
     }
   }
-
+  return nEq; /* Updated to silence -Wreturn-type warning */
 }
 
 /**Function********************************************************************
