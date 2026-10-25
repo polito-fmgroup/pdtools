@@ -383,6 +383,6 @@ In the literature the tool is referred to as PdTRAV (Politecnico di Torino Reach
 
 ## Third-party components and licence
 
-This repository is released under the MIT licence (see [`LICENSE`](LICENSE)).
+This repository is released under the PolyForm Noncommercial License 1.0.0 (see [`LICENSE`](LICENSE)).
 
 The bundled third-party components (ABC, CUDD, AIGER, Lingeling and MiniSat, see [Repository layout](#repository-layout)) are distributed under their own terms. See the licence and readme files in each component's directory.
