@@ -5483,7 +5483,7 @@ Trav_IgrToPdr (
   }
 
   checkRingInclusion(itpMgr);
-
+  return 0; /* Added to silence -Wreturn-type warning */
 }
 
 

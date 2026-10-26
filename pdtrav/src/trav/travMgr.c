@@ -5865,6 +5865,7 @@ Trav_LogStats(
   }
   travStats->cpuTimeTot = currTime;
   pthread_mutex_unlock(&travStats->mutex);
+  return ret; /* Added to silence -Wreturn-type warning */
 }
 
 /**Function********************************************************************

@@ -1245,7 +1245,7 @@ doMcWork(
         worker->taskName));
     worker->result = -2;
   }
-
+  return NULL; /* Added to silence -Wreturn-type warning */
 }
 
 /**Function*******************************************************************
@@ -1899,6 +1899,7 @@ threadOutputPipes(
     }
     sleep(2);
   }
+  return NULL; /* Added to silence -Wreturn-type warning */
 }
 
 static void

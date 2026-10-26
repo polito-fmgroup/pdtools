@@ -27148,6 +27148,7 @@ partitionByWitnessVars(
     Ddi_Free(p0n);
     Ddi_Free(p1n);
   }
+  return b; /* Added to silence -Wreturn-type warning */
 }
 
 

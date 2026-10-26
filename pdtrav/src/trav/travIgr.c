@@ -323,7 +323,7 @@ Trav_PdrToIgr (
 
   Ddi_Free(myOne);
   Ddi_Free(reachedAig);
-
+  return 0; /* Added to silence -Wreturn-type warning */
 }
 
 

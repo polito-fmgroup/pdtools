@@ -3526,6 +3526,7 @@ TravBmcMgrAddFramesFwdBwd(
   }
 
   bmcMgr->nTimeFrames += nFrames;
+  return 0; /* Added to silence -Wreturn-type warning */
 }
 
 

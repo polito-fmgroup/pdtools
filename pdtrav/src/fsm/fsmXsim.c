@@ -2293,5 +2293,6 @@ xSimEqClassUpdateBySignature(
       return Pdtutil_EqClass_SameClass_c;
     }
   }
-
+  return Pdtutil_EqClass_SameClass_c; /* Added to silence -Wreturn-type warning */
+  /* Return value choice mirrors the logic of pdtutil:Pdtutil_EqClassUpdate */
 }
