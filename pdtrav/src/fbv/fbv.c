@@ -22907,6 +22907,9 @@ new_settings(
 {
   Fbv_Globals_t *opt = Pdtutil_Alloc(Fbv_Globals_t, 1);
 
+  /* Pre-emptive init of memory block to zeros. Explicit init follows */
+  memset(opt, 0, sizeof(*opt));
+
   /*
    *  common options
    */
