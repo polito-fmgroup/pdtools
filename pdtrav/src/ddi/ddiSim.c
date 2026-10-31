@@ -980,22 +980,23 @@ BinCoeff(
   int d
 )
 {
-  int i, j;
-  static float C[20000][20000];
-  if (n>=20000 || d>=20000) return 0.0;
-  
-  for (j = 1; j <= d; j++)
-    C[0][j] = 0.0;
-  for (i = 0; i <= n; i++)
-    C[i][0] = 1.0;
+  int i;
+  double c = 1.0;
 
-  for (i = 1; i <= n; i++)
-    for (j = 1; j <= d; j++)
-      C[i][j] = C[i-1][j-1] + C[i-1][j];
-  return C[n][d];
+  if (n < 0 || d < 0 || d > n) {
+    return 0.0;
+  }
+
+  if (d > n - d) {
+    d = n - d;
+  }
+
+  for (i = 1; i <= d; i++) {
+    c *= (double)(n - d + i) / (double)(i);
+  }
+
+  return (float)c;
 }
-
-
 
 /**Function********************************************************************
   Synopsis     [estimate space coverage starting from a constrained signature
