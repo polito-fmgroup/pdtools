@@ -993,6 +993,9 @@ BinCoeff(
 
   for (i = 1; i <= d; i++) {
     c *= (double)(n - d + i) / (double)(i);
+    if (c > FLT_MAX) {
+      return FLT_MAX;
+    }
   }
 
   return (float)c;
