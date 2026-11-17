@@ -1523,6 +1523,7 @@ EXTERN Ddi_Varset_t * Ddi_VarsetarrayQuickExtract(Ddi_Varsetarray_t *array, int 
 EXTERN void Ddi_VarsetarrayRemove(Ddi_Varsetarray_t *array, int pos);
 EXTERN void Ddi_VarsetarrayQuickRemove(Ddi_Varsetarray_t *array, int pos);
 EXTERN void Ddi_VarsetarrayAppend (Ddi_Varsetarray_t *array1, Ddi_Varsetarray_t *array2);
+EXTERN int Ddi_AigAbcOptAcc (Ddi_Bdd_t *aig, float timeLimit);
 EXTERN int Ddi_AigarrayAbcOptAcc (Ddi_Bddarray_t *aigA, float timeLimit);
 EXTERN int Ddi_AigarrayAbcRpmAcc (Ddi_Bddarray_t *aigA, Ddi_Vararray_t *ps, int nCutMax, float timeLimit);
 EXTERN int Ddi_AigAbcRpmAcc (Ddi_Bdd_t *aig, Ddi_Vararray_t *ps, int nCutMax, float timeLimit);
@@ -1665,6 +1666,7 @@ Ddi_AigarrayNetLoadAigerMapVars(
   char *filename
 ) ;
 EXTERN Ddi_Bdd_t *Ddi_AigNetLoadAiger(Ddi_Mgr_t *dd, Ddi_Vararray_t *vars, char *filename);
+EXTERN int Ddi_AigarrayNetStoreAigerWithPis(Ddi_Bddarray_t *fA, Ddi_Vararray_t *piA, int badOrOutput, char *filename);
 EXTERN int Ddi_AigarrayNetStoreAiger(Ddi_Bddarray_t *fA, int badOrOutput, char *filename);
 EXTERN int Ddi_AigNetStoreAiger(Ddi_Bdd_t *f, int badOrOutput, char *filename);
 EXTERN Ddi_Bddarray_t *Ddi_AigarrayNnf (Ddi_Bddarray_t *fA, Ddi_Vararray_t *monotoneVars, int assumeRed, Ddi_Bdd_t *splitVarConstrain, Ddi_Vararray_t *refVars, Ddi_Vararray_t *auxVars0, Ddi_Vararray_t *auxVars1);

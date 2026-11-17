@@ -1637,6 +1637,23 @@ Ddi_AbcInterpolant (
 }
 
 
+/**Function*************************************************************
+
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+
+***********************************************************************/
+
+int
+Ddi_AigAbcOptAcc (
+  Ddi_Bdd_t *aig,
+  float timeLimit
+  )
+{
+  return ddiAbcOptAcc (aig,timeLimit);
+}
 
 /**Function*************************************************************
 

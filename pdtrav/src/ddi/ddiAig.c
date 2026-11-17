@@ -628,7 +628,14 @@ Minisat22SolverTopVarsByDecisions(
   float litUnbalanceTh,
   int nv
 );
-
+static int Minisat22MUS(
+  void *pS22void,
+  Ddi_Vararray_t *auxVars,
+  int nVars,
+  unsigned char *doAbstr,
+  unsigned char *enAbstr,
+  int enIncr
+);
 /**AutomaticEnd***************************************************************/
 
 /*---------------------------------------------------------------------------*/
@@ -79751,8 +79758,6 @@ Ddi_AigAbstrVarsForInterpolant22 (
   unsigned char *doAbstr = Pdtutil_Alloc(unsigned char, nVars);
   Ddi_Bddarray_t *eqRelArray=NULL;
   Minisat22Solver S;
-  Minisat::vec<Minisat::Lit> lits;
-  Minisat::vec<Minisat::Lit> assumps, possibleAssumps, totAssumps, assumpsReverse;
   FILE *fp=NULL;
   Var *minisatAV, *minisatBV;
   int strategy = Ddi_MgrReadAigDynAbstrStrategy(ddm);
@@ -79818,9 +79823,9 @@ Ddi_AigAbstrVarsForInterpolant22 (
   }
   Minisat22Clauses((void *)&S,b,NULL,NULL,0);
 
-  assumps.clear();
   eqRelArray = Ddi_BddarrayAlloc(ddm,0);
 
+  //  printf("\n");
   for (i=0; i<nVars; i++) {
     Ddi_Bdd_t *wire, *eqRel;
     Ddi_Var_t *aV = Ddi_VararrayRead(aVars,i);
@@ -79834,6 +79839,10 @@ Ddi_AigAbstrVarsForInterpolant22 (
     doAbstr[i] = 0;
     lit = Ddi_BddMakeLiteralAig(bV,1);
     wire = Ddi_BddMakeLiteralAig(aV,1);
+    /*
+    if (enAbstr!=NULL && !enAbstr[i])
+      eqRel = Ddi_BddMakeConstAig(ddm,1);
+      else m*/
     eqRel = Ddi_BddMakeLiteralAig(auxV,1);
     Ddi_BddXnorAcc(wire,lit);
     Ddi_Free(lit);
@@ -79844,7 +79853,7 @@ Ddi_AigAbstrVarsForInterpolant22 (
     {
       int id = aig2CnfId(bmgr,Ddi_VarToBaig(auxV));
       Minisat::Lit l = Minisat22Lit(id);
-      assumps.push(l);
+      //printf("%d ", toInt(l));
       id = aig2CnfId(bmgr,Ddi_VarToBaig(aV));
       minisatAV[i]=Minisat::var(Minisat22Lit(id));
       id = aig2CnfId(bmgr,Ddi_VarToBaig(bV));
@@ -79852,6 +79861,7 @@ Ddi_AigAbstrVarsForInterpolant22 (
     }
     Ddi_Free(eqRel);
   }
+  //  printf("\n");
 
   Ddi_Free(eqRelArray);
   Ddi_Free(aa);
@@ -79861,53 +79871,13 @@ Ddi_AigAbstrVarsForInterpolant22 (
     cpuTime = 10000.0;
   }
   else {
-    int sat;
-    if ((sat = S.okay())) {
-      startTime = util_cpu_time ();
-      sat = S.solve(assumps);
-      cpuTime = util_cpu_time () - startTime;
-    }
-    if (sat>0) {
-      doEval=0;
-    }
-    else if (sat<0) {
-      Pdtutil_VerbosityMgr(ddm, Pdtutil_VerbLevelNone_c,
-        fprintf(dMgrO(ddm),"DYN ABSTR ABORTED\n"));
-      doAbort=1;
-    }
-    else if (strategy > 0) {
-      int j;
-      int nkeep = 0;
-      doEval = 0;
-      doEvalAbstr = 1;
-      for (i=j=0; i<nVars; i++) {
-        if (! doAbort && !doAbstr[i] && (enAbstr==NULL || enAbstr[i])) {
-          int sat, k;
-          Minisat::Lit lit;
-
-          lit = assumps[j++];
-	  doAbstr[i]=1;
-	  for (k=0; k<S.conflict.size(); k++) {
-            Minisat::Lit kLit = S.conflict[k];
-	    if (Minisat::var(kLit) == Minisat::var(lit)) {
-	      nkeep++;
-	      doAbstr[i]=0;
-	      break;
-	    }
-	  }
-	}
-      }
-      Pdtutil_VerbosityMgr(ddm, Pdtutil_VerbLevelUsrMin_c,
-        fprintf(dMgrO(ddm),"DYN ABSTR (M22) KEPT %d/%d vars (time: %s)\n",
-                nkeep, assumps.size(), util_print_time(cpuTime)));
-    }
+    int enIncr = strategy>=1;
+    doEvalAbstr = Minisat22MUS(&S,auxVars,nVars,doAbstr,enAbstr,enIncr);
   }
-
 
   aig2CnfIdClose(ddm);
 
-
-  if (doEvalAbstr) {
+  if (doEvalAbstr>=0) {
 
     abstrVarLit = Ddi_BddarrayAlloc(ddm,0);
     vSubst = Ddi_VararrayAlloc(ddm,0);
@@ -79941,7 +79911,7 @@ Ddi_AigAbstrVarsForInterpolant22 (
     Ddi_Free(abstrVarLit);
   }
   else {
-    a2=NULL;
+    a2=NULL; // SAT
   }
 
 
@@ -84748,7 +84718,10 @@ aigSat22AndWithInterpolantIntern (
         &&Ddi_AigSat(a)) {
       *psat = 1;
     }
-    return (Ddi_BddMakeConstAig(ddm,1));
+    if (Ddi_AigSat(a))
+      return (Ddi_BddMakeConstAig(ddm,1));
+    else
+      return (Ddi_BddMakeConstAig(ddm,0));
   }
 
   vA = Ddi_VararrayMakeFromVarset(myGlobalVars,1);
@@ -90449,4 +90422,152 @@ sat22ConstrainIntern(
   return newfAig;
 }
 
+/**Function********************************************************************
+  Synopsis    [Inner steps of MUS computation for interpolation]
+  Description [Inner steps of MUS computation for interpolation.
+              ]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static int Minisat22MUS(
+  void *pS22void,
+  Ddi_Vararray_t *auxVars,
+  int nVars,
+  unsigned char *doAbstr,
+  unsigned char *enAbstr,
+  int enIncr
+)
+{
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(auxVars);
+  bAig_Manager_t *bmgr = ddm->aig.mgr;
+  Minisat22Solver *pS22 = (Minisat22Solver *)pS22void;
+  int sat, abstrDone = 0;
+  long cpuTime, cpuTime2=0, cpuTime3=0, startTime;
+
+  Minisat::vec<Minisat::Lit> assumps;
+  assumps.clear();
+  //  printf("\n");
+  vec<int> varIds;
+  vec<int> varSolverIds;
+  varIds.clear();
+  for (int i=0; i<nVars; i++) {
+    if (doAbstr[i]) continue;
+    Ddi_Var_t *auxV = Ddi_VararrayRead(auxVars,i);
+    int id = aig2CnfId(bmgr,Ddi_VarToBaig(auxV));
+    Minisat::Lit l = Minisat22Lit(id);
+    int v = Minisat::toInt(Minisat::var(l));
+    //printf("%d ", toInt(l));
+    assumps.push(l);
+    varIds.push(i);
+    varSolverIds.push(v);
+  }
+  //  printf("\n");
+  if ((sat = pS22->okay())) {
+    startTime = util_cpu_time ();
+    sat = pS22->solve(assumps);
+    cpuTime = util_cpu_time () - startTime;
+  }
+  if (sat>0) {
+    Pdtutil_VerbosityMgr(ddm, Pdtutil_VerbLevelNone_c,
+                         fprintf(dMgrO(ddm),"DYN ABSTR RETURNED SAT\n"));
+    return -1;
+  }
+  if (sat<0) {
+    Pdtutil_VerbosityMgr(ddm, Pdtutil_VerbLevelNone_c,
+                         fprintf(dMgrO(ddm),"DYN ABSTR ABORTED\n"));
+    return 0;
+  }
+
+  int nkeep = 0;
+  Minisat::vec<Minisat::lbool> doAbstrSolver;
+  doAbstrSolver.growTo(pS22->nVars(),l_False22);
+  for (int j=0; j<assumps.size(); j++) {
+    doAbstrSolver[varSolverIds[j]] = l_True22;
+  }
+  for (int k=0; k<pS22->conflict.size(); k++) {
+    Minisat::Lit lit = pS22->conflict[k];
+    int v = Minisat::toInt(Minisat::var(lit));
+    doAbstrSolver[v] = l_False22;
+  }
+  if (enIncr) {
+    float timeLimit = 2.0;
+    int n0=0, nUnsat=0, nSat=0;
+    for (int j=0; j<assumps.size(); j++) {
+      int v = varSolverIds[j];
+      if (doAbstrSolver[v] == l_False22) {
+        n0++;
+        if (enAbstr!=NULL && !enAbstr[varIds[j]]) {
+          pS22->addClause(assumps[j]);
+        }
+      }
+    }
+    //    for (int j=assumps.size()-1; j>=0; j--) {
+    for (int j=0; j<assumps.size(); j++) {
+      int v = varSolverIds[j];
+      if (doAbstrSolver[v] == l_False22 && (enAbstr==NULL || enAbstr[varIds[j]])) {
+        Minisat::vec<Minisat::Lit> assumps2;
+        for (int k=0; k<assumps.size(); k++) {
+          if (k!=j && doAbstrSolver[varSolverIds[k]] == l_False22) {
+            // keep this var
+            if (enAbstr==NULL || enAbstr[varIds[k]])
+              assumps2.push(assumps[k]);
+          }
+        }
+        startTime = util_cpu_time ();
+        if ((sat = pS22->okay())) {
+          pS22->setTimeBudget((double)timeLimit);
+          sat = pS22->solveLimitedInt(assumps2);
+        }
+        if (sat) {
+          pS22->addClause(assumps[j]);
+          if (enAbstr!=NULL && enAbstr[varIds[j]])
+            enAbstr[varIds[j]]=0;
+          cpuTime3 += (util_cpu_time () - startTime);
+          nSat++;
+        } else  {
+          nUnsat++;
+          cpuTime2 += (util_cpu_time () - startTime);
+          for (int k=0; k<assumps.size(); k++) {
+            if (doAbstrSolver[varSolverIds[k]] == l_False22) {
+              if (enAbstr==NULL || enAbstr[varIds[k]])
+                doAbstrSolver[varSolverIds[k]] = l_True22;
+            }
+          }
+          for (int k=0; k<pS22->conflict.size(); k++) {
+            Minisat::Lit lit = pS22->conflict[k];
+            int v = Minisat::toInt(Minisat::var(lit));
+            doAbstrSolver[v] = l_False22;
+          }
+        }
+      }
+    }
+    Pdtutil_VerbosityMgr(ddm, Pdtutil_VerbLevelUsrMin_c,
+                       fprintf(dMgrO(ddm),"DYN ABSTR (M22) initially kept %d vars, %d/%d SAT/UNSAT calls\n",
+                               n0, nSat, nUnsat));
+  }
+  for (int j=0; j<assumps.size(); j++) {
+    if (doAbstrSolver[varSolverIds[j]] == l_True22) {
+      abstrDone = 1;
+      int i = varIds[j];
+      doAbstr[i]=1;
+    }
+    else {
+      nkeep++;
+      int i = varIds[j];
+      if (enIncr && enAbstr!=NULL && enAbstr[i])
+        enAbstr[i]=0;
+    }
+  }
+
+  Pdtutil_VerbosityMgrIf(ddm, Pdtutil_VerbLevelUsrMin_c) {
+    fprintf(dMgrO(ddm),"DYN ABSTR (M22) KEPT %d/%d vars (time: %s",
+            nkeep, assumps.size(),
+            util_print_time(cpuTime));
+    fprintf(dMgrO(ddm)," + %s",
+            util_print_time(cpuTime2));
+    fprintf(dMgrO(ddm)," + %s)\n",
+            util_print_time(cpuTime3));
+  }
+  return abstrDone;
+}
 

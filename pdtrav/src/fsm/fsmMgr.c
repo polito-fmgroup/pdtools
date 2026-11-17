@@ -339,6 +339,7 @@ Fsm_MgrQuit(
   Fsm_Mgr_t * fsmMgr            /* FSM Manager */
 )
 {
+  if (fsmMgr==NULL) return;
   Pdtutil_VerbosityMgr(fsmMgr,
     Pdtutil_VerbLevelUsrMax_c, fprintf(stdout, "-- FSM Manager Quit.\n")
     );

@@ -28483,7 +28483,7 @@ itpImgLoop(
   float coneSplitRatio = travMgr->settings.aig.igrConeSplitRatio;
   int enConeSplit = 0 && (coneSplitRatio < 0.99);
   int usePrevTo = 0;
-  int abstrCareVarsWithDynAbstr = 1;
+  int abstrCareVarsWithDynAbstr = 0;
   int doIncrItp=0;
 
   if (travMgr->settings.aig.itpSolver>0) {
@@ -30216,7 +30216,28 @@ itpImgLoop(
 	  Ddi_VararrayUnionAcc(itpTravMgr->noDynAbstr,noAbstr);
 	  Ddi_Free(noAbstr);
 	}
-	
+        int tryItp=0; /* too tight - the interpolant is too close to A so
+                         no abstraction is allowed */
+        if (tryItp) {
+          int sat=0;
+          Ddi_Bdd_t *itp = Ddi_AigSat22AndWithInterpolant(NULL,
+             localCone,itpTravMgr->from,NULL,
+             NULL, NULL,NULL,0,NULL,NULL, &sat, 0, 1, 0, -1.0);
+          if (!sat) {
+            int mark = Ddi_BddReadMark(localCone);
+            Ddi_Free(localCone);
+            localCone = Ddi_BddDup(itp);
+            Ddi_BddWriteMark(localCone,mark);
+            Pdtutil_VerbosityLocalIf(verbosity, Pdtutil_VerbLevelUsrMax_c) {
+              Ddi_Varset_t *supp = Ddi_BddSupp(itp);
+              fprintf(tMgrO(travMgr),
+                      "DYN ABSTR preprocessing itp has support: %d\n",
+                      Ddi_VarsetNum(supp));
+              Ddi_Free(supp);
+            }
+            Ddi_Free(itp);
+          }
+        }
         abstrVars = interpolantDynAbstrFrom(itpTravMgr->from,
           itpTravMgr->from0, localCone,
           /* careBwd DISABLED */ itpCare, itpMgr->invarConstrForTr,
@@ -31004,7 +31025,7 @@ itpImgLoop(
                 }
                 itpGen = Ddi_AigInterpolantByGenClauses(localConeAndNew,
                   fromAndNew, myCareBwd, toPlus,
-                  ps, ns, NULL, glbA, dynAC, dynAA, dynACL, maxGen, 0, &res);
+                  ps, ns, NULL, glbA, dynAC, dynAA, dynACL, maxGen, 0, &res); // 1
                 Ddi_Free(fromAndNew);
                 Ddi_Free(localConeAndNew);
                 //  Ddi_Free(a);
@@ -38409,6 +38430,219 @@ interpolantDynAbstrFrom(
 {
   int j, k, p, doAbort, nPhases = 3;
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(from);
+  Ddi_Varset_t *abstrVars = NULL;
+  Ddi_Bdd_t *myCone = Ddi_BddDup(cone);
+  Ddi_Bdd_t *newFrom, *auxFrom = NULL;
+  int nvars = Ddi_VararrayNum(ns);
+  int strategy = Ddi_MgrReadAigDynAbstrStrategy(ddm);
+
+  if (strategy > 1) {
+    Ddi_MgrSetOption(ddm, Pdt_DdiDynAbstrStrategy_c, inum, strategy - 2);
+  }
+  //  Ddi_Bdd_t *from2, *saveFrom = Ddi_BddDup(fromAndTr);
+
+  if (1 && care != NULL && (1 || !Ddi_BddIncluded(myCone, care))) {
+    Ddi_BddAndAcc(myCone, care);
+  }
+
+  if (nAbstrP != NULL) {
+    *nAbstrP = 0;
+  }
+
+  if (noAbstr!=NULL && enAbstr!=NULL) {
+    Ddi_VararrayWriteMark(noAbstr, 1);
+    for (int i=0; i<nvars; i++) {
+      if (Ddi_VarReadMark(Ddi_VararrayRead(ns,i))) {
+        enAbstr[i]=0;
+      }
+    }
+    Ddi_VararrayWriteMark(noAbstr, 0);
+  }
+
+  auxFrom = Ddi_BddCompose(fromAndTr, ns, dynAbstrCutLits);
+
+  int useMinisat22 = ddm->settings.aig.itpDrup; 
+  if (useMinisat22)
+    newFrom = Ddi_AigAbstrVarsForInterpolant22(auxFrom, myCone,
+              dynAbstrCut, ns, dynAbstrAux, NULL,
+              enAbstr, &doAbort);
+  else
+    newFrom = Ddi_AigAbstrVarsForInterpolant(auxFrom, myCone,
+              dynAbstrCut, ns, dynAbstrAux, NULL,
+              enAbstr, &doAbort);
+
+  if (doAbort) {
+    Ddi_Free(newFrom);
+    newFrom = Ddi_AigAbstrVarsForInterpolantByRefinement(auxFrom, myCone,
+      dynAbstrCut, ns, dynAbstrAux, NULL, enAbstr);
+  }
+
+#if 1
+  if (newFrom != NULL) {
+    Ddi_Vararray_t *totVarsA = Ddi_BddSuppVararray(fromAndTr);
+    Ddi_Vararray_t *keepVarsA = Ddi_BddSuppVararray(newFrom);
+    Ddi_VararrayIntersectAcc(totVarsA, ns);
+    Ddi_VararrayIntersectAcc(keepVarsA, ns);
+
+    if (noAbstr!=NULL) {
+      Ddi_VararrayUnionAcc(noAbstr,keepVarsA);
+    }
+
+    Ddi_Vararray_t *abstrVarsA = Ddi_VararrayDiff(totVarsA,keepVarsA);
+    abstrVars = Ddi_VarsetMakeFromArray(abstrVarsA);
+    Ddi_VarsetSetArray(abstrVars);
+
+    Ddi_VararrayWriteMarkWithIndex(ns,1);
+
+    Ddi_Bdd_t *one = Ddi_BddMakeConstAig(ddm, 1);
+    for (int i=0; i<Ddi_VararrayNum(abstrVarsA); i++) {
+      Ddi_Var_t *v = Ddi_VararrayRead(abstrVarsA, i);
+      j = Ddi_VarReadMark(v)-1;
+      Pdtutil_Assert((j>=0)&&(j<nvars),"wrong mark of var");
+      if (nAbstrP != NULL) {
+        (*nAbstrP)++;
+      }
+      if (abstrMask != NULL) {
+        abstrMask[j] = 1;
+      }
+      if (doSimplifyTr && trArray!=NULL) {
+        Ddi_BddarrayWrite(trArray, j, one);
+      }
+    }
+    Ddi_Free(one);
+
+    DdiGenericDataCopy((Ddi_Generic_t *) fromAndTr, (Ddi_Generic_t *) from);
+
+    for (int i=0; i<Ddi_VararrayNum(keepVarsA); i++) {
+      Ddi_Var_t *v = Ddi_VararrayRead(keepVarsA, i);
+      j = Ddi_VarReadMark(v)-1;
+      Pdtutil_Assert((j>=0)&&(j<nvars),"wrong mark of var");
+      Ddi_Bdd_t *tr_j = Ddi_BddarrayRead(trArray, j);
+      Ddi_BddAndAcc(fromAndTr, tr_j);
+      if (abstrMask != NULL) {
+        abstrMask[j] = 0;
+      }
+
+    }
+
+    Ddi_VararrayWriteMark(ns,0);
+
+    if (invar != NULL) {
+      Ddi_BddAndAcc(fromAndTr, invar);
+    }
+
+    Ddi_Free(keepVarsA);
+    Ddi_Free(totVarsA);
+    Ddi_Free(abstrVarsA);
+    Ddi_Free(newFrom);
+  }
+#else
+  if (newFrom != NULL) {
+    Ddi_Bdd_t *one = Ddi_BddMakeConstAig(ddm, 1);
+    Ddi_Varset_t *totVars = Ddi_BddSupp(fromAndTr);
+    Ddi_VarsetWriteMark(totVars, 1);
+
+    abstrVars = Ddi_VarsetVoid(ddm);
+    Ddi_VarsetSetArray(abstrVars);
+    Ddi_Vartset_t *fromVars = Ddi_BddSupp(newFrom);
+    Ddi_VarsetSetArray(fromVars);
+    Ddi_VarsetIntersectAcc(fromVars, nsvars);
+    //Ddi_VarsetPrint(fromVars,0,0,stdout);
+
+    if (0&&noAbstr!=NULL) { // conflicts with var mark
+      Ddi_Vararray_t *keptVars = Ddi_VararrayMakeFromVarset(fromVars, 1);
+      Ddi_VararrayUnionAcc(noAbstr,keptVars);
+      Ddi_Free(keptVars);
+    }
+
+    if (Pdtutil_MgrVerbosity(ddm) > Pdtutil_VerbLevelDevMed_c) {
+      printf("EA[1]: ");
+    }
+    for (j = 0; j < Ddi_VararrayNum(ns); j++) {
+      Ddi_Var_t *v = Ddi_VararrayRead(ns, j);
+      int keepVar = 0;
+
+      keepVar |= Ddi_VarInVarset(fromVars, v);
+      if (0 && enAbstr != NULL)
+        keepVar |= strstr(Ddi_VarName(v), "PDT_BDD_INVAR") != NULL;
+
+      if (Pdtutil_MgrVerbosity(ddm) > Pdtutil_VerbLevelDevMed_c) {
+        printf("%d", keepVar);
+      }
+      if (keepVar) {
+        Ddi_Bdd_t *tr_j = Ddi_BddarrayRead(trArray, j);
+
+        Ddi_BddAndAcc(fromAndTr, tr_j);
+        if (abstrMask != NULL) {
+          abstrMask[j] = 0;
+        }
+      } else if (Ddi_VarReadMark(Ddi_VararrayRead(ns, j))==1) {
+        Ddi_VarsetAddAcc(abstrVars, Ddi_VararrayRead(ns, j));
+
+        if (nAbstrP != NULL) {
+          (*nAbstrP)++;
+        }
+        if (abstrMask != NULL) {
+          abstrMask[j] = 1;
+        }
+        if (doSimplifyTr) {
+          Ddi_BddarrayWrite(trArray, j, one);
+        }
+      }
+    }
+
+    if (Pdtutil_MgrVerbosity(ddm) > Pdtutil_VerbLevelDevMin_c) {
+      printf("\n");
+    }
+
+    Ddi_Free(one);
+
+    if (invar != NULL) {
+      Ddi_BddAndAcc(from, invar);
+    }
+    Ddi_VarsetWriteMark(totVars, 0);
+    Ddi_Free(fromVars);
+    Ddi_Free(totVars);
+    Ddi_Free(newFrom);
+  }
+#endif
+
+  Ddi_Free(myCone);
+  Ddi_Free(auxFrom);
+
+  return abstrVars;
+
+}
+
+
+/**Function*******************************************************************
+  Synopsis    []
+  Description []
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static Ddi_Varset_t *
+interpolantDynAbstrFromOld(
+  Ddi_Bdd_t * fromAndTr,
+  Ddi_Bdd_t * from,
+  Ddi_Bdd_t * cone,
+  Ddi_Bdd_t * care,
+  Ddi_Bdd_t * invar,
+  Ddi_Vararray_t * ns,
+  Ddi_Varset_t * nsvars,
+  Ddi_Vararray_t * noAbstr,
+  Ddi_Vararray_t * dynAbstrCut,
+  Ddi_Vararray_t * dynAbstrAux,
+  Ddi_Bddarray_t * dynAbstrCutLits,
+  Ddi_Bddarray_t * trArray,
+  unsigned char *enAbstr,
+  unsigned char *abstrMask,
+  int doSimplifyTr,
+  int *nAbstrP
+)
+{
+  int j, k, p, doAbort, nPhases = 3;
+  Ddi_Mgr_t *ddm = Ddi_ReadMgr(from);
   Ddi_Varset_t *fromVars, *abstrVars = NULL;
   Ddi_Bdd_t *myCone = Ddi_BddDup(cone);
   Ddi_Bdd_t *newFrom, *auxFrom = NULL;
@@ -38524,8 +38758,17 @@ interpolantDynAbstrFrom(
       printf("\n");
     }
   }
+  else if (noAbstr!=NULL && enAbstr!=NULL) {
+    Ddi_VararrayWriteMark(noAbstr, 1);
+    for (int i=0; i<nvars; i++) {
+      if (Ddi_VarReadMark(Ddi_VararrayRead(ns,i))) {
+        enAbstr[i]=0;
+      }
+    }
+    Ddi_VararrayWriteMark(noAbstr, 0);
+  }
 
-  if (noAbstr!=NULL) {
+  if (0 && noAbstr!=NULL) { // disabled - now simply driving enAbstr 
     int na = Ddi_VararrayNum(noAbstr);
     unsigned char *enA = NULL;
     Ddi_Vararray_t *ns2 = Ddi_VararrayAlloc(ddm, 0);
@@ -38641,7 +38884,7 @@ interpolantDynAbstrFrom(
     DdiGenericDataCopy((Ddi_Generic_t *) fromAndTr, (Ddi_Generic_t *) from);
     //Ddi_VarsetPrint(fromVars,0,0,stdout);
 
-    if (noAbstr!=NULL) {
+    if (0&&noAbstr!=NULL) { // conflicts with var mark
       Ddi_Vararray_t *keptVars = Ddi_VararrayMakeFromVarset(fromVars, 1);
       Ddi_VararrayUnionAcc(noAbstr,keptVars);
       Ddi_Free(keptVars);

@@ -7283,7 +7283,7 @@ Ddi_IncrSatMgrLockAig(
   if (mgr->dummyRefs==NULL) {
     mgr->dummyRefs = Ddi_BddarrayAlloc(ddm,0);
   }
-  if (Ddi_BddIsPartConj(f)) {
+  if (0&&Ddi_BddIsPartConj(f)) {
     int i;
     for (i=0; i<Ddi_BddPartNum(f); i++) {
       Ddi_Bdd_t *f_i = Ddi_BddPartRead(f,i);

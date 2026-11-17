@@ -84,7 +84,11 @@ struct App_Mgr_s {
     struct {
     } aiger;
     struct {
+    } eco;
+    struct {
     } gfp;
+    struct {
+    } iso;
     struct {
     } none;
   } app;

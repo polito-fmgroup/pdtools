@@ -60,7 +60,7 @@
 /* Static function prototypes                                                */
 /*---------------------------------------------------------------------------*/
 
-aiger *BddarrayCopyToAiger (Ddi_Bddarray_t *fA, int badOrOutput);
+aiger *BddarrayCopyToAiger (Ddi_Bddarray_t *fA, Ddi_Vararray_t *piA, int badOrOutput);
 
 /**AutomaticEnd***************************************************************/
 
@@ -86,6 +86,7 @@ aiger *BddarrayCopyToAiger (Ddi_Bddarray_t *fA, int badOrOutput);
 aiger*
 BddarrayCopyToAiger (
   Ddi_Bddarray_t *fA,   
+  Ddi_Vararray_t *piA,
   int badOrOutput
   )
 {
@@ -121,6 +122,13 @@ BddarrayCopyToAiger (
   Ddi_PostOrderAigClearVisitedIntern(bmgr,visitedNodes);
 
   vars = Ddi_BddarraySuppVararray(fA); 
+  if (piA!=NULL) {
+    Ddi_Vararray_t *diff = Ddi_VararrayDiff(vars,piA);
+    Pdtutil_Assert(Ddi_VararrayNum(diff)==0,"Pi array does not include support");
+    Ddi_Free(diff);
+    Ddi_DataCopy(vars,piA);
+  }
+
   ni = Ddi_VararrayNum(vars); 
   for (i=0; i<ni; i++) {
     int index, i1 = i+1;
@@ -460,6 +468,37 @@ Ddi_AigarrayNetLoadAigerMapVars(
 
 ******************************************************************************/
 int
+Ddi_AigarrayNetStoreAigerWithPis(
+  Ddi_Bddarray_t *fA,
+  Ddi_Vararray_t *piA,
+  int badOrOutput,
+  char *filename                 /* OUT: file name */
+)
+{
+  aiger* mgr;
+
+  mgr = BddarrayCopyToAiger (fA,piA,badOrOutput);
+  
+  if (!aiger_open_and_write_to_file (mgr,filename))
+      return (1);	
+
+  aiger_reset (mgr);
+
+  return (0);
+}
+
+/**Function********************************************************************
+
+  Synopsis           []
+
+  Description        []
+
+  SideEffects        []
+
+  SeeAlso            []
+
+******************************************************************************/
+int
 Ddi_AigarrayNetStoreAiger(
   Ddi_Bddarray_t *fA,   
   int badOrOutput,
@@ -468,7 +507,7 @@ Ddi_AigarrayNetStoreAiger(
 {
   aiger* mgr;
 
-  mgr = BddarrayCopyToAiger (fA,badOrOutput);
+  mgr = BddarrayCopyToAiger (fA,NULL,badOrOutput);
   
   if (!aiger_open_and_write_to_file (mgr,filename))
       return (1);	

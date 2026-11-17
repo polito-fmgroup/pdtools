@@ -52,6 +52,7 @@ static struct {
   {
    {"aiger", App_Aiger}, 
    {"certify", App_Certify},
+   {"eco", App_Eco}, 
    {"gfp", App_Gfp}, 
    {"iso", App_Iso}, 
    {NULL,NULL}
