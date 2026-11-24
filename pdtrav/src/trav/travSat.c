@@ -38465,7 +38465,7 @@ interpolantDynAbstrFrom(
   if (useMinisat22)
     newFrom = Ddi_AigAbstrVarsForInterpolant22(auxFrom, myCone,
               dynAbstrCut, ns, dynAbstrAux, NULL,
-              enAbstr, &doAbort);
+              enAbstr, NULL, &doAbort);
   else
     newFrom = Ddi_AigAbstrVarsForInterpolant(auxFrom, myCone,
               dynAbstrCut, ns, dynAbstrAux, NULL,
@@ -38849,7 +38849,7 @@ interpolantDynAbstrFromOld(
   if (useMinisat22)
     newFrom = Ddi_AigAbstrVarsForInterpolant22(auxFrom, myCone,
               dynAbstrCut, ns, dynAbstrAux, NULL,
-              myEnAbstr != NULL ? myEnAbstr : enAbstr, &doAbort);
+              myEnAbstr != NULL ? myEnAbstr : enAbstr, NULL, &doAbort);
   else
     newFrom = Ddi_AigAbstrVarsForInterpolant(auxFrom, myCone,
               dynAbstrCut, ns, dynAbstrAux, NULL,

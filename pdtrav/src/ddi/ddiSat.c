@@ -4564,6 +4564,41 @@ Ddi_AigInterpolantByGenClauses(
   SideEffects []
   SeeAlso     []
 ******************************************************************************/
+Ddi_Bdd_t *
+Ddi_AigInterpolantByGenClausesSimple(
+  Ddi_Bdd_t *a,
+  Ddi_Bdd_t *b,
+  int maxIter,
+  int *result
+)
+{
+  Ddi_Vararray_t *vAB = Ddi_BddSuppVararray(a);
+  Ddi_Vararray_t *vB = Ddi_BddSuppVararray(b);
+
+  Ddi_VararrayIntersectAcc(vAB,vB);
+  
+  Ddi_Vararray_t *vAB2 =
+    Ddi_VararrayMakeNewAigVars(vAB, "shadow", NULL);
+  Ddi_Vararray_t *glbA = Ddi_VararrayDup(vAB);
+  Ddi_Bdd_t *itp =
+    Ddi_AigInterpolantByGenClauses(a,b,NULL,
+                                   NULL, 
+                                   vAB2, vAB, NULL, glbA, 
+                                   NULL, NULL, NULL, maxIter, 
+                                   0, result);
+  Ddi_Free(vB);
+  Ddi_Free(vAB);
+  Ddi_Free(vAB2);
+  Ddi_Free(glbA);
+  return itp;
+}
+
+/**Function********************************************************************
+  Synopsis    [refine state eq classes]
+  Description [refine state eq classes]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
 static Ddi_Bdd_t *
 aigInterpolantByGenClausesIntern(
   Ddi_Bdd_t *a,

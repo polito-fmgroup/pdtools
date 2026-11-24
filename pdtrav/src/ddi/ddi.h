@@ -967,7 +967,7 @@ EXTERN Ddi_Bddarray_t *Ddi_AigSatAndWithInterpolantSequence (Ddi_Bdd_t *a, Ddi_B
 EXTERN Ddi_Bddarray_t *Ddi_AigItpSeqEq(Ddi_Bdd_t *a, Ddi_Vararray_t *eqVars, Ddi_Bddarray_t *eqSubst, int bound);
 EXTERN Ddi_Bdd_t * Ddi_AigAbstrVarsForInterpolantByRefinement(Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Vararray_t *aVars, Ddi_Vararray_t *bVars, Ddi_Vararray_t *auxVars, char *wfileName, unsigned char *enAbstr);
 EXTERN Ddi_Bdd_t * Ddi_AigAbstrVarsForInterpolant(Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Vararray_t *aVars, Ddi_Vararray_t *bVars, Ddi_Vararray_t *auxVars, char *wfileName, unsigned char *enAbstr, int *pAbort);
-EXTERN Ddi_Bdd_t * Ddi_AigAbstrVarsForInterpolant22(Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Vararray_t *aVars, Ddi_Vararray_t *bVars, Ddi_Vararray_t *auxVars, char *wfileName, unsigned char *enAbstr, int *pAbort);
+EXTERN Ddi_Bdd_t * Ddi_AigAbstrVarsForInterpolant22(Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Vararray_t *aVars, Ddi_Vararray_t *bVars, Ddi_Vararray_t *auxVars, char *wfileName, unsigned char *enAbstr, int *varWeights, int *pAbort);
 EXTERN Ddi_Varset_t * Ddi_AigAbstrVarsIncremental(Ddi_Bdd_t *f, Ddi_Vararray_t *vars);
 EXTERN Ddi_Bdd_t * Ddi_AigOptByEquiv(Ddi_Bdd_t *fAig, Ddi_Bddarray_t *representatives, Ddi_Bddarray_t *equalNodes);
 EXTERN Ddi_Bdd_t * Ddi_AigOptByEquivFwd(Ddi_Bdd_t *fAig, Ddi_Bddarray_t *representatives, Ddi_Bddarray_t *equalNodes);
@@ -1623,6 +1623,7 @@ EXTERN int Ddi_PdrCubeLitIsNoInit(Ddi_PdrMgr_t *pdrMgr, int lit);
 EXTERN Ddi_Clause_t *Ddi_GeneralizeClause(Ddi_SatSolver_t *solver, Ddi_Clause_t *cl, unsigned char *enAbstr, int nAbstr, int *initLits, int useInduction);
 EXTERN int Ddi_UnderEstimateUnsatCoreByCexGen(Ddi_Bdd_t *f, Ddi_Bdd_t *cone, Ddi_Vararray_t *vars, unsigned char *enAbstr, int maxIter, int *result);
 EXTERN Ddi_Bdd_t *Ddi_AigInterpolantByGenClauses(Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Bdd_t *care, Ddi_Bdd_t *careA, Ddi_Vararray_t *ps, Ddi_Vararray_t *ns, Ddi_Bdd_t *init, Ddi_Vararray_t *globVars,   Ddi_Vararray_t *dynAbstrCut, Ddi_Vararray_t *dynAbstrAux, Ddi_Bddarray_t *dynAbstrCutLits, int maxIter, int useInduction, int *result);
+EXTERN Ddi_Bdd_t *Ddi_AigInterpolantByGenClausesSimple(Ddi_Bdd_t *a, Ddi_Bdd_t *b, int maxIter, int *result);
 EXTERN Ddi_Bddarray_t *Ddi_AigAbstrRefineCegarPba(Ddi_Bdd_t *f, Ddi_Vararray_t *abstrVars, Ddi_Bddarray_t *noAbstr, Ddi_Bddarray_t *prevAbstr, int *result, float timeLimit);
 EXTERN Ddi_Bddarray_t *Ddi_AigAbstrRefinePba(Ddi_Bdd_t *f, Ddi_Vararray_t *abstrVars, Ddi_Bddarray_t *noAbstr, Ddi_Bddarray_t *prevAbstr, int *result, float timeLimit);
 EXTERN Ddi_Bdd_t *Ddi_AigExistProjectByGenClauses(Ddi_Bdd_t *a, Ddi_Bdd_t *b, Ddi_Bdd_t *care, Ddi_Varset_t *projVars, int maxIter, int doConstr, int *result);

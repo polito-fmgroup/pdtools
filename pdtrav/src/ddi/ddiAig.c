@@ -630,10 +630,12 @@ Minisat22SolverTopVarsByDecisions(
 );
 static int Minisat22MUS(
   void *pS22void,
+  Ddi_Vararray_t *aVars,
+  Ddi_Vararray_t *bVars,
   Ddi_Vararray_t *auxVars,
   int nVars,
   unsigned char *doAbstr,
-  unsigned char *enAbstr,
+  int *varWeights,
   int enIncr
 );
 /**AutomaticEnd***************************************************************/
@@ -79742,6 +79744,7 @@ Ddi_AigAbstrVarsForInterpolant22 (
   Ddi_Vararray_t *auxVars,
   char *wfileName,
   unsigned char *enAbstr,
+  int *varWeights,
   int *pAbort
 )
 {
@@ -79750,16 +79753,13 @@ Ddi_AigAbstrVarsForInterpolant22 (
   int i, j;
   Ddi_Bdd_t *a2;
   Ddi_Bdd_t *lit;
-  Ddi_Bddarray_t *abstrVarLit;
-  Ddi_Vararray_t *vSubst, *abVars;
-  Ddi_Varset_t *aSupp, *bSupp, *abSupp, *aVarsSet, *bVarsSet;
-  int abstrCnt=0, nInitialAbstr=0;
+  Ddi_Vararray_t *joinVars, *vSubst;
+  Ddi_Vararray_t *abSupp, *bSupp;
+  int abstrCnt=0;
   int nVars = Ddi_VararrayNum(aVars), nSuppVars;
-  unsigned char *doAbstr = Pdtutil_Alloc(unsigned char, nVars);
   Ddi_Bddarray_t *eqRelArray=NULL;
   Minisat22Solver S;
   FILE *fp=NULL;
-  Var *minisatAV, *minisatBV;
   int strategy = Ddi_MgrReadAigDynAbstrStrategy(ddm);
   int enableTimeout = 0 || ddm->settings.aig.satTimeout;
   int doEval=1, doEvalAbstr=0;
@@ -79785,30 +79785,32 @@ Ddi_AigAbstrVarsForInterpolant22 (
     return (Ddi_BddMakeConstAig(ddm,1));
   }
 
-  minisatAV = Pdtutil_Alloc(Var, nVars);
-  minisatBV = Pdtutil_Alloc(Var, nVars);
+  abSupp = Ddi_BddSuppVararray(a);
+  bSupp = Ddi_BddSuppVararray(b);
 
-  aSupp = Ddi_BddSupp(a);
-  bSupp = Ddi_BddSupp(b);
-
-  aVarsSet = Ddi_VarsetMakeFromArray(aVars);
-  bVarsSet = Ddi_VarsetMakeFromArray(bVars);
-
-  Ddi_VarsetIntersectAcc(aSupp,aVarsSet);
-  Ddi_VarsetIntersectAcc(bSupp,bVarsSet);
-
-  Ddi_Free(aVarsSet);
-  Ddi_Free(bVarsSet);
-
-  nSuppVars = Ddi_VarsetNum(aSupp);
-
-  Ddi_VarsetSetArray(aSupp);
-  Ddi_VarsetSetArray(bSupp);
-
-  abSupp = Ddi_VarsetUnion(aSupp,bSupp);
-  abVars = Ddi_VararrayMakeFromVarset(abSupp,1);
+  Ddi_VararraySubstVarsAcc(abSupp, aVars, bVars);
+  Ddi_VararrayIntersectAcc(abSupp,bSupp);
 
   aa = Ddi_AigPartitionTop(a,0);
+
+  if (enAbstr!=NULL) {
+    joinVars = Ddi_VararrayAlloc(ddm,0);
+    vSubst = Ddi_VararrayAlloc(ddm,0);
+
+    for (int i=0; i<nVars; i++) {
+      Ddi_Var_t *bV = Ddi_VararrayRead(bVars,i);
+      Ddi_Var_t *aV = Ddi_VararrayRead(aVars,i);
+      if (!enAbstr[i]) {  
+        Ddi_VararrayInsertLast(joinVars,bV);
+        Ddi_VararrayInsertLast(vSubst,aV);
+      }
+    }
+    Ddi_BddSubstVarsAcc(aa,vSubst,joinVars);
+  
+    Ddi_Free(vSubst);
+    Ddi_Free(joinVars);
+
+  }
 
   sizeA = Ddi_BddSize(aa);
   sizeB = Ddi_BddSize(b);
@@ -79825,29 +79827,39 @@ Ddi_AigAbstrVarsForInterpolant22 (
 
   eqRelArray = Ddi_BddarrayAlloc(ddm,0);
 
-  //  printf("\n");
-  for (i=0; i<nVars; i++) {
+  Ddi_VararrayWriteMarkWithIndex (bVars, 1);
+  
+  int nCommon = Ddi_VararrayNum(abSupp);
+
+  Ddi_Vararray_t *myAuxVars = Ddi_VararrayAlloc(ddm,0);
+  Ddi_Vararray_t *myAVars = Ddi_VararrayAlloc(ddm,0);
+  Ddi_Vararray_t *myBVars = Ddi_VararrayAlloc(ddm,0);
+  int *myWeights = Pdtutil_Alloc(int,nCommon);
+  int nUsedVars=0;  
+  for (int ii=0; ii<nCommon; ii++) {
     Ddi_Bdd_t *wire, *eqRel;
+    Ddi_Var_t *bV = Ddi_VararrayRead(abSupp,ii);
+    int i = Ddi_VarReadMark(bV)-1;
+    Pdtutil_Assert(i>=0 && i<nVars,"wrong var mark");
     Ddi_Var_t *aV = Ddi_VararrayRead(aVars,i);
-    Ddi_Var_t *bV = Ddi_VararrayRead(bVars,i);
     Ddi_Var_t *auxV = Ddi_VararrayRead(auxVars,i);
-    doAbstr[i] = 1;
-    if (!(Ddi_VarInVarset(aSupp,aV)&&Ddi_VarInVarset(bSupp,bV))) {
-      nInitialAbstr++;
+    if (enAbstr && !enAbstr[i]) {  
       continue;
     }
-    doAbstr[i] = 0;
     lit = Ddi_BddMakeLiteralAig(bV,1);
     wire = Ddi_BddMakeLiteralAig(aV,1);
-    /*
-    if (enAbstr!=NULL && !enAbstr[i])
-      eqRel = Ddi_BddMakeConstAig(ddm,1);
-      else m*/
-    eqRel = Ddi_BddMakeLiteralAig(auxV,1);
     Ddi_BddXnorAcc(wire,lit);
     Ddi_Free(lit);
-    Ddi_BddXnorAcc(eqRel,wire);
+    //    eqRel = Ddi_BddMakeLiteralAig(auxV,1);
+    //    Ddi_BddXnorAcc(eqRel,wire);
+    // eqRel => bV==aV
+    eqRel = Ddi_BddMakeLiteralAig(auxV,0);
+    Ddi_BddOrAcc(eqRel,wire);
     Ddi_Free(wire);
+    Ddi_VararrayInsertLast(myAVars,aV);
+    Ddi_VararrayInsertLast(myBVars,bV);
+    Ddi_VararrayInsertLast(myAuxVars,auxV);
+    myWeights[nUsedVars++] = varWeights[i];
     Ddi_BddarrayInsertLast(eqRelArray,eqRel);
     Minisat22Clauses((void *)&S,eqRel,NULL,NULL,0);
     {
@@ -79855,73 +79867,84 @@ Ddi_AigAbstrVarsForInterpolant22 (
       Minisat::Lit l = Minisat22Lit(id);
       //printf("%d ", toInt(l));
       id = aig2CnfId(bmgr,Ddi_VarToBaig(aV));
-      minisatAV[i]=Minisat::var(Minisat22Lit(id));
       id = aig2CnfId(bmgr,Ddi_VarToBaig(bV));
-      minisatBV[i]=Minisat::var(Minisat22Lit(id));
     }
     Ddi_Free(eqRel);
   }
   //  printf("\n");
+  Pdtutil_Assert(nUsedVars==Ddi_VararrayNum(myAuxVars),"wrong var num");
+  Ddi_VararrayWriteMark (bVars, 0);
 
   Ddi_Free(eqRelArray);
   Ddi_Free(aa);
+  unsigned char *doAbstr = Pdtutil_Alloc(unsigned char, nUsedVars);
+  for (i=0; i<nUsedVars; i++) {
+    doAbstr[i] = 0;
+  }
 
   if (enableTimeout < 0) {
     enableTimeout *= -1;
     cpuTime = 10000.0;
   }
   else {
-    int enIncr = strategy>=1;
-    doEvalAbstr = Minisat22MUS(&S,auxVars,nVars,doAbstr,enAbstr,enIncr);
+    int nReduceIter = strategy-1;
+    doEvalAbstr = Minisat22MUS(&S,myAVars,myBVars,myAuxVars,nUsedVars,doAbstr,
+                               myWeights,nReduceIter);
   }
 
   aig2CnfIdClose(ddm);
 
   if (doEvalAbstr>=0) {
 
-    abstrVarLit = Ddi_BddarrayAlloc(ddm,0);
+    Ddi_Free(joinVars);
+    Ddi_Free(vSubst);
+    joinVars = Ddi_VararrayAlloc(ddm,0);
     vSubst = Ddi_VararrayAlloc(ddm,0);
 
+    Ddi_VararrayWriteMarkWithIndex (auxVars, 1);
     //    	printf("\n");
-    for (i=nVars-1; !doAbort && i>=0; i--) {
+    for (int ii=nUsedVars-1; !doAbort && ii>=0; ii--) {
+      Ddi_Var_t *auxV = Ddi_VararrayRead(myAuxVars,ii);
+      int i = Ddi_VarReadMark(auxV)-1;
+      Pdtutil_Assert(i>=0 && i<nUsedVars,"wrong var mark");
       Ddi_Var_t *aV = Ddi_VararrayRead(aVars,i);
       Ddi_Var_t *bV = Ddi_VararrayRead(bVars,i);
-      if (!doAbstr[i]) {
-        Ddi_Bdd_t *lit = Ddi_BddMakeLiteralAig(bV,1);
-        Ddi_BddarrayInsertLast(abstrVarLit,lit);
-        Ddi_Free(lit);
+      if (!doAbstr[ii]) {
+        Ddi_VararrayInsertLast(joinVars,bV);
         Ddi_VararrayInsertLast(vSubst,aV);
 	//    	printf("%s ",Ddi_VarName(bV));
       }
       else {
+        enAbstr[i] = 0;
         if (fp!=NULL) {
     	fprintf(fp,"%s\n",Ddi_VarName(bV));
         }
       }
     }
+    Ddi_VararrayWriteMark (auxVars, 0);
 
     //    	printf("\n");
     if (fp!=NULL) {
       fclose(fp);
     }
 
-    a2 = Ddi_BddCompose(a,vSubst,abstrVarLit);
+    a2 = Ddi_BddSubstVars(a,vSubst,joinVars);
 
     Ddi_Free(vSubst);
-    Ddi_Free(abstrVarLit);
+    Ddi_Free(joinVars);
   }
   else {
     a2=NULL; // SAT
   }
 
 
-  Ddi_Free(aSupp);
+  Ddi_Free(myAuxVars);
+  Ddi_Free(myAVars);
+  Ddi_Free(myBVars);
   Ddi_Free(abSupp);
-  Ddi_Free(abVars);
   Ddi_Free(bSupp);
+  Pdtutil_Free(myWeights);
   Pdtutil_Free(doAbstr);
-  Pdtutil_Free(minisatAV);
-  Pdtutil_Free(minisatBV);
 
 
   return(a2);
@@ -90422,6 +90445,332 @@ sat22ConstrainIntern(
   return newfAig;
 }
 
+
+/**Function********************************************************************
+  Synopsis    [Inner steps of MUS computation for interpolation]
+  Description [Inner steps of MUS computation for interpolation.
+              ]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static void Minisat22MUSconstrainSolver(
+  Minisat22Solver *pS22,
+  Minisat22Solver *pS22aux,
+  Minisat::vec<Minisat::Var>& varsA,
+  Minisat::vec<Minisat::Var>& varsB,
+  Minisat::vec<Minisat::Lit>& assumps
+)
+{
+  int sat;
+  int nVars = assumps.size();
+  Minisat::vec<Minisat::Lit> constr;
+
+  for (int i=0; i<nVars; i++) {
+    if (pS22->model[varsA[i]]!=pS22->model[varsB[i]]) {
+      constr.push(assumps[i]);
+    }
+  }
+  if (constr.size()>0) {
+    //    pS22->addClause(constr);
+    pS22aux->addClause(constr);
+  }
+
+  //  Minisat::vec<Minisat::Lit> noAssumps;
+  //  assert(pS22->solveLimitedInt(noAssumps));
+
+}
+
+/**Function********************************************************************
+  Synopsis    [Inner steps of MUS computation for interpolation]
+  Description [Inner steps of MUS computation for interpolation.
+              ]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static void Minisat22MUSreduceR(
+  Minisat22Solver *pS22,
+  Minisat22Solver *pS22aux,
+  int j,
+  int w,
+  int *bestWp,
+  int enChk0,
+  int enChk1,
+  Minisat::vec<Minisat::Var>& varsA,
+  Minisat::vec<Minisat::Var>& varsB,
+  Minisat::vec<Minisat::Lit>& assumps,
+  Minisat::vec<Minisat::Lit>& assumpsCurr,
+  Minisat::vec<Minisat::Lit>& assumpsCurrIncr,
+  Minisat::vec<Minisat::Lit>& assumpsAll,
+  Minisat::vec<Minisat::Lit>& assumpsBest,
+  int *varWeights,
+  int enBlock
+)
+{
+  int sat;
+  int nVars = assumps.size();
+  static int nSat0=0, nSat1=0, nUns0=0, nUns1=0; 
+  float timeLimit = 2.0;
+  Minisat::vec<Minisat::Lit> noAssumps;
+
+  //  if (enBlock) assert(!pS22->solve(assumpsBest));
+  if (j>=nVars || w>=*bestWp) return;
+
+  if (pS22aux!=NULL) {
+    // feasibility check
+    int satAux = pS22aux->solve(assumpsCurrIncr);
+    if (!satAux) return;
+  }
+  
+  // check if this abstraction is feasible assuming all remaining
+  // assumptions are enabled
+
+  if (enChk0) {
+    if ((sat = pS22->okay())) {
+      pS22->setTimeBudget((double)timeLimit);
+      sat = pS22->solveLimitedInt(assumpsAll);
+    }
+    if (sat) {
+      nSat0++;
+      int cnt=0;
+      for (int i=0; i<assumps.size(); i++) {
+        if (assumps[i]!=assumpsAll[i]) cnt++;
+      }
+      if (enBlock)
+        Minisat22MUSconstrainSolver(pS22,pS22aux,varsA,varsB,assumps);
+      return;
+    }
+    nUns0++;
+  }
+
+  if (enChk1) {
+    if ((sat = pS22->okay())) {
+      pS22->setTimeBudget((double)timeLimit);
+      sat = pS22->solveLimitedInt(assumpsCurr);
+    }
+    if (!sat) {
+      nUns1++;
+      if (w<*bestWp) {
+        *bestWp=w;
+        assumpsCurr.copyTo(assumpsBest);
+      }
+      return;
+    }
+    if (enBlock)
+      Minisat22MUSconstrainSolver(pS22,pS22aux,varsA,varsB,assumps);
+    nSat1++;
+  }
+  
+  /* recur without variable */
+  assumpsAll[j] = ~assumpsAll[j]; 
+  Minisat22MUSreduceR(pS22,pS22aux,j+1,w,bestWp,1,0,
+                      varsA,varsB,assumps,assumpsCurr,assumpsCurrIncr,
+                      assumpsAll,assumpsBest,varWeights,enBlock);
+  assumpsAll[j] = ~assumpsAll[j]; // backtrack
+
+  /* recur with variable */
+  int wj = varWeights[j];
+  assumpsCurr[j] = ~assumpsCurr[j]; 
+  assumpsCurrIncr.push(assumps[j]);
+  Minisat22MUSreduceR(pS22,pS22aux,j+1,w+wj,bestWp,0,1,
+                      varsA,varsB,assumps,assumpsCurr,assumpsCurrIncr,
+                      assumpsAll,assumpsBest,varWeights,enBlock);
+  assumpsCurr[j] = ~assumpsCurr[j]; 
+  assumpsCurrIncr.pop();
+
+}
+
+/**Function********************************************************************
+  Synopsis    [Inner steps of MUS computation for interpolation]
+  Description [Inner steps of MUS computation for interpolation.
+              ]
+  SideEffects []
+  SeeAlso     []
+******************************************************************************/
+static void Minisat22MUSreduce(
+  void *pS22void,
+  Ddi_Mgr_t *ddm,
+  int nIter,
+  int nVars,
+  Minisat::vec<Minisat::Var>& varsA,
+  Minisat::vec<Minisat::Var>& varsB,
+  Minisat::vec<Minisat::Lit>& assumps,
+  Minisat::vec<Minisat::lbool>& doAbstrSolver,
+  vec<int>& varIds,
+  vec<int>& varSolverIds,
+  int *varWeights
+)
+{
+  Minisat22Solver *pS22 = (Minisat22Solver *)pS22void;
+  int sat, abstrDone = 0;
+  long cpuTime, cpuTime2=0, cpuTime3=0, startTime;
+
+  int nBest = 0;
+
+  float timeLimit = 2.0;
+  int n0=nVars, nUnsat=0, nSat=0;
+  
+  int bestGreedy=0;
+
+  Minisat22Solver *pS22aux = new Minisat22Solver();
+  int maxV = 0;
+  for (int k=0; k<assumps.size(); k++) {
+    int v = Minisat::toInt(Minisat::var(assumps[k]));
+    if (v>maxV) maxV = v;
+  }
+  for (int k=0; k<=maxV; k++) {
+    pS22aux->newVar();
+  }
+  
+  Minisat::vec<Minisat::Lit> assumpsGreedy;
+  Minisat::vec<Minisat::Var> varsAGreedy;
+  Minisat::vec<Minisat::Var> varsBGreedy;
+  //  printf("Greedy weights: ");
+  for (int k=0; k<assumps.size(); k++) {
+    if (doAbstrSolver[varSolverIds[k]] == l_False22) {
+      // keep this var
+      assumpsGreedy.push(assumps[k]);
+      varsAGreedy.push(varsA[k]);
+      varsBGreedy.push(varsB[k]);
+      int i = varIds[k];
+      bestGreedy += varWeights!=NULL ? varWeights[i] : 1;
+      //  printf("[%d,%d] w: %d ", i, k, varWeights!=NULL ? varWeights[i] : 1);
+    }
+  }
+  //  printf("\n");
+  int *myWeightsGreedy = Pdtutil_Alloc(int,assumpsGreedy.size());
+  for (int k=0,j=0; k<assumps.size(); k++) {
+    if (doAbstrSolver[varSolverIds[k]] == l_False22) {
+      int i = varIds[k];
+      myWeightsGreedy[j++] = varWeights!=NULL ? varWeights[i] : 1;
+    }
+  }
+
+  //    for (int j=assumps.size()-1; j>=0; j--) {
+  for (int j=0; j<assumps.size(); j++) {
+    int v = varSolverIds[j];
+    if (doAbstrSolver[v] == l_False22) {
+      Minisat::vec<Minisat::Lit> assumps2;
+      for (int k=0; k<assumps.size(); k++) {
+        if (k!=j && doAbstrSolver[varSolverIds[k]] == l_False22) {
+          // keep this var
+          assumps2.push(assumps[k]);
+        }
+      }
+      startTime = util_cpu_time ();
+      if ((sat = pS22->okay())) {
+        pS22->setTimeBudget((double)timeLimit);
+        sat = pS22->solveLimitedInt(assumps2);
+      }
+      if (sat) {
+        //          pS22->addClause(assumps[j]);
+        cpuTime3 += (util_cpu_time () - startTime);
+        nSat++;
+      } else  {
+        nUnsat++;
+        cpuTime2 += (util_cpu_time () - startTime);
+        for (int k=0; k<assumps.size(); k++) {
+          if (doAbstrSolver[varSolverIds[k]] == l_False22) {
+            doAbstrSolver[varSolverIds[k]] = l_True22;
+          }
+        }
+        for (int k=0; k<pS22->conflict.size(); k++) {
+          Minisat::Lit lit = pS22->conflict[k];
+          int v = Minisat::toInt(Minisat::var(lit));
+          doAbstrSolver[v] = l_False22;
+        }
+      }
+    }
+  }
+
+  int nKeep=0, bestW=0;
+  Minisat::vec<Minisat::Lit> assumpsBest;
+  assumps.copyTo(assumpsBest);
+  //  printf("Greedy2 weights: ");
+  for (int j=0; j<assumps.size(); j++) {
+    if (doAbstrSolver[varSolverIds[j]] == l_False22) {
+      int i = varIds[j];
+      nKeep++;
+      bestW += varWeights!=NULL ? varWeights[i] : 1;
+      // printf("[%d] w: %d ", i, varWeights!=NULL ? varWeights[i] : 1);
+    }
+    else
+      assumpsBest[j] = ~assumpsBest[j]; 
+  }
+  //  printf("\n");
+  
+  if (nIter > 0) {
+    // now try recursive.
+    // first starting from greedy solution
+    Minisat::vec<Minisat::Lit> assumpsCurrGreedy;
+    Minisat::vec<Minisat::Lit> assumpsCurrIncrGreedy;
+    Minisat::vec<Minisat::Lit> assumpsAllGreedy;
+    Minisat::vec<Minisat::Lit> assumpsBestGreedy;
+    assumpsGreedy.copyTo(assumpsAllGreedy);
+    assumpsGreedy.copyTo(assumpsBestGreedy);
+    assumpsGreedy.copyTo(assumpsCurrGreedy);
+
+    for (int j=0; j<assumpsCurrGreedy.size(); j++) {
+      assumpsCurrGreedy[j] = ~assumpsCurrGreedy[j]; 
+    }
+  
+    Minisat22MUSreduceR(pS22,NULL,0,0,&bestW,1,1,varsAGreedy
+                        ,varsBGreedy,assumpsGreedy,
+                        assumpsCurrGreedy,assumpsCurrIncrGreedy,assumpsAllGreedy,
+                        assumpsBestGreedy,myWeightsGreedy,0);
+    Pdtutil_Free(myWeightsGreedy);
+  
+
+    Minisat::vec<Minisat::Lit> assumpsCurr;
+    Minisat::vec<Minisat::Lit> assumpsCurrIncr;
+    Minisat::vec<Minisat::Lit> assumpsAll;
+    assumps.copyTo(assumpsAll);
+    assumps.copyTo(assumpsCurr);
+  
+    for (int j=0; j<assumps.size(); j++) {
+      if (doAbstrSolver[varSolverIds[j]] == l_True22) {
+        assumpsBest[j] = ~assumpsBest[j]; 
+      }         
+    }
+  
+    Pdtutil_VerbosityMgr(ddm, Pdtutil_VerbLevelUsrMin_c,
+                         fprintf(dMgrO(ddm),"DYN ABSTR (M22) initially kept %d vars, %d/%d SAT/UNSAT calls - heuristically kept: %d - W: %d\n",
+                                 n0, nSat, nUnsat, nKeep, bestW));
+
+  
+    int *myWeights = Pdtutil_Alloc(int,assumps.size());
+    for (int j=0; j<assumps.size(); j++) {
+      assumpsCurr[j] = ~assumpsCurr[j]; 
+      int i = varIds[j];
+      myWeights[j] = varWeights!=NULL ? varWeights[i] : 1;
+    }
+  
+    Minisat22MUSreduceR(pS22,pS22aux,0,0,&bestW,1,1,varsA,varsB,assumps,assumpsCurr,assumpsCurrIncr,
+                        assumpsAll,assumpsBest,myWeights,1);
+    Pdtutil_Free(myWeights);
+  }
+  nKeep=0;
+  int checkW = 0;
+  for (int j=0; j<assumps.size(); j++) {
+    if (assumpsBest[j] != assumps[j]) {
+      Pdtutil_Assert(assumpsBest[j] == ~assumps[j],"problem in recursive solution");
+      doAbstrSolver[varSolverIds[j]] = l_True22;
+    }
+    else {
+      int i = varIds[j];
+      nKeep++;
+      doAbstrSolver[varSolverIds[j]] = l_False22;
+      checkW += varWeights!=NULL ? varWeights[i] : 1;
+    }
+  }
+  
+  //  Pdtutil_Assert(checkW == bestW, "problem in best weight solution");
+  Pdtutil_VerbosityMgr(ddm, Pdtutil_VerbLevelUsrMin_c,
+                       fprintf(dMgrO(ddm),"DYN ABSTR (M22) initially kept %d vars, %d/%d SAT/UNSAT calls - finally kept: %d - W: %d\n",
+                       n0, nSat, nUnsat, nKeep, bestW));
+
+  delete pS22aux;  
+}
+
 /**Function********************************************************************
   Synopsis    [Inner steps of MUS computation for interpolation]
   Description [Inner steps of MUS computation for interpolation.
@@ -90431,11 +90780,13 @@ sat22ConstrainIntern(
 ******************************************************************************/
 static int Minisat22MUS(
   void *pS22void,
+  Ddi_Vararray_t *aVars,
+  Ddi_Vararray_t *bVars,
   Ddi_Vararray_t *auxVars,
   int nVars,
   unsigned char *doAbstr,
-  unsigned char *enAbstr,
-  int enIncr
+  int *varWeights,
+  int nReduceIter
 )
 {
   Ddi_Mgr_t *ddm = Ddi_ReadMgr(auxVars);
@@ -90445,7 +90796,11 @@ static int Minisat22MUS(
   long cpuTime, cpuTime2=0, cpuTime3=0, startTime;
 
   Minisat::vec<Minisat::Lit> assumps;
+  Minisat::vec<Minisat::Var> varsA;
+  Minisat::vec<Minisat::Var> varsB;
   assumps.clear();
+  varsA.clear();
+  varsB.clear();
   //  printf("\n");
   vec<int> varIds;
   vec<int> varSolverIds;
@@ -90454,13 +90809,22 @@ static int Minisat22MUS(
     if (doAbstr[i]) continue;
     Ddi_Var_t *auxV = Ddi_VararrayRead(auxVars,i);
     int id = aig2CnfId(bmgr,Ddi_VarToBaig(auxV));
+    Ddi_Var_t *aV = Ddi_VararrayRead(aVars,i);
+    int idA = aig2CnfId(bmgr,Ddi_VarToBaig(aV));
+    Ddi_Var_t *bV = Ddi_VararrayRead(bVars,i);
+    int idB = aig2CnfId(bmgr,Ddi_VarToBaig(bV));
     Minisat::Lit l = Minisat22Lit(id);
+    Minisat::Lit lA = Minisat22Lit(idA);
+    Minisat::Lit lB = Minisat22Lit(idB);
     int v = Minisat::toInt(Minisat::var(l));
     //printf("%d ", toInt(l));
     assumps.push(l);
+    varsA.push(Minisat::var(lA));
+    varsB.push(Minisat::var(lB));
     varIds.push(i);
     varSolverIds.push(v);
   }
+  
   //  printf("\n");
   if ((sat = pS22->okay())) {
     startTime = util_cpu_time ();
@@ -90489,62 +90853,9 @@ static int Minisat22MUS(
     int v = Minisat::toInt(Minisat::var(lit));
     doAbstrSolver[v] = l_False22;
   }
-  if (enIncr) {
-    float timeLimit = 2.0;
-    int n0=0, nUnsat=0, nSat=0;
-    for (int j=0; j<assumps.size(); j++) {
-      int v = varSolverIds[j];
-      if (doAbstrSolver[v] == l_False22) {
-        n0++;
-        if (enAbstr!=NULL && !enAbstr[varIds[j]]) {
-          pS22->addClause(assumps[j]);
-        }
-      }
-    }
-    //    for (int j=assumps.size()-1; j>=0; j--) {
-    for (int j=0; j<assumps.size(); j++) {
-      int v = varSolverIds[j];
-      if (doAbstrSolver[v] == l_False22 && (enAbstr==NULL || enAbstr[varIds[j]])) {
-        Minisat::vec<Minisat::Lit> assumps2;
-        for (int k=0; k<assumps.size(); k++) {
-          if (k!=j && doAbstrSolver[varSolverIds[k]] == l_False22) {
-            // keep this var
-            if (enAbstr==NULL || enAbstr[varIds[k]])
-              assumps2.push(assumps[k]);
-          }
-        }
-        startTime = util_cpu_time ();
-        if ((sat = pS22->okay())) {
-          pS22->setTimeBudget((double)timeLimit);
-          sat = pS22->solveLimitedInt(assumps2);
-        }
-        if (sat) {
-          pS22->addClause(assumps[j]);
-          if (enAbstr!=NULL && enAbstr[varIds[j]])
-            enAbstr[varIds[j]]=0;
-          cpuTime3 += (util_cpu_time () - startTime);
-          nSat++;
-        } else  {
-          nUnsat++;
-          cpuTime2 += (util_cpu_time () - startTime);
-          for (int k=0; k<assumps.size(); k++) {
-            if (doAbstrSolver[varSolverIds[k]] == l_False22) {
-              if (enAbstr==NULL || enAbstr[varIds[k]])
-                doAbstrSolver[varSolverIds[k]] = l_True22;
-            }
-          }
-          for (int k=0; k<pS22->conflict.size(); k++) {
-            Minisat::Lit lit = pS22->conflict[k];
-            int v = Minisat::toInt(Minisat::var(lit));
-            doAbstrSolver[v] = l_False22;
-          }
-        }
-      }
-    }
-    Pdtutil_VerbosityMgr(ddm, Pdtutil_VerbLevelUsrMin_c,
-                       fprintf(dMgrO(ddm),"DYN ABSTR (M22) initially kept %d vars, %d/%d SAT/UNSAT calls\n",
-                               n0, nSat, nUnsat));
-  }
+  Minisat22MUSreduce(pS22void,ddm,nReduceIter,nVars,
+                     varsA,varsB,assumps,doAbstrSolver,varIds,varSolverIds,varWeights);
+
   for (int j=0; j<assumps.size(); j++) {
     if (doAbstrSolver[varSolverIds[j]] == l_True22) {
       abstrDone = 1;
@@ -90553,9 +90864,6 @@ static int Minisat22MUS(
     }
     else {
       nkeep++;
-      int i = varIds[j];
-      if (enIncr && enAbstr!=NULL && enAbstr[i])
-        enAbstr[i]=0;
     }
   }
 
@@ -90568,6 +90876,7 @@ static int Minisat22MUS(
     fprintf(dMgrO(ddm)," + %s)\n",
             util_print_time(cpuTime3));
   }
+  
   return abstrDone;
 }
 
